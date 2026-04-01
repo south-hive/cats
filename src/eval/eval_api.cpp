@@ -11,6 +11,7 @@
 #include "libsed/transport/nvme_transport.h"
 #include "libsed/security/hash_password.h"
 #include "libsed/core/uid.h"
+#include "libsed/core/endian.h"
 #include "libsed/core/log.h"
 
 namespace libsed {
@@ -1369,16 +1370,13 @@ void EvalApi::setSessionMaxComPacket(Session& session, uint32_t size) {
 // ════════════════════════════════════════════════════════
 
 Result EvalApi::stackReset(std::shared_ptr<ITransport> transport, uint16_t comId) {
-    // Security Protocol 0x02, ComID for stack reset
-    // Send empty payload to reset the protocol stack
-    Bytes empty(512, 0);
-    // Build stack reset request: first 4 bytes = ComID + extended ComID
-    empty[0] = static_cast<uint8_t>((comId >> 8) & 0xFF);
-    empty[1] = static_cast<uint8_t>(comId & 0xFF);
-    empty[2] = 0x00; // Extended ComID
-    empty[3] = 0x04; // STACK_RESET request code
+    // TCG Core Spec: ComID Management packet via Security Protocol 0x02
+    Bytes request(512, 0);
+    Endian::writeBe16(request.data(), comId);        // bytes 0-1: ComID
+    Endian::writeBe16(request.data() + 2, 0);        // bytes 2-3: Extended ComID
+    Endian::writeBe32(request.data() + 4, 2);        // bytes 4-7: request code = STACK_RESET
 
-    return transport->ifSend(0x02, comId, ByteSpan(empty.data(), empty.size()));
+    return transport->ifSend(0x02, comId, ByteSpan(request.data(), request.size()));
 }
 
 Result EvalApi::verifyComId(std::shared_ptr<ITransport> transport,
