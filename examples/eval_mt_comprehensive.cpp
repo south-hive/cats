@@ -9,6 +9,7 @@
 /// │                    Transport (shared)                            │
 /// ├─────────────┬──────────────┬──────────────┬─────────────────────┤
 /// │  Thread 0   │  Thread 1    │  Thread 2    │  Thread 3           │
+/// │  ComID +0   │  ComID +1    │  ComID +2    │  ComID +3           │
 /// │  Session A  │  Session B   │  Session C   │  Session D          │
 /// │             │              │              │                     │
 /// │ SP Lifecycle│ Locking &    │ MBR &        │ Security &          │
@@ -24,9 +25,15 @@
 /// │             │              │ - ByteTable  │ - Table Get/Set     │
 /// └─────────────┴──────────────┴──────────────┴─────────────────────┘
 ///
+/// ComID 할당 전략:
+///   TCG SED에서 ComID는 통신 채널 식별자이며, 하나의 ComID에서는
+///   하나의 outstanding IF-SEND/IF-RECV만 허용됩니다.
+///   → numComIds >= 4: 스레드별 baseComId + tid (완전 병렬)
+///   → numComIds < 4:  단일 ComID + transport 뮤텍스 (직렬화)
+///
 /// Phase 구조:
 ///   Phase 0: 공통 초기화 (Discovery, Properties, Take Ownership, Activate)
-///   Phase 1: 4개 스레드 병렬 실행 — 각자 독립 작업
+///   Phase 1: 4개 스레드 병렬 실행 — 각자 독립 ComID로 작업
 ///   Phase 2: 교차 검증 — 다른 스레드의 결과를 읽기 세션으로 확인
 ///   Phase 3: 정리 — Revert Locking SP, Revert TPer
 
@@ -103,14 +110,28 @@ struct ThreadResult {
 };
 
 /// 전역 공유 상태
+///
+/// TCG SED에서 ComID는 통신 채널 식별자이며, 하나의 ComID에서
+/// 동시에 하나의 outstanding IF-SEND/IF-RECV 쌍만 허용됩니다.
+/// 따라서 멀티스레드 환경에서는 **스레드별로 서로 다른 ComID를 사용**해야
+/// 응답 패킷 혼선 없이 병렬 실행이 가능합니다.
+///
+/// numComIds >= 4인 경우: baseComId + tid 로 각각 별도 ComID 할당
+/// numComIds < 4인 경우:  단일 ComID + transport 뮤텍스로 직렬화
 struct SharedState {
     std::shared_ptr<ITransport> transport;
-    uint16_t comId = 0;
+    uint16_t baseComId = 0;
+    uint16_t numComIds = 0;
+    uint16_t comIds[4] = {};       ///< 스레드별 ComID (핵심: 각 스레드가 고유 ComID 사용)
     PropertiesResult props;
 
     std::string sidPw;
     std::string admin1Pw;
     std::string user1Pw;
+
+    /// Transport 직렬화 뮤텍스 — ComID가 부족할 때만 사용
+    std::mutex transportMutex;
+    bool serialMode = false;       ///< true이면 단일 ComID 직렬화 모드
 
     Barrier barrier{4};
     ThreadResult results[4];
@@ -186,14 +207,14 @@ static void thread0_spLifecycleDiscovery(int tid, SharedState& ss) {
 
     // 6. Verify ComID
     bool comIdActive = false;
-    r = api.verifyComId(ss.transport, ss.comId, comIdActive);
+    r = api.verifyComId(ss.transport, ss.comIds[tid], comIdActive);
     TSTEP(tid, "verifyComId", r);
     ss.results[tid].record(r);
 
     // 7. AdminSP session → SP lifecycle
     {
         Bytes sidCred = HashPassword::passwordToBytes(ss.sidPw);
-        Session session(ss.transport, ss.comId);
+        Session session(ss.transport, ss.comIds[tid]);
         StartSessionResult ssr;
         r = api.startSessionWithAuth(session, uid::SP_ADMIN, false,
                                       uid::AUTH_SID, sidCred, ssr);
@@ -218,7 +239,9 @@ static void thread0_spLifecycleDiscovery(int tid, SharedState& ss) {
     // ── Phase 2: StackReset & re-discover ──
     TLOG(tid, "--- Phase 2: StackReset ---");
 
-    r = api.stackReset(ss.transport, ss.comId);
+    // StackReset은 해당 ComID의 세션만 무효화함
+    // 스레드별 ComID를 사용하므로 다른 스레드에 영향 없음
+    r = api.stackReset(ss.transport, ss.comIds[tid]);
     TSTEP(tid, "StackReset", r);
     ss.results[tid].record(r);
 
@@ -229,7 +252,7 @@ static void thread0_spLifecycleDiscovery(int tid, SharedState& ss) {
 
     // Re-exchange properties (stack was reset)
     PropertiesResult reprops;
-    r = api.exchangeProperties(ss.transport, ss.comId, reprops);
+    r = api.exchangeProperties(ss.transport, ss.comIds[tid], reprops);
     TSTEP(tid, "Re-exchange Properties", r);
     ss.results[tid].record(r);
 }
@@ -268,7 +291,7 @@ static void thread1_lockingKeyMgmt(int tid, SharedState& ss) {
 
     // ── Phase 1: Admin1 session ──
     Bytes admin1Cred = HashPassword::passwordToBytes(ss.admin1Pw);
-    Session session(ss.transport, ss.comId);
+    Session session(ss.transport, ss.comIds[tid]);
     StartSessionResult ssr;
     auto r = api.startSessionWithAuth(session, uid::SP_LOCKING, true,
                                        uid::AUTH_ADMIN1, admin1Cred, ssr);
@@ -353,7 +376,7 @@ static void thread1_lockingKeyMgmt(int tid, SharedState& ss) {
     TLOG(tid, "--- Phase 2: User1 Lock/Unlock x5 ---");
     Bytes user1Cred = HashPassword::passwordToBytes(ss.user1Pw);
     for (int i = 0; i < 5; i++) {
-        Session us(ss.transport, ss.comId);
+        Session us(ss.transport, ss.comIds[tid]);
         StartSessionResult usr;
         r = api.startSessionWithAuth(us, uid::SP_LOCKING, true,
                                       uid::AUTH_USER1, user1Cred, usr);
@@ -402,7 +425,7 @@ static void thread2_mbrDataStore(int tid, SharedState& ss) {
     RawResult raw;
 
     Bytes admin1Cred = HashPassword::passwordToBytes(ss.admin1Pw);
-    Session session(ss.transport, ss.comId);
+    Session session(ss.transport, ss.comIds[tid]);
     StartSessionResult ssr;
     auto r = api.startSessionWithAuth(session, uid::SP_LOCKING, true,
                                        uid::AUTH_ADMIN1, admin1Cred, ssr);
@@ -499,7 +522,7 @@ static void thread2_mbrDataStore(int tid, SharedState& ss) {
     // ── Phase 2: Large DataStore chunk ──
     TLOG(tid, "--- Phase 2: Large DataStore (2048B chunked) ---");
     {
-        Session s2(ss.transport, ss.comId);
+        Session s2(ss.transport, ss.comIds[tid]);
         StartSessionResult ssr2;
         r = api.startSessionWithAuth(s2, uid::SP_LOCKING, true,
                                       uid::AUTH_ADMIN1, admin1Cred, ssr2);
@@ -580,7 +603,7 @@ static void thread3_securityAuthority(int tid, SharedState& ss) {
 
     // 2. Admin1 session
     Bytes admin1Cred = HashPassword::passwordToBytes(ss.admin1Pw);
-    Session session(ss.transport, ss.comId);
+    Session session(ss.transport, ss.comIds[tid]);
     StartSessionResult ssr;
     auto r = api.startSessionWithAuth(session, uid::SP_LOCKING, true,
                                        uid::AUTH_ADMIN1, admin1Cred, ssr);
@@ -695,7 +718,7 @@ static void thread3_securityAuthority(int tid, SharedState& ss) {
 
         // Verify SID is blocked
         Bytes sidCred = HashPassword::passwordToBytes(ss.sidPw);
-        Session bs(ss.transport, ss.comId);
+        Session bs(ss.transport, ss.comIds[tid]);
         StartSessionResult bssr;
         r = api.startSessionWithAuth(bs, uid::SP_ADMIN, true,
                                       uid::AUTH_SID, sidCred, bssr);
@@ -723,8 +746,8 @@ static bool phase0_initialize(SharedState& ss) {
     EvalApi api;
     RawResult raw;
 
-    // 1. Read MSID
-    Session s1(ss.transport, ss.comId);
+    // 1. Read MSID (Phase 0은 단일 스레드이므로 baseComId 사용)
+    Session s1(ss.transport, ss.baseComId);
     StartSessionResult ssr;
     auto r = api.startSession(s1, uid::SP_ADMIN, false, ssr);
     if (r.failed()) { std::cerr << "Cannot open AdminSP\n"; return false; }
@@ -735,7 +758,7 @@ static bool phase0_initialize(SharedState& ss) {
     std::cout << "  MSID read: " << msid.size() << " bytes\n";
 
     // 2. Take ownership
-    Session s2(ss.transport, ss.comId);
+    Session s2(ss.transport, ss.baseComId);
     r = api.startSessionWithAuth(s2, uid::SP_ADMIN, true, uid::AUTH_SID, msid, ssr);
     if (r.failed()) {
         // SID may already be changed, try with provided password
@@ -761,7 +784,7 @@ static bool phase0_initialize(SharedState& ss) {
 
     // 4. Set Admin1 password
     Bytes admin1Cred = HashPassword::passwordToBytes(ss.admin1Pw);
-    Session s3(ss.transport, ss.comId);
+    Session s3(ss.transport, ss.baseComId);
     r = api.startSessionWithAuth(s3, uid::SP_LOCKING, true, uid::AUTH_ADMIN1, msid, ssr);
     if (r.failed()) {
         r = api.startSessionWithAuth(s3, uid::SP_LOCKING, true, uid::AUTH_ADMIN1, admin1Cred, ssr);
@@ -798,9 +821,9 @@ static void phase3_cleanup(SharedState& ss) {
     EvalApi api;
     RawResult raw;
 
-    // Revert Locking SP
+    // Revert Locking SP (Phase 3은 단일 스레드 — baseComId 사용)
     Bytes admin1Cred = HashPassword::passwordToBytes(ss.admin1Pw);
-    Session s1(ss.transport, ss.comId);
+    Session s1(ss.transport, ss.baseComId);
     StartSessionResult ssr;
     auto r = api.startSessionWithAuth(s1, uid::SP_LOCKING, true,
                                        uid::AUTH_ADMIN1, admin1Cred, ssr);
@@ -810,11 +833,11 @@ static void phase3_cleanup(SharedState& ss) {
     }
 
     // Re-exchange properties after revert
-    api.exchangeProperties(ss.transport, ss.comId, ss.props);
+    api.exchangeProperties(ss.transport, ss.baseComId, ss.props);
 
     // Revert TPer
     Bytes sidCred = HashPassword::passwordToBytes(ss.sidPw);
-    Session s2(ss.transport, ss.comId);
+    Session s2(ss.transport, ss.baseComId);
     r = api.startSessionWithAuth(s2, uid::SP_ADMIN, true,
                                   uid::AUTH_SID, sidCred, ssr);
     if (r.ok()) {
@@ -857,15 +880,50 @@ int main(int argc, char* argv[]) {
     EvalApi api;
     TcgOption opt;
     api.getTcgOption(ss.transport, opt);
-    ss.comId = opt.baseComId;
-    if (ss.comId == 0) { std::cerr << "No valid ComID\n"; return 1; }
-    api.exchangeProperties(ss.transport, ss.comId, ss.props);
+    ss.baseComId = opt.baseComId;
+    ss.numComIds = opt.numComIds;
+    if (ss.baseComId == 0) { std::cerr << "No valid ComID\n"; return 1; }
+
+    // ── ComID 할당: 스레드별 독립 ComID ──
+    // TCG spec에서 ComID는 통신 채널이며, 하나의 ComID에서는
+    // 하나의 outstanding IF-SEND/IF-RECV만 허용됩니다.
+    // 멀티스레드 병렬 실행을 위해 각 스레드에 별도 ComID를 할당합니다.
+    if (ss.numComIds >= 4) {
+        // 충분한 ComID — 각 스레드에 고유 ComID 할당
+        for (int i = 0; i < 4; i++) {
+            ss.comIds[i] = ss.baseComId + i;
+        }
+        ss.serialMode = false;
+        std::cout << "ComID allocation: parallel mode (4 independent ComIDs)\n";
+    } else {
+        // ComID 부족 — 단일 ComID, transport 직렬화 모드
+        for (int i = 0; i < 4; i++) {
+            ss.comIds[i] = ss.baseComId;
+        }
+        ss.serialMode = true;
+        std::cout << "WARNING: numComIds=" << ss.numComIds
+                  << " < 4, falling back to serial mode (shared ComID)\n";
+        std::cout << "  Parallel threads will serialize transport access.\n";
+    }
+
+    // 각 ComID별로 Properties exchange 수행
+    api.exchangeProperties(ss.transport, ss.baseComId, ss.props);
+    for (int i = 1; i < 4 && !ss.serialMode; i++) {
+        PropertiesResult p;
+        api.exchangeProperties(ss.transport, ss.comIds[i], p);
+    }
 
     std::cout << "═══════════════════════════════════════════════════════\n";
     std::cout << " Comprehensive Multi-Thread TCG SED Evaluation TC\n";
     std::cout << " Device: " << argv[1] << "\n";
-    std::cout << " ComID:  0x" << std::hex << ss.comId << std::dec << "\n";
+    std::cout << " ComIDs: ";
+    for (int i = 0; i < 4; i++) {
+        std::cout << "T" << i << "=0x" << std::hex << ss.comIds[i] << std::dec;
+        if (i < 3) std::cout << ", ";
+    }
+    std::cout << "\n";
     std::cout << " SSC:    " << (int)opt.sscType << "\n";
+    std::cout << " Mode:   " << (ss.serialMode ? "Serial (shared ComID)" : "Parallel (per-thread ComID)") << "\n";
     std::cout << " Threads: 4 (T0=Discovery T1=Locking T2=MBR/DS T3=Auth)\n";
     std::cout << "═══════════════════════════════════════════════════════\n";
 
