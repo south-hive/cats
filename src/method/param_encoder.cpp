@@ -51,23 +51,15 @@ Bytes ParamEncoder::encodeStartSession(uint32_t hostSessionId,
 Bytes ParamEncoder::encodeProperties(const HostProperties& props) {
     TokenEncoder enc;
 
-    // Host properties list
+    // TCG Core Spec: Properties method parameter is a named value pair
+    //   STARTNAME "HostProperties" STARTLIST { pairs... } ENDLIST ENDNAME
+    // sedutil reference: DtaDevOpal.cpp properties()
+    enc.startName();
+    enc.encodeString("HostProperties");
     enc.startList();
-
-    enc.startName(); enc.encodeString("MaxMethods");
-    enc.encodeUint(props.maxMethods); enc.endName();
-
-    enc.startName(); enc.encodeString("MaxSubPackets");
-    enc.encodeUint(props.maxSubPackets); enc.endName();
-
-    enc.startName(); enc.encodeString("MaxPackets");
-    enc.encodeUint(props.maxPackets); enc.endName();
 
     enc.startName(); enc.encodeString("MaxComPacketSize");
     enc.encodeUint(props.maxComPacketSize); enc.endName();
-
-    enc.startName(); enc.encodeString("MaxResponseComPacketSize");
-    enc.encodeUint(props.maxResponseComPacketSize); enc.endName();
 
     enc.startName(); enc.encodeString("MaxPacketSize");
     enc.encodeUint(props.maxPacketSize); enc.endName();
@@ -75,22 +67,17 @@ Bytes ParamEncoder::encodeProperties(const HostProperties& props) {
     enc.startName(); enc.encodeString("MaxIndTokenSize");
     enc.encodeUint(props.maxIndTokenSize); enc.endName();
 
-    enc.startName(); enc.encodeString("MaxAggTokenSize");
-    enc.encodeUint(props.maxAggTokenSize); enc.endName();
+    enc.startName(); enc.encodeString("MaxPackets");
+    enc.encodeUint(props.maxPackets); enc.endName();
 
-    enc.startName(); enc.encodeString("ContinuedTokens");
-    enc.encodeUint(props.continuedTokens); enc.endName();
+    enc.startName(); enc.encodeString("MaxSubPackets");
+    enc.encodeUint(props.maxSubPackets); enc.endName();
 
-    enc.startName(); enc.encodeString("SequenceNumbers");
-    enc.encodeUint(props.sequenceNumbers); enc.endName();
-
-    enc.startName(); enc.encodeString("AckNak");
-    enc.encodeUint(props.ackNak); enc.endName();
-
-    enc.startName(); enc.encodeString("Async");
-    enc.encodeUint(props.async); enc.endName();
+    enc.startName(); enc.encodeString("MaxMethods");
+    enc.encodeUint(props.maxMethods); enc.endName();
 
     enc.endList();
+    enc.endName();
 
     return enc.data();
 }

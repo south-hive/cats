@@ -66,8 +66,8 @@ Result EvalApi::discovery0Custom(std::shared_ptr<ITransport> transport,
 Result EvalApi::exchangeProperties(std::shared_ptr<ITransport> transport,
                                     uint16_t comId,
                                     PropertiesResult& result) {
-    // TCG Core Spec: Properties는 세션 전 기본 ComPacket 크기로 교환
-    return exchangePropertiesCustom(transport, comId, 1024, 980, 944, result);
+    // sedutil 기본값: MaxComPacketSize=2048, MaxPacketSize=2028, MaxIndTokenSize=1992
+    return exchangePropertiesCustom(transport, comId, 2048, 2028, 1992, result);
 }
 
 Result EvalApi::exchangePropertiesCustom(std::shared_ptr<ITransport> transport,
@@ -95,8 +95,8 @@ Result EvalApi::exchangePropertiesCustom(std::shared_ptr<ITransport> transport,
     if (r.failed()) { result.raw.transportError = r.code(); return r; }
 
     // IF-RECV with polling — TPer가 응답 준비될 때까지 반복
-    // Properties는 세션 전이므로 TPer 기본 ComPacket 크기 사용
-    static constexpr size_t PROPS_RECV_SIZE = 512;
+    // sedutil 기준: MIN_BUFFER_LENGTH = 2048
+    static constexpr size_t PROPS_RECV_SIZE = 2048;
     Bytes recvBuffer;
     PacketBuilder::ParsedResponse parsed;
     for (int attempt = 0; attempt < 20; attempt++) {
@@ -121,12 +121,34 @@ Result EvalApi::exchangePropertiesCustom(std::shared_ptr<ITransport> transport,
     if (!result.raw.methodResult.isSuccess())
         return result.raw.methodResult.toResult();
 
-    // Decode TPer properties
+    // Decode TPer properties from response
+    // Response format: STARTNAME "HostProperties" { echo } ENDNAME
+    //                  STARTNAME "TPerProperties" { values } ENDNAME
     auto stream = result.raw.methodResult.resultStream();
-    if (stream.isStartList()) stream.skipList(); // skip host echo
 
+    // Skip HostProperties echo (STARTNAME "HostProperties" ... ENDNAME)
+    if (stream.isStartName()) {
+        stream.expectStartName();
+        stream.skip(); // "HostProperties" string
+        stream.skipList(); // { echoed host values }
+        stream.expectEndName();
+    } else if (stream.isStartList()) {
+        stream.skipList(); // fallback: bare list format
+    }
+
+    // Parse TPerProperties
     ParamDecoder::TPerProperties tperProps;
-    if (stream.isStartList()) {
+    if (stream.isStartName()) {
+        stream.expectStartName();
+        stream.skip(); // "TPerProperties" string
+        if (stream.isStartList()) {
+            stream.expectStartList();
+            ParamDecoder::decodeProperties(stream, tperProps);
+            stream.expectEndList();
+        }
+        stream.expectEndName();
+    } else if (stream.isStartList()) {
+        // fallback: bare list format
         stream.expectStartList();
         ParamDecoder::decodeProperties(stream, tperProps);
         stream.expectEndList();
