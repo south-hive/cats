@@ -418,92 +418,90 @@ void CommandLogger::writeTcgPayload(std::ostream& os,
 
     os << "TCG Payload\n";
 
-    int indent = 1;
-    bool afterCall = false;       // CALL 토큰 직후 상태
-    int uidCountAfterCall = 0;    // CALL 직후 UID 카운트 (0=invoking, 1=method)
+    // 간결한 한 줄 형식: 토큰 스트림을 콤팩트하게 출력
+    // CALL invokingUid(name), methodUid(name) { params... }
+    os << "  ";
+
+    bool afterCall = false;
+    int uidCountAfterCall = 0;
 
     for (size_t i = 0; i < decoder.count(); i++) {
         const auto& tok = decoder[i];
 
-        // EndList는 인덴트를 먼저 줄이고 출력
-        if (tok.type == TokenType::EndList ||
-            tok.type == TokenType::EndName) {
-            if (indent > 1) indent--;
-        }
-
-        // 인덴트 적용
-        for (int d = 0; d < indent; d++) os << "  ";
-
         if (tok.isControl()) {
-            // 제어 토큰
-            os << tokenTypeName(tok.type) << " [control]\n";
-
-            if (tok.type == TokenType::Call) {
-                afterCall = true;
-                uidCountAfterCall = 0;
-            }
-
-            // StartList/StartName은 인덴트 증가
-            if (tok.type == TokenType::StartList ||
-                tok.type == TokenType::StartName) {
-                indent++;
+            switch (tok.type) {
+                case TokenType::Call:
+                    os << "CALL ";
+                    afterCall = true;
+                    uidCountAfterCall = 0;
+                    break;
+                case TokenType::StartList:      os << "{ "; break;
+                case TokenType::EndList:        os << "} "; break;
+                case TokenType::StartName:      os << "[ "; break;
+                case TokenType::EndName:        os << "] "; break;
+                case TokenType::EndOfData:      os << "EOD "; break;
+                case TokenType::EndOfSession:   os << "EOS "; break;
+                case TokenType::StartTransaction: os << "TX{ "; break;
+                case TokenType::EndTransaction: os << "}TX "; break;
+                case TokenType::EmptyAtom:      os << "empty "; break;
+                default: break;
             }
         } else if (tok.isByteSequence) {
-            // 바이트 시퀀스 (short_atom, medium_atom, long_atom)
-            os << tokenTypeName(tok.type) << " ["
-               << tok.byteData.size() << " bytes]: ";
-
-            // 바이트 값 출력 (최대 32바이트)
-            size_t printLen = std::min(tok.byteData.size(), (size_t)32);
-            for (size_t b = 0; b < printLen; b++) {
-                if (b > 0) os << " ";
-                os << std::hex << std::setfill('0') << std::setw(2)
-                   << (int)tok.byteData[b];
-            }
-            if (tok.byteData.size() > 32) os << " ...";
-
-            // UID 해석 (8바이트 byte-sequence)
+            // 8바이트 UID는 이름으로 해석, 그 외는 크기만 표시
             if (tok.byteData.size() == 8) {
-                uint64_t uidVal = bytesToUid(tok.byteData.data(),
-                                             tok.byteData.size());
+                uint64_t uidVal = bytesToUid(tok.byteData.data(), tok.byteData.size());
                 const char* name = nullptr;
 
                 if (afterCall && uidCountAfterCall == 0) {
-                    // CALL 직후 첫 번째: invoking UID
                     name = resolveUid(uidVal);
                     uidCountAfterCall++;
                 } else if (afterCall && uidCountAfterCall == 1) {
-                    // CALL 직후 두 번째: method UID
                     name = resolveMethodUid(uidVal);
                     uidCountAfterCall++;
-                    afterCall = false;  // 이후는 일반 파라미터
+                    afterCall = false;
                 } else {
-                    // 일반 파라미터에서도 UID 해석 시도
                     name = resolveUid(uidVal);
                 }
 
                 if (name) {
-                    os << std::dec << "  -> " << name;
+                    os << name << " ";
+                } else {
+                    // 이름 없으면 hex로 축약
+                    os << std::hex;
+                    for (size_t b = 0; b < 8; b++)
+                        os << std::setfill('0') << std::setw(2) << (int)tok.byteData[b];
+                    os << std::dec << " ";
+                }
+            } else {
+                // 짧은 데이터는 hex, 긴 데이터는 크기만
+                if (tok.byteData.size() <= 8) {
+                    os << tokenTypeName(tok.type) << "(";
+                    for (size_t b = 0; b < tok.byteData.size(); b++)
+                        os << std::hex << std::setfill('0') << std::setw(2) << (int)tok.byteData[b];
+                    os << std::dec << ") ";
+                } else {
+                    os << tokenTypeName(tok.type) << "(" << tok.byteData.size() << "B) ";
                 }
             }
-
-            os << std::dec << "\n";
         } else {
             // 정수 atom
-            os << tokenTypeName(tok.type) << ": ";
             if (tok.isSigned) {
-                os << tok.intVal << "  (int)";
+                os << tok.intVal << " ";
             } else {
-                os << tok.uintVal << "  (uint)";
-                // 작은 uint도 UID 해석 시도 (예: SP UID가 작은 값일 수 있음)
                 if (tok.uintVal > 0xFF) {
                     const char* name = resolveUid(tok.uintVal);
-                    if (name) os << "  -> " << name;
+                    if (name) {
+                        os << name << " ";
+                    } else {
+                        os << "0x" << std::hex << tok.uintVal << std::dec << " ";
+                    }
+                } else {
+                    os << tok.uintVal << " ";
                 }
             }
-            os << "\n";
         }
     }
+    os << "\n";
 }
 
 // ── Raw Payload ─────────────────────────────────────
