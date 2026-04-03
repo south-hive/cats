@@ -12,9 +12,15 @@
 #include <libsed/eval/eval_api.h>
 #include <libsed/transport/transport_factory.h>
 #include <libsed/debug/logging_transport.h>
+#include <libsed/method/method_call.h>
+#include <libsed/method/method_uids.h>
+#include <libsed/method/param_encoder.h>
+#include <libsed/packet/packet_builder.h>
 #include <libsed/sed_library.h>
 #include <iostream>
 #include <iomanip>
+#include <thread>
+#include <chrono>
 
 using namespace libsed;
 using namespace libsed::eval;
@@ -104,20 +110,96 @@ int main(int argc, char* argv[]) {
 
     // ═══════════════════════════════════════════════
     //  3. Properties Exchange
+    //  방법 A: api.exchangeProperties() (고수준)
+    //  방법 B: 직접 ifSend/ifRecv (props_diff와 동일)
     // ═══════════════════════════════════════════════
     std::cout << "[" << ++step << "] Properties Exchange\n";
+
+    // ── 방법 A: EvalApi 경유 ──
+    std::cout << "  [A] via api.exchangeProperties()...\n";
     PropertiesResult props;
     r = api.exchangeProperties(transport, comId, props);
     if (r.ok()) {
-        std::cout << "  MaxComPacketSize : " << props.tperMaxComPacketSize << "\n";
-        std::cout << "  MaxPacketSize    : " << props.tperMaxPacketSize << "\n";
-        std::cout << "  MaxIndTokenSize  : " << props.tperMaxIndTokenSize << "\n";
-        std::cout << "  OK\n";
+        std::cout << "  [A] OK: MaxCPS=" << props.tperMaxComPacketSize << "\n";
     } else {
-        std::cerr << "  FAIL: " << r.message() << "\n";
-        std::cerr << "  Fallback: MaxComPacketSize=2048\n";
+        std::cout << "  [A] FAIL: " << r.message() << "\n";
+
+        // StackReset 후 방법 B 시도
+        api.stackReset(transport, comId);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        std::cout << "  [B] via direct ifSend/ifRecv...\n";
+
+        // props_diff와 동일하게 패킷 직접 구성
+        ParamEncoder::HostProperties hp;
+        hp.maxComPacketSize = 2048;
+        hp.maxPacketSize = 2028;
+        hp.maxIndTokenSize = 1992;
+        Bytes params = ParamEncoder::encodeProperties(hp);
+        Bytes methodTokens = MethodCall::buildSmCall(method::SM_PROPERTIES, params);
+        PacketBuilder pb;
+        pb.setComId(comId);
+        Bytes sendData = pb.buildSessionManagerPacket(methodTokens);
+
+        // Send
+        r = transport->ifSend(0x01, comId, ByteSpan(sendData.data(), sendData.size()));
+        if (r.ok()) {
+            // Recv with polling
+            Bytes recvBuf;
+            for (int att = 0; att < 20; att++) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                recvBuf.clear();
+                r = transport->ifRecv(0x01, comId, recvBuf, 2048);
+                if (r.failed()) break;
+                if (recvBuf.size() >= 20) {
+                    uint32_t cpLen = Endian::readBe32(recvBuf.data() + 16);
+                    if (cpLen > 0) break;
+                }
+            }
+            if (r.ok() && recvBuf.size() >= 56) {
+                uint32_t tokenLen = Endian::readBe32(recvBuf.data() + 52);
+                // 토큰에서 status 파싱
+                // Status는 EOD 뒤 [ status 0 0 ]
+                const uint8_t* toks = recvBuf.data() + 56;
+                uint8_t status = 0xFF;
+                for (size_t i = 0; i + 4 < tokenLen; i++) {
+                    if (toks[i] == 0xF9) {  // EOD
+                        // 다음: F0 status 00 00 F1
+                        if (i + 3 < tokenLen && toks[i+1] == 0xF0)
+                            status = toks[i+2];
+                        break;
+                    }
+                }
+                std::cout << "  [B] Recv " << recvBuf.size() << " bytes, St=" << (int)status;
+                if (status == 0) std::cout << " (Success)";
+                else std::cout << " (0x" << std::hex << (int)status << std::dec << ")";
+                std::cout << "\n";
+
+                // [A] send payload와 비교
+                std::cout << "  [A vs B] Send size: A=" << props.raw.rawSendPayload.size()
+                          << " B=" << sendData.size() << "\n";
+                if (props.raw.rawSendPayload.size() == sendData.size()) {
+                    bool same = (props.raw.rawSendPayload == sendData);
+                    std::cout << "  [A vs B] Send payload: "
+                              << (same ? "IDENTICAL" : "DIFFERENT") << "\n";
+                    if (!same) {
+                        for (size_t i = 0; i < sendData.size(); i++) {
+                            if (props.raw.rawSendPayload[i] != sendData[i]) {
+                                printf("    offset 0x%04zX: A=0x%02X B=0x%02X\n",
+                                       i, props.raw.rawSendPayload[i], sendData[i]);
+                            }
+                        }
+                    }
+                } else {
+                    std::cout << "  [A vs B] Send payload: SIZE MISMATCH\n";
+                }
+            }
+        } else {
+            std::cout << "  [B] Send FAIL: " << r.message() << "\n";
+        }
     }
-    uint32_t maxCPS = (r.ok() && props.tperMaxComPacketSize > 0)
+
+    uint32_t maxCPS = (props.tperMaxComPacketSize > 0)
                       ? props.tperMaxComPacketSize : 2048;
     std::cout << "\n";
 
