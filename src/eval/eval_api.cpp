@@ -93,14 +93,25 @@ Result EvalApi::exchangePropertiesCustom(std::shared_ptr<ITransport> transport,
     auto r = transport->ifSend(0x01, comId, ByteSpan(sendData.data(), sendData.size()));
     if (r.failed()) { result.raw.transportError = r.code(); return r; }
 
+    // IF-RECV with polling — TPer가 응답 준비될 때까지 반복
+    // ComPacket.outstandingData > 0이면 아직 응답 미완성
     Bytes recvBuffer;
-    r = transport->ifRecv(0x01, comId, recvBuffer, 65536);
-    if (r.failed()) { result.raw.transportError = r.code(); return r; }
-    result.raw.rawRecvPayload = recvBuffer;
-
     PacketBuilder::ParsedResponse parsed;
-    r = pb.parseResponse(recvBuffer, parsed);
-    if (r.failed()) return r;
+    for (int attempt = 0; attempt < 20; attempt++) {
+        recvBuffer.clear();
+        r = transport->ifRecv(0x01, comId, recvBuffer, 65536);
+        if (r.failed()) { result.raw.transportError = r.code(); return r; }
+
+        r = pb.parseResponse(recvBuffer, parsed);
+        if (r.failed()) return r;
+
+        // ComPacket.length > 0이면 실제 응답 수신 완료
+        if (parsed.comPacketHeader.length > 0) break;
+
+        // length == 0이면 TPer가 아직 처리 중 — 대기 후 재시도
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    result.raw.rawRecvPayload = recvBuffer;
 
     r = result.raw.methodResult.parse(parsed.tokenPayload);
     if (r.failed()) return r;

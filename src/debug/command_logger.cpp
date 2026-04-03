@@ -288,11 +288,13 @@ void CommandLogger::logCommand(const char* direction,
 
     writeCommandInfo(os, protocolId, comId, len);
 
-    // TCG Head와 Payload는 프로토콜 0x01이고 충분한 데이터가 있을 때만 파싱
+    // TCG Head/Payload는 Protocol 0x01 + ComID >= 0x1000일 때만 파싱
+    // ComID 0x0001 = Level 0 Discovery (binary format, NOT ComPacket)
+    // Protocol 0x02 = ComID Management (별도 binary format)
     static constexpr size_t MIN_COMPACKET_SIZE =
         ComPacketHeader::HEADER_SIZE + PacketHeader::HEADER_SIZE + SubPacketHeader::HEADER_SIZE;
 
-    if (protocolId == 0x01 && len >= MIN_COMPACKET_SIZE) {
+    if (protocolId == 0x01 && comId >= 0x1000 && len >= MIN_COMPACKET_SIZE) {
         writeTcgHead(os, data, len);
         writeTcgPayload(os, data, len);
     }
@@ -394,17 +396,31 @@ static const char* methodStatusName(uint64_t status) {
     }
 }
 
-/// @brief atom 값을 의미 있는 문자열로 변환 (UID 이름, 숫자, 바이트 hex)
+/// @brief 바이트 배열이 출력 가능한 ASCII 문자열인지 판별
+static bool isPrintableAscii(const Bytes& data) {
+    if (data.empty()) return false;
+    for (auto b : data) {
+        if (b < 0x20 || b > 0x7E) return false;
+    }
+    return true;
+}
+
+/// @brief atom 값을 의미 있는 문자열로 변환 (UID 이름, 문자열, 숫자, hex)
 std::string CommandLogger::formatAtomValue(const Token& tok) {
     if (tok.isByteSequence) {
+        // 8바이트 UID → 이름 해석 시도
         if (tok.byteData.size() == 8) {
             uint64_t uid = bytesToUid(tok.byteData.data(), 8);
             const char* name = resolveUid(uid);
             if (!name) name = resolveMethodUid(uid);
             if (name) return name;
         }
-        // Short byte sequences as hex string
         if (tok.byteData.empty()) return "\"\"";
+        // 출력 가능한 ASCII면 문자열로 표시
+        if (isPrintableAscii(tok.byteData)) {
+            return "\"" + std::string(tok.byteData.begin(), tok.byteData.end()) + "\"";
+        }
+        // 짧은 바이트는 hex
         if (tok.byteData.size() <= 16) {
             std::ostringstream h;
             h << std::hex << std::setfill('0');
