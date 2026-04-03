@@ -49,13 +49,15 @@ EvalApi (stateless, 120+ step-by-step methods)
 
 1. **EvalApi** (`include/libsed/eval/eval_api.h`, ~960 lines) — Low-level flat API. Every protocol step is an independent function. All results include `rawSendPayload`/`rawRecvPayload` for wire-level inspection. This is the primary API for evaluation platforms.
 
-2. **SSC High-Level APIs** (`include/libsed/ssc/`) — Convenience wrappers (`OpalAdmin`, `OpalLocking`, `EnterpriseDevice`, etc.) that bundle multiple protocol steps. Used for simple operations where step-by-step control isn't needed.
+2. **Eval Composite** (`include/libsed/eval/eval_composite.h`) — Multi-step convenience functions built on EvalApi. Bundles common TC sequences (getMsid, takeOwnership, revertToFactory, withSession RAII, etc.) into single calls with step-by-step logging via `CompositeResult`. Replaces the old `sed_macro_util` pattern.
+
+3. **SSC High-Level APIs** (`include/libsed/ssc/`) — Convenience wrappers (`OpalAdmin`, `OpalLocking`, `EnterpriseDevice`, etc.) that bundle multiple protocol steps. Used for simple operations where step-by-step control isn't needed.
 
 ### Key Modules
 
 | Module | Headers | Purpose |
 |--------|---------|---------|
-| `eval/` | `eval_api.h`, `sed_context.h` | Core evaluation API and per-thread context |
+| `eval/` | `eval_api.h`, `eval_composite.h`, `sed_context.h` | Core evaluation API, composite utilities, and per-thread context |
 | `transport/` | `i_transport.h`, `i_nvme_device.h`, `nvme_transport.h` | Transport abstraction and NVMe DI |
 | `session/` | `session.h` | Session lifecycle (explicit open/close) |
 | `codec/` | `token*.h` | TCG token encoding/decoding |
