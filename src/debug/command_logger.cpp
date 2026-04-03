@@ -418,40 +418,35 @@ void CommandLogger::writeTcgPayload(std::ostream& os,
 
     os << "TCG Payload\n";
 
-    // 간결한 한 줄 형식: 토큰 스트림을 콤팩트하게 출력
-    // CALL invokingUid(name), methodUid(name) { params... }
-    os << "  ";
-
+    int indent = 1;
     bool afterCall = false;
     int uidCountAfterCall = 0;
 
     for (size_t i = 0; i < decoder.count(); i++) {
         const auto& tok = decoder[i];
 
+        // END_LIST/END_NAME은 인덴트를 먼저 줄이고 출력
+        if (tok.type == TokenType::EndList || tok.type == TokenType::EndName) {
+            if (indent > 1) indent--;
+        }
+
+        // 인덴트 적용
+        for (int d = 0; d < indent; d++) os << "  ";
+
         if (tok.isControl()) {
-            switch (tok.type) {
-                case TokenType::Call:
-                    os << "CALL ";
-                    afterCall = true;
-                    uidCountAfterCall = 0;
-                    break;
-                case TokenType::StartList:      os << "{ "; break;
-                case TokenType::EndList:        os << "} "; break;
-                case TokenType::StartName:      os << "[ "; break;
-                case TokenType::EndName:        os << "] "; break;
-                case TokenType::EndOfData:      os << "EOD "; break;
-                case TokenType::EndOfSession:   os << "EOS "; break;
-                case TokenType::StartTransaction: os << "TX{ "; break;
-                case TokenType::EndTransaction: os << "}TX "; break;
-                case TokenType::EmptyAtom:      os << "empty "; break;
-                default: break;
+            os << tokenTypeName(tok.type) << "\n";
+            if (tok.type == TokenType::Call) {
+                afterCall = true;
+                uidCountAfterCall = 0;
+            }
+            if (tok.type == TokenType::StartList || tok.type == TokenType::StartName) {
+                indent++;
             }
         } else if (tok.isByteSequence) {
-            // 8바이트 UID는 이름으로 해석, 그 외는 크기만 표시
+            os << tokenTypeName(tok.type) << ": ";
             if (tok.byteData.size() == 8) {
-                uint64_t uidVal = bytesToUid(tok.byteData.data(), tok.byteData.size());
+                uint64_t uidVal = bytesToUid(tok.byteData.data(), 8);
                 const char* name = nullptr;
-
                 if (afterCall && uidCountAfterCall == 0) {
                     name = resolveUid(uidVal);
                     uidCountAfterCall++;
@@ -462,46 +457,27 @@ void CommandLogger::writeTcgPayload(std::ostream& os,
                 } else {
                     name = resolveUid(uidVal);
                 }
-
                 if (name) {
-                    os << name << " ";
+                    os << name;
                 } else {
-                    // 이름 없으면 hex로 축약
                     os << std::hex;
-                    for (size_t b = 0; b < 8; b++)
+                    for (int b = 0; b < 8; b++)
                         os << std::setfill('0') << std::setw(2) << (int)tok.byteData[b];
-                    os << std::dec << " ";
+                    os << std::dec;
                 }
+            } else if (tok.byteData.size() <= 16) {
+                os << std::hex;
+                for (size_t b = 0; b < tok.byteData.size(); b++)
+                    os << std::setfill('0') << std::setw(2) << (int)tok.byteData[b];
+                os << std::dec;
             } else {
-                // 짧은 데이터는 hex, 긴 데이터는 크기만
-                if (tok.byteData.size() <= 8) {
-                    os << tokenTypeName(tok.type) << "(";
-                    for (size_t b = 0; b < tok.byteData.size(); b++)
-                        os << std::hex << std::setfill('0') << std::setw(2) << (int)tok.byteData[b];
-                    os << std::dec << ") ";
-                } else {
-                    os << tokenTypeName(tok.type) << "(" << tok.byteData.size() << "B) ";
-                }
+                os << "(" << tok.byteData.size() << " bytes)";
             }
+            os << "\n";
         } else {
-            // 정수 atom
-            if (tok.isSigned) {
-                os << tok.intVal << " ";
-            } else {
-                if (tok.uintVal > 0xFF) {
-                    const char* name = resolveUid(tok.uintVal);
-                    if (name) {
-                        os << name << " ";
-                    } else {
-                        os << "0x" << std::hex << tok.uintVal << std::dec << " ";
-                    }
-                } else {
-                    os << tok.uintVal << " ";
-                }
-            }
+            os << tokenTypeName(tok.type) << ": " << (tok.isSigned ? tok.intVal : (int64_t)tok.uintVal) << "\n";
         }
     }
-    os << "\n";
 }
 
 // ── Raw Payload ─────────────────────────────────────
