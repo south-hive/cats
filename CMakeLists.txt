@@ -231,6 +231,10 @@ if(LIBSED_BUILD_EXAMPLES)
     add_executable(example_sedutil_query examples/eval_sedutil_query.cpp)
     target_link_libraries(example_sedutil_query PRIVATE libsed)
 
+    # ── Properties Diagnostic ──
+    add_executable(example_eval_props_diag examples/eval_props_diag.cpp)
+    target_link_libraries(example_eval_props_diag PRIVATE libsed)
+
     # ── Comprehensive Multi-Thread TC ──
     add_executable(example_eval_mt_comp examples/eval_mt_comprehensive.cpp)
     target_link_libraries(example_eval_mt_comp PRIVATE libsed Threads::Threads)
