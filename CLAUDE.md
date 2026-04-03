@@ -63,7 +63,7 @@ EvalApi (stateless, 120+ step-by-step methods)
 | `codec/` | `token*.h` | TCG token encoding/decoding |
 | `packet/` | `packet_builder.h`, `com_packet.h` | ComPacket construction/parsing |
 | `discovery/` | `discovery.h`, feature descriptors | Level 0 Discovery and feature parsing |
-| `debug/` | `fault_builder.h`, `test_context.h` | Fault injection (24 injection points) |
+| `debug/` | `fault_builder.h`, `test_context.h`, `command_logger.h`, `logging_transport.h` | Fault injection (24 points), command history logging |
 | `core/` | `types.h`, `error.h`, `uid.h` | Fundamental types, error codes, 150+ well-known UIDs |
 
 ### NVMe Dependency Injection

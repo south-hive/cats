@@ -91,6 +91,8 @@ set(LIBSED_SOURCES
 
     # Debug / Test Layer
     src/debug/test_context.cpp
+    src/debug/command_logger.cpp
+    src/debug/logging_transport.cpp
 
     # Eval API (flat step-by-step)
     src/eval/eval_api.cpp
