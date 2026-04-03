@@ -309,6 +309,7 @@ static void thread0_spLifecycleDiscovery(int tid, SharedState& ss) {
     {
         Bytes sidCred = HashPassword::passwordToBytes(ss.sidPw);
         Session session(ss.transport, ss.comIds[tid]);
+        session.setMaxComPacketSize(ss.props.tperMaxComPacketSize);
         StartSessionResult ssr;
         r = api.startSessionWithAuth(session, uid::SP_ADMIN, false,
                                       uid::AUTH_SID, sidCred, ssr);
@@ -386,6 +387,7 @@ static void thread1_lockingKeyMgmt(int tid, SharedState& ss) {
     // ── Phase 1: Admin1 session ──
     Bytes admin1Cred = HashPassword::passwordToBytes(ss.admin1Pw);
     Session session(ss.transport, ss.comIds[tid]);
+    session.setMaxComPacketSize(ss.props.tperMaxComPacketSize);
     StartSessionResult ssr;
     auto r = api.startSessionWithAuth(session, uid::SP_LOCKING, true,
                                        uid::AUTH_ADMIN1, admin1Cred, ssr);
@@ -471,6 +473,7 @@ static void thread1_lockingKeyMgmt(int tid, SharedState& ss) {
     Bytes user1Cred = HashPassword::passwordToBytes(ss.user1Pw);
     for (int i = 0; i < 5; i++) {
         Session us(ss.transport, ss.comIds[tid]);
+        us.setMaxComPacketSize(ss.props.tperMaxComPacketSize);
         StartSessionResult usr;
         r = api.startSessionWithAuth(us, uid::SP_LOCKING, true,
                                       uid::AUTH_USER1, user1Cred, usr);
@@ -520,6 +523,7 @@ static void thread2_mbrDataStore(int tid, SharedState& ss) {
 
     Bytes admin1Cred = HashPassword::passwordToBytes(ss.admin1Pw);
     Session session(ss.transport, ss.comIds[tid]);
+    session.setMaxComPacketSize(ss.props.tperMaxComPacketSize);
     StartSessionResult ssr;
     auto r = api.startSessionWithAuth(session, uid::SP_LOCKING, true,
                                        uid::AUTH_ADMIN1, admin1Cred, ssr);
@@ -617,6 +621,7 @@ static void thread2_mbrDataStore(int tid, SharedState& ss) {
     TLOG(tid, "--- Phase 2: Large DataStore (2048B chunked) ---");
     {
         Session s2(ss.transport, ss.comIds[tid]);
+        s2.setMaxComPacketSize(ss.props.tperMaxComPacketSize);
         StartSessionResult ssr2;
         r = api.startSessionWithAuth(s2, uid::SP_LOCKING, true,
                                       uid::AUTH_ADMIN1, admin1Cred, ssr2);
@@ -698,6 +703,7 @@ static void thread3_securityAuthority(int tid, SharedState& ss) {
     // 2. Admin1 session
     Bytes admin1Cred = HashPassword::passwordToBytes(ss.admin1Pw);
     Session session(ss.transport, ss.comIds[tid]);
+    session.setMaxComPacketSize(ss.props.tperMaxComPacketSize);
     StartSessionResult ssr;
     auto r = api.startSessionWithAuth(session, uid::SP_LOCKING, true,
                                        uid::AUTH_ADMIN1, admin1Cred, ssr);
@@ -813,6 +819,7 @@ static void thread3_securityAuthority(int tid, SharedState& ss) {
         // Verify SID is blocked
         Bytes sidCred = HashPassword::passwordToBytes(ss.sidPw);
         Session bs(ss.transport, ss.comIds[tid]);
+        bs.setMaxComPacketSize(ss.props.tperMaxComPacketSize);
         StartSessionResult bssr;
         r = api.startSessionWithAuth(bs, uid::SP_ADMIN, true,
                                       uid::AUTH_SID, sidCred, bssr);
@@ -863,6 +870,7 @@ static bool phase0_initialize(SharedState& ss) {
     // 1. Read MSID
     std::cout << "  [1] Reading MSID (Anonymous AdminSP session)...\n";
     Session s1(ss.transport, ss.baseComId);
+    s1.setMaxComPacketSize(props.tperMaxComPacketSize);
     StartSessionResult ssr;
     r = api.startSession(s1, uid::SP_ADMIN, false, ssr);
     if (r.failed()) {
@@ -887,6 +895,7 @@ static bool phase0_initialize(SharedState& ss) {
     // 2. Take ownership (SID auth → set SID PIN)
     std::cout << "  [2] Take Ownership (SID auth with MSID)...\n";
     Session s2(ss.transport, ss.baseComId);
+    s2.setMaxComPacketSize(props.tperMaxComPacketSize);
     r = api.startSessionWithAuth(s2, uid::SP_ADMIN, true, uid::AUTH_SID, msid, ssr);
     if (r.failed()) {
         std::cout << "      MSID로 SID 인증 실패 — 이미 소유된 드라이브일 수 있음, sidPw로 재시도\n";
@@ -945,6 +954,7 @@ static bool phase0_initialize(SharedState& ss) {
     std::cout << "  [4] Setting Admin1 / User1 passwords...\n";
     Bytes admin1Cred = HashPassword::passwordToBytes(ss.admin1Pw);
     Session s3(ss.transport, ss.baseComId);
+    s3.setMaxComPacketSize(props.tperMaxComPacketSize);
     r = api.startSessionWithAuth(s3, uid::SP_LOCKING, true, uid::AUTH_ADMIN1, msid, ssr);
     if (r.failed()) {
         std::cout << "      MSID로 Admin1 인증 실패 — admin1Pw로 재시도\n";
@@ -1012,6 +1022,7 @@ static void phase3_cleanup(SharedState& ss) {
     std::cout << "  [1] Revert Locking SP...\n";
     Bytes admin1Cred = HashPassword::passwordToBytes(ss.admin1Pw);
     Session s1(ss.transport, ss.baseComId);
+    s1.setMaxComPacketSize(props.tperMaxComPacketSize);
     StartSessionResult ssr;
     auto r = api.startSessionWithAuth(s1, uid::SP_LOCKING, true,
                                        uid::AUTH_ADMIN1, admin1Cred, ssr);
@@ -1033,6 +1044,7 @@ static void phase3_cleanup(SharedState& ss) {
     std::cout << "  [2] Revert TPer...\n";
     Bytes sidCred = HashPassword::passwordToBytes(ss.sidPw);
     Session s2(ss.transport, ss.baseComId);
+    s2.setMaxComPacketSize(ss.props.tperMaxComPacketSize);
     r = api.startSessionWithAuth(s2, uid::SP_ADMIN, true,
                                   uid::AUTH_SID, sidCred, ssr);
     if (r.ok()) {
