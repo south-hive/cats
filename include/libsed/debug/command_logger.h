@@ -99,6 +99,11 @@ private:
     static void writeRawPayload(std::ostream& os,
                                 const uint8_t* data, size_t len);
 
+    /// @brief CMD 한 줄 요약 작성 (진단 보고용)
+    static void writeSummaryLine(std::ostream& os,
+                                 uint8_t protocolId, uint16_t comId,
+                                 const uint8_t* data, size_t len);
+
     /// @brief 현재 실행 파일의 basename 획득
     static std::string getExecutableName();
 

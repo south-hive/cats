@@ -286,6 +286,9 @@ void CommandLogger::logCommand(const char* direction,
     std::ostringstream os;
     os << "\n<<CMD #" << cmdNum << ", " << direction << ">>\n";
 
+    // ── 한 줄 요약 (진단용) ──
+    writeSummaryLine(os, protocolId, comId, data, len);
+
     writeCommandInfo(os, protocolId, comId, len);
 
     // TCG Head/Payload는 Protocol 0x01 + ComID >= 0x1000일 때만 파싱
@@ -610,6 +613,110 @@ void CommandLogger::writeListSemantic(std::ostream& os,
 
     os << " }";
     if (pos < count) pos++; // skip EndList
+}
+
+// ── Summary Line (진단용 한 줄 요약) ────────────────
+
+void CommandLogger::writeSummaryLine(std::ostream& os,
+                                     uint8_t protocolId, uint16_t comId,
+                                     const uint8_t* data, size_t len) {
+    os << ">> ";
+
+    // Protocol 0x02: ComID Management
+    if (protocolId == 0x02) {
+        if (len >= 8) {
+            uint32_t reqCode = Endian::readBe32(data + 4);
+            const char* opName = "Unknown";
+            if (reqCode == 0) opName = "Verify";
+            else if (reqCode == 1) opName = "RequestComID";
+            else if (reqCode == 2) opName = "StackReset";
+            os << "ComID_Mgmt:" << opName;
+        } else {
+            os << "ComID_Mgmt";
+        }
+        os << " P=0x02 C=0x" << std::hex << std::setfill('0')
+           << std::setw(4) << comId << std::dec << "\n";
+        return;
+    }
+
+    // Protocol 0x01, ComID < 0x1000: Discovery
+    if (protocolId == 0x01 && comId < 0x1000) {
+        os << "Discovery P=0x01 C=0x" << std::hex << std::setfill('0')
+           << std::setw(4) << comId << std::dec << "\n";
+        return;
+    }
+
+    // Protocol 0x01, ComID >= 0x1000: TCG ComPacket
+    static constexpr size_t TOKEN_OFFSET =
+        ComPacketHeader::HEADER_SIZE + PacketHeader::HEADER_SIZE +
+        SubPacketHeader::HEADER_SIZE;
+
+    if (protocolId != 0x01 || len < TOKEN_OFFSET) {
+        os << "P=0x" << std::hex << std::setfill('0')
+           << std::setw(2) << (int)protocolId
+           << " C=0x" << std::setw(4) << comId << std::dec << "\n";
+        return;
+    }
+
+    // TSN/HSN 추출
+    PacketHeader ph;
+    PacketHeader::deserialize(data + ComPacketHeader::HEADER_SIZE,
+                              len - ComPacketHeader::HEADER_SIZE, ph);
+
+    // SubPacket에서 토큰 추출
+    SubPacketHeader sph;
+    static constexpr size_t SPH_OFFSET =
+        ComPacketHeader::HEADER_SIZE + PacketHeader::HEADER_SIZE;
+    auto r = SubPacketHeader::deserialize(data + SPH_OFFSET, len - SPH_OFFSET, sph);
+
+    size_t tokenLen = (r.ok() && sph.length > 0) ? sph.length : 0;
+    if (TOKEN_OFFSET + tokenLen > len) tokenLen = len - TOKEN_OFFSET;
+
+    // 토큰 디코딩
+    std::string method;
+    std::string status;
+
+    if (tokenLen > 0) {
+        TokenDecoder decoder;
+        r = decoder.decode(data + TOKEN_OFFSET, tokenLen);
+        if (r.ok() && decoder.count() > 0) {
+            size_t pos = 0;
+            // CALL invokingUID methodUID 추출
+            if (decoder[pos].type == TokenType::Call) {
+                pos++;
+                if (pos < decoder.count() && decoder[pos].isAtom()) {
+                    method = formatAtomValue(decoder[pos]);
+                    pos++;
+                }
+                if (pos < decoder.count() && decoder[pos].isAtom()) {
+                    method += "." + formatAtomValue(decoder[pos]);
+                    pos++;
+                }
+            }
+            // EOD 다음 status 추출
+            for (size_t i = 0; i < decoder.count(); i++) {
+                if (decoder[i].type == TokenType::EndOfData) {
+                    // { status ... }
+                    if (i + 2 < decoder.count() &&
+                        decoder[i + 1].type == TokenType::StartList &&
+                        decoder[i + 2].isAtom() && !decoder[i + 2].isByteSequence) {
+                        uint64_t st = decoder[i + 2].uintVal;
+                        const char* stName = methodStatusName(st);
+                        status = std::to_string(st);
+                        if (stName) { status += "("; status += stName; status += ")"; }
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    // 출력 조합
+    if (!method.empty()) os << method << " ";
+    if (!status.empty()) os << "St=" << status << " ";
+    os << "P=0x01 C=0x" << std::hex << std::setfill('0') << std::setw(4) << comId
+       << std::dec << " TSN=" << ph.tperSessionNumber << " HSN=" << ph.hostSessionNumber
+       << "\n";
 }
 
 // ── Raw Payload ─────────────────────────────────────
