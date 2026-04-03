@@ -206,11 +206,13 @@ if(LIBSED_BUILD_EXAMPLES)
     add_executable(appnote_mbr         examples/appnote_mbr.cpp)
     add_executable(appnote_psid        examples/appnote_psid.cpp)
     add_executable(appnote_datastore   examples/appnote_datastore.cpp)
+    add_executable(appnote_block_sid   examples/appnote_block_sid.cpp)
     target_link_libraries(appnote_opal        PRIVATE libsed)
     target_link_libraries(appnote_enterprise  PRIVATE libsed)
     target_link_libraries(appnote_mbr         PRIVATE libsed)
     target_link_libraries(appnote_psid        PRIVATE libsed)
     target_link_libraries(appnote_datastore   PRIVATE libsed)
+    target_link_libraries(appnote_block_sid   PRIVATE libsed)
 endif()
 
 # ══════════════════════════════════════════════════════
