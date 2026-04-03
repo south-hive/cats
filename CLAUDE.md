@@ -115,3 +115,66 @@ TCG Storage Application Note documents mapped to EvalApi calls in `examples/`:
 ## Developer Guide
 
 Comprehensive documentation in `docs/developer_guide.md` (in Korean) covers architecture, NVMe DI patterns, session management, multi-threading rules, TC Library util mapping, fault injection, the SedContext/Worker integration pattern, and a full application note example catalog.
+
+---
+
+## Current Debug Status (2026-04-03)
+
+### Problem: Properties 메서드만 0x0C (InvalidParameter) 반환
+
+**증상**: `sedutil-cli --query`는 정상 동작하지만, libsed의 Properties exchange만 status 0x0C를 반환. Discovery, StackReset, StartSession(AdminSP), MSID Read, CloseSession은 모두 정상.
+
+### 이미 수정 완료된 버그들
+
+1. **SedErrorCategory::message()** — 모든 ErrorCode에 대해 메시지 추가 (이전에 "Unknown error")
+2. **MethodResult CALL header skip** — SM 메서드 응답(SyncSession, Properties, CloseSession)에 CALL 헤더가 포함되는데 이를 스킵하지 않아 MalformedResponse 발생 → 수정
+3. **StartSession named param index** — HostExchangeAuthority=3, HostSigningAuthority=4 (TCG Core Spec Table 225). 1,2로 잘못 변경되었다가 복구
+4. **Properties 토큰 인코딩** — `STARTNAME "HostProperties" STARTLIST { pairs } ENDLIST ENDNAME` 래퍼 추가 (이전에 bare list)
+5. **ComPacket 최소 크기** — 512 → 2048 바이트 (sedutil IO_BUFFER_LENGTH). 일부 TPer는 작은 패킷 거부
+6. **"MaxSubPackets" → "MaxSubpackets"** — 대소문자 구분 (lowercase 'p'). 1바이트 차이
+7. **Properties 응답 파서 순서** — TPer가 TPerProperties를 먼저, HostProperties를 나중에 보냄. 이름 문자열 체크로 순서 무관하게 파싱하도록 수정 (`src/eval/eval_api.cpp:124-153`)
+8. **Method 에러 로깅** — method_result.cpp에서 메서드 이름+상태 표시 (예: "Properties returned status: 0x0C (Invalid Parameter)")
+
+### 현재 의심 원인
+
+- `props_diff` 도구로 비교 시 libsed와 sedutil의 send 패킷이 **IDENTICAL** → 패킷 내용 차이 아님
+- 둘 다 동일하게 St=12 반환 → TPer 상태 문제 가능성 (power cycle 필요?)
+- 또는 NVMe ioctl 레벨 차이 가능성
+
+### 진단 도구
+
+- `tools/props_diff.cpp` — 실제 디바이스에서 libsed vs sedutil 방식 패킷 비교
+- `examples/eval_props_diag.cpp` — Properties만 10개 시나리오로 격리 진단
+- `examples/eval_sedutil_query.cpp` — sedutil --query 동일 플로우 + Feature Descriptor 출력 + `--sedutil-first` 옵션
+
+### 다음 작업: SED 소프트웨어 시뮬레이터
+
+하드웨어 없이 테스트하기 위해 `ITransport`를 구현하는 소프트웨어 SED 시뮬레이터 제작 예정. 현재 `tests/mock/mock_transport.h`는 단순 큐 기반이라 TCG 프로토콜을 시뮬레이션하지 않음.
+
+시뮬레이터가 처리해야 할 것:
+- **Discovery** (Protocol 0x01, ComID 0x0001): Feature Descriptor 응답 생성 (TPer, Locking, Geometry, Opal v2)
+- **StackReset** (Protocol 0x02, ComID): ComID 상태 초기화
+- **Properties** (SM method 0xFF01): TPerProperties + HostProperties echo 응답
+- **StartSession/SyncSession** (SM method 0xFF02/0xFF03): TSN 할당, 세션 상태 관리
+- **Get** (method 0x06): C_PIN_MSID 등 테이블 읽기
+- **CloseSession** (SM method 0xFF06): 세션 정리
+
+패킷 구조: `ComPacket(20B) + Packet(24B) + SubPacket(12B) + TokenPayload`
+
+구현 위치: `src/transport/sim_transport.cpp` + `include/libsed/transport/sim_transport.h`
+또는 `tests/mock/` 아래에 `sed_simulator.cpp`로.
+
+### 핵심 참조 파일
+
+| 파일 | 역할 |
+|------|------|
+| `src/eval/eval_api.cpp` | Properties exchange 구현 (line 62-161) |
+| `src/method/param_encoder.cpp` | encodeProperties() (line 51-83), encodeStartSession() |
+| `src/method/method_call.cpp` | buildSmCall() — SM 메서드 토큰 생성 |
+| `src/method/method_result.cpp` | 응답 파싱, CALL header skip, status 추출 |
+| `src/packet/packet_builder.cpp` | ComPacket 생성 (2048B 패딩), 응답 파싱 |
+| `src/session/session.cpp` | sendMethod() — 패킷 전송/수신 + MethodResult 파싱 |
+| `include/libsed/transport/i_transport.h` | ITransport 인터페이스 (ifSend/ifRecv) |
+| `tests/mock/mock_transport.h` | 현재 단순 mock (큐 기반) |
+| `include/libsed/method/method_uids.h` | SM_PROPERTIES=0xFF01, SM_START_SESSION=0xFF02 등 |
+| `include/libsed/core/uid.h` | SMUID, SP_ADMIN, CPIN_MSID 등 UID 상수 |
