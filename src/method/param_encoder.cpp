@@ -70,7 +70,7 @@ Bytes ParamEncoder::encodeProperties(const HostProperties& props) {
     enc.startName(); enc.encodeString("MaxPackets");
     enc.encodeUint(props.maxPackets); enc.endName();
 
-    enc.startName(); enc.encodeString("MaxSubPackets");
+    enc.startName(); enc.encodeString("MaxSubpackets");
     enc.encodeUint(props.maxSubPackets); enc.endName();
 
     enc.startName(); enc.encodeString("MaxMethods");

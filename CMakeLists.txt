@@ -239,10 +239,12 @@ if(LIBSED_BUILD_TOOLS)
     add_executable(sed_discover  tools/sed_discover.cpp)
     add_executable(sed_manage    tools/sed_manage.cpp)
     add_executable(token_dump    tools/token_dump.cpp)
+    add_executable(props_diff    tools/props_diff.cpp)
 
     target_link_libraries(sed_discover  PRIVATE libsed)
     target_link_libraries(sed_manage    PRIVATE libsed)
     target_link_libraries(token_dump    PRIVATE libsed)
+    target_link_libraries(props_diff    PRIVATE libsed)
 endif()
 
 # ══════════════════════════════════════════════════════
