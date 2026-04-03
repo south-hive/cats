@@ -746,6 +746,13 @@ static bool phase0_initialize(SharedState& ss) {
     EvalApi api;
     RawResult raw;
 
+    // 0. StackReset — 이전 stale 세션이 남아있을 수 있으므로 정리
+    api.stackReset(ss.transport, ss.baseComId);
+
+    // Properties 재교환 (StackReset 후 필수)
+    PropertiesResult props;
+    api.exchangeProperties(ss.transport, ss.baseComId, props);
+
     // 1. Read MSID (Phase 0은 단일 스레드이므로 baseComId 사용)
     Session s1(ss.transport, ss.baseComId);
     StartSessionResult ssr;
@@ -906,7 +913,11 @@ int main(int argc, char* argv[]) {
         std::cout << "  Parallel threads will serialize transport access.\n";
     }
 
-    // 각 ComID별로 Properties exchange 수행
+    // 각 ComID별로 StackReset → Properties exchange 수행
+    // (이전 실행의 stale 세션이 남아있을 수 있으므로 반드시 StackReset 선행)
+    for (int i = 0; i < (ss.serialMode ? 1 : 4); i++) {
+        api.stackReset(ss.transport, ss.comIds[i]);
+    }
     api.exchangeProperties(ss.transport, ss.baseComId, ss.props);
     for (int i = 1; i < 4 && !ss.serialMode; i++) {
         PropertiesResult p;
@@ -931,6 +942,13 @@ int main(int argc, char* argv[]) {
     if (!phase0_initialize(ss)) {
         std::cerr << "Phase 0 initialization failed\n";
         return 1;
+    }
+
+    // Phase 0 완료 후 각 스레드 ComID를 깨끗한 상태로 준비
+    for (int i = 0; i < (ss.serialMode ? 1 : 4); i++) {
+        api.stackReset(ss.transport, ss.comIds[i]);
+        PropertiesResult p;
+        api.exchangeProperties(ss.transport, ss.comIds[i], p);
     }
 
     // ── Phase 1+2: Parallel threads ──
