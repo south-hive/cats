@@ -94,6 +94,7 @@ set(LIBSED_SOURCES
 
     # Eval API (flat step-by-step)
     src/eval/eval_api.cpp
+    src/eval/eval_composite.cpp
 )
 
 # ══════════════════════════════════════════════════════
