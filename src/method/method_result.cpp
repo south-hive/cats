@@ -1,7 +1,39 @@
 #include "libsed/method/method_result.h"
+#include "libsed/method/method_uids.h"
 #include "libsed/core/log.h"
+#include <cstring>
+#include <cstdio>
 
 namespace libsed {
+
+/// @brief MethodUID를 사람이 읽을 수 있는 이름으로 변환 (디버그 로그용)
+static const char* methodUidName(uint64_t uid) {
+    if (uid == method::GET)             return "Get";
+    if (uid == method::SET)             return "Set";
+    if (uid == method::AUTHENTICATE)    return "Authenticate";
+    if (uid == method::REVERT)          return "Revert";
+    if (uid == method::REVERTSP)        return "RevertSP";
+    if (uid == method::ACTIVATE)        return "Activate";
+    if (uid == method::NEXT)            return "Next";
+    if (uid == method::ERASE)           return "Erase";
+    if (uid == method::GENKEY)          return "GenKey";
+    if (uid == method::RANDOM)          return "Random";
+    if (uid == method::SM_PROPERTIES)   return "Properties";
+    if (uid == method::SM_START_SESSION)return "StartSession";
+    if (uid == method::SM_SYNC_SESSION) return "SyncSession";
+    if (uid == method::SM_CLOSE_SESSION)return "CloseSession";
+    return nullptr;
+}
+
+/// @brief 8-byte Token에서 uint64_t UID 추출
+static uint64_t tokenToUid(const Token& tok) {
+    auto bytes = tok.getBytes();
+    if (bytes.size() != 8) return 0;
+    uint64_t uid = 0;
+    for (size_t i = 0; i < 8; i++)
+        uid = (uid << 8) | bytes[i];
+    return uid;
+}
 
 Result MethodResult::parse(const Bytes& tokenData) {
     TokenDecoder decoder;
@@ -13,6 +45,7 @@ Result MethodResult::parse(const Bytes& tokenData) {
 Result MethodResult::parse(const std::vector<Token>& tokens) {
     resultTokens_.clear();
     status_ = MethodStatus::Fail;
+    methodName_.clear();
 
     if (tokens.empty()) {
         return ErrorCode::MalformedResponse;
@@ -29,15 +62,27 @@ Result MethodResult::parse(const std::vector<Token>& tokens) {
 
     // Skip CALL header if present: CALL InvokingUID MethodUID
     // SM method responses (SyncSession, etc.) include the CALL block
+    // Also extract method name for logging
     size_t startIdx = 0;
     if (startIdx < eodIndex && tokens[startIdx].type == TokenType::Call) {
         ++startIdx;  // skip CALL
         // skip InvokingUID (byte-sequence atom)
         if (startIdx < eodIndex && tokens[startIdx].isAtom() && tokens[startIdx].isByteSequence)
             ++startIdx;
-        // skip MethodUID (byte-sequence atom)
-        if (startIdx < eodIndex && tokens[startIdx].isAtom() && tokens[startIdx].isByteSequence)
+        // extract MethodUID for logging, then skip
+        if (startIdx < eodIndex && tokens[startIdx].isAtom() && tokens[startIdx].isByteSequence) {
+            uint64_t muid = tokenToUid(tokens[startIdx]);
+            const char* name = methodUidName(muid);
+            if (name) {
+                methodName_ = name;
+            } else {
+                char buf[24];
+                snprintf(buf, sizeof(buf), "UID(0x%016llX)",
+                         static_cast<unsigned long long>(muid));
+                methodName_ = buf;
+            }
             ++startIdx;
+        }
     }
 
     // Collect result tokens (skip outer StartList/EndList if present)
@@ -76,7 +121,16 @@ Result MethodResult::parse(const std::vector<Token>& tokens) {
     }
 
     if (status_ != MethodStatus::Success) {
-        LIBSED_WARN("Method returned status: 0x%02X", static_cast<int>(status_));
+        if (!methodName_.empty()) {
+            LIBSED_WARN("%s returned status: 0x%02X (%s)",
+                        methodName_.c_str(),
+                        static_cast<int>(status_),
+                        statusMessage().c_str());
+        } else {
+            LIBSED_WARN("Method returned status: 0x%02X (%s)",
+                        static_cast<int>(status_),
+                        statusMessage().c_str());
+        }
     }
 
     return ErrorCode::Success;
@@ -152,11 +206,33 @@ std::string MethodResult::statusMessage() const {
         case MethodStatus::SpDisabled:        return "SP Disabled";
         case MethodStatus::SpFrozen:          return "SP Frozen";
         case MethodStatus::NoSessionsAvailable: return "No Sessions Available";
+        case MethodStatus::UniquenessConflict:return "Uniqueness Conflict";
+        case MethodStatus::InsufficientSpace: return "Insufficient Space";
+        case MethodStatus::InsufficientRows:  return "Insufficient Rows";
         case MethodStatus::InvalidParameter:  return "Invalid Parameter";
         case MethodStatus::TPerMalfunction:   return "TPer Malfunction";
+        case MethodStatus::TransactionFailure:return "Transaction Failure";
+        case MethodStatus::ResponseOverflow:  return "Response Overflow";
         case MethodStatus::AuthorityLockedOut:return "Authority Locked Out";
-        case MethodStatus::Fail:              return "General Failure";
-        default:                              return "Unknown Status";
+        case MethodStatus::Fail:              return "Fail";
+        default: {
+            char buf[32];
+            snprintf(buf, sizeof(buf), "Unknown(0x%02X)", static_cast<int>(status_));
+            return buf;
+        }
+    }
+}
+
+void MethodResult::setSendMethodUid(uint64_t uid) {
+    if (!methodName_.empty()) return;  // 응답 CALL에서 이미 설정됨
+    const char* name = methodUidName(uid);
+    if (name) {
+        methodName_ = name;
+    } else {
+        char buf[24];
+        snprintf(buf, sizeof(buf), "UID(0x%016llX)",
+                 static_cast<unsigned long long>(uid));
+        methodName_ = buf;
     }
 }
 

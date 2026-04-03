@@ -179,6 +179,24 @@ Result Session::sendMethod(const Bytes& methodTokens, MethodResult& result) {
     }
     LIBSED_BUMP("method.sent");
 
+    // Extract method name from send tokens for logging
+    {
+        TokenDecoder dec;
+        if (dec.decode(methodTokens).ok()) {
+            const auto& toks = dec.tokens();
+            // CALL(0) InvokingUID(1) MethodUID(2)
+            if (toks.size() >= 3 && toks[0].type == TokenType::Call
+                && toks[2].isAtom() && toks[2].isByteSequence) {
+                auto bytes = toks[2].getBytes();
+                if (bytes.size() == 8) {
+                    uint64_t muid = 0;
+                    for (int j = 0; j < 8; j++) muid = (muid << 8) | bytes[j];
+                    result.setSendMethodUid(muid);
+                }
+            }
+        }
+    }
+
     Bytes sendData = packetBuilder_.buildComPacket(methodTokens);
 
     Bytes recvTokens;

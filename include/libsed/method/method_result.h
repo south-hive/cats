@@ -50,9 +50,16 @@ public:
     /// Error message
     std::string statusMessage() const;
 
+    /// 응답에서 추출된 메서드 이름 (CALL 헤더가 있는 경우)
+    const std::string& methodName() const { return methodName_; }
+
+    /// send 토큰에서 추출한 메서드 UID 설정 (일반 메서드용)
+    void setSendMethodUid(uint64_t uid);
+
 private:
     MethodStatus status_ = MethodStatus::Fail;
     std::vector<Token> resultTokens_;
+    std::string methodName_;
 };
 
 } // namespace libsed
