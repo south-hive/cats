@@ -25,10 +25,11 @@ Result ComIdManager::verifyComId(uint16_t comId) {
     r = transport_->ifRecv(PROTOCOL_ID_COMID_MGMT, comId, response, 512);
     if (r.failed()) return r;
 
-    if (response.size() < 12) return ErrorCode::MalformedResponse;
+    // Response format (Table 203): ComID(2) + Ext(2) + RequestCode(4) + AvailDataLen(4) + State(4)
+    if (response.size() < 16) return ErrorCode::MalformedResponse;
 
-    // Check response state
-    uint32_t state = Endian::readBe32(response.data() + 4);
+    // ComID State at offset 12 (not offset 4 which is echoed RequestCode)
+    uint32_t state = Endian::readBe32(response.data() + 12);
     if (state == 0) {
         LIBSED_DEBUG("ComID 0x%04X is valid (idle)", comId);
     } else if (state == 1) {
@@ -76,9 +77,26 @@ Result ComIdManager::stackReset(uint16_t comId) {
                                  ByteSpan(request.data(), request.size()));
     if (r.failed()) return r;
 
-    // StackReset 완료 대기 — IF-RECV로 ComID 상태를 polling
+    // StackReset 완료 대기 — VERIFY_COMID(IF-SEND+IF-RECV)로 ComID 상태 polling
     // TCG Core Spec: reset 후 ComID 상태가 idle(0)이 될 때까지 대기
+    // Response format (Table 203): ComID(2) + Ext(2) + RequestCode(4) + AvailDataLen(4) + State(4)
     for (int attempt = 0; attempt < 20; attempt++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+        // VERIFY_COMID 요청 전송 (RequestCode = 0)
+        Bytes verifyReq(512, 0);
+        Endian::writeBe16(verifyReq.data(), comId);
+        Endian::writeBe16(verifyReq.data() + 2, 0);
+        Endian::writeBe32(verifyReq.data() + 4, 0);  // RequestCode = VERIFY
+
+        r = transport_->ifSend(PROTOCOL_ID_COMID_MGMT, comId,
+                                ByteSpan(verifyReq.data(), verifyReq.size()));
+        if (r.failed()) {
+            LIBSED_WARN("StackReset verify send failed for ComID 0x%04X: %s",
+                         comId, r.message().c_str());
+            return r;
+        }
+
         Bytes response;
         r = transport_->ifRecv(PROTOCOL_ID_COMID_MGMT, comId, response, 512);
         if (r.failed()) {
@@ -87,8 +105,8 @@ Result ComIdManager::stackReset(uint16_t comId) {
             return r;
         }
 
-        if (response.size() >= 8) {
-            uint32_t state = Endian::readBe32(response.data() + 4);
+        if (response.size() >= 16) {
+            uint32_t state = Endian::readBe32(response.data() + 12);  // offset 12: ComID State
             if (state == 0) {
                 // idle — reset 완료
                 LIBSED_INFO("Stack reset complete for ComID 0x%04X", comId);
@@ -97,9 +115,6 @@ Result ComIdManager::stackReset(uint16_t comId) {
             LIBSED_DEBUG("StackReset poll: ComID 0x%04X state=%u, retrying",
                           comId, state);
         }
-
-        // 짧은 대기 후 재시도
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
     LIBSED_WARN("StackReset timeout for ComID 0x%04X", comId);

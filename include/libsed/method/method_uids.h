@@ -8,12 +8,12 @@ namespace method {
 // ══════════════════════════════════════════════════════
 //  Session Manager Methods (invoked on SMUID)
 // ══════════════════════════════════════════════════════
-inline constexpr uint64_t SM_PROPERTIES       = 0x0000000000000000FF01;
-inline constexpr uint64_t SM_START_SESSION     = 0x0000000000000000FF02;
-inline constexpr uint64_t SM_SYNC_SESSION      = 0x0000000000000000FF03;
-inline constexpr uint64_t SM_START_TRUSTED_SESSION = 0x0000000000000000FF04;
-inline constexpr uint64_t SM_SYNC_TRUSTED_SESSION  = 0x0000000000000000FF05;
-inline constexpr uint64_t SM_CLOSE_SESSION     = 0x0000000000000000FF06;
+inline constexpr uint64_t SM_PROPERTIES            = 0x000000000000FF01;
+inline constexpr uint64_t SM_START_SESSION         = 0x000000000000FF02;
+inline constexpr uint64_t SM_SYNC_SESSION          = 0x000000000000FF03;
+inline constexpr uint64_t SM_START_TRUSTED_SESSION = 0x000000000000FF04;
+inline constexpr uint64_t SM_SYNC_TRUSTED_SESSION  = 0x000000000000FF05;
+inline constexpr uint64_t SM_CLOSE_SESSION         = 0x000000000000FF06;
 
 // ══════════════════════════════════════════════════════
 //  Standard Object Methods
@@ -24,8 +24,8 @@ inline constexpr uint64_t NEXT                 = 0x0000000600000008;
 inline constexpr uint64_t GETACL               = 0x000000060000000D;
 inline constexpr uint64_t GENKEY               = 0x0000000600000010;
 inline constexpr uint64_t REVERTSP             = 0x0000000600000011;
-inline constexpr uint64_t GET_FREE_SPACE       = 0x0000000600000007; // via AdminSP
-inline constexpr uint64_t GET_FREE_ROWS        = 0x0000000600000007; // via AdminSP
+// Note: GetFreeSpace/GetFreeRows are not separate method UIDs in TCG Core Spec.
+// They are performed via GET on Table objects with specific columns.
 inline constexpr uint64_t AUTHENTICATE         = 0x000000060000001C;
 inline constexpr uint64_t REVERT               = 0x0000000600000202;
 inline constexpr uint64_t ACTIVATE             = 0x0000000600000203;

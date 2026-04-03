@@ -370,25 +370,51 @@ void CommandLogger::writeTcgHead(std::ostream& os,
 
 // ── TCG Payload ─────────────────────────────────────
 
-/// @brief TokenType을 로그 문자열로 변환
-static const char* tokenTypeName(TokenType type) {
-    switch (type) {
-        case TokenType::TinyAtom:       return "tiny_atom";
-        case TokenType::ShortAtom:      return "short_atom";
-        case TokenType::MediumAtom:     return "medium_atom";
-        case TokenType::LongAtom:       return "long_atom";
-        case TokenType::StartList:      return "START_LIST";
-        case TokenType::EndList:        return "END_LIST";
-        case TokenType::StartName:      return "START_NAME";
-        case TokenType::EndName:        return "END_NAME";
-        case TokenType::Call:           return "CALL";
-        case TokenType::EndOfData:      return "END_OF_DATA";
-        case TokenType::EndOfSession:   return "END_OF_SESSION";
-        case TokenType::StartTransaction: return "START_TRANSACTION";
-        case TokenType::EndTransaction: return "END_TRANSACTION";
-        case TokenType::EmptyAtom:      return "empty_atom";
-        default:                        return "unknown";
+/// @brief MethodStatus 코드를 이름으로 변환
+static const char* methodStatusName(uint64_t status) {
+    switch (status) {
+        case 0x00: return "Success";
+        case 0x01: return "NotAuthorized";
+        case 0x02: return "Obsolete";
+        case 0x03: return "SpBusy";
+        case 0x04: return "SpFailed";
+        case 0x05: return "SpDisabled";
+        case 0x06: return "SpFrozen";
+        case 0x07: return "NoSessionsAvailable";
+        case 0x08: return "UniquenessConflict";
+        case 0x09: return "InsufficientSpace";
+        case 0x0A: return "InsufficientRows";
+        case 0x0C: return "InvalidParameter";
+        case 0x0F: return "TPerMalfunction";
+        case 0x10: return "TransactionFailure";
+        case 0x11: return "ResponseOverflow";
+        case 0x12: return "AuthorityLockedOut";
+        case 0x3F: return "Fail";
+        default:   return nullptr;
     }
+}
+
+/// @brief atom 값을 의미 있는 문자열로 변환 (UID 이름, 숫자, 바이트 hex)
+std::string CommandLogger::formatAtomValue(const Token& tok) {
+    if (tok.isByteSequence) {
+        if (tok.byteData.size() == 8) {
+            uint64_t uid = bytesToUid(tok.byteData.data(), 8);
+            const char* name = resolveUid(uid);
+            if (!name) name = resolveMethodUid(uid);
+            if (name) return name;
+        }
+        // Short byte sequences as hex string
+        if (tok.byteData.empty()) return "\"\"";
+        if (tok.byteData.size() <= 16) {
+            std::ostringstream h;
+            h << std::hex << std::setfill('0');
+            for (auto b : tok.byteData) h << std::setw(2) << (int)b;
+            return h.str();
+        }
+        return "(" + std::to_string(tok.byteData.size()) + " bytes)";
+    }
+    // Integer
+    return std::to_string(tok.isSigned ? tok.intVal : (int64_t)tok.uintVal);
 }
 
 void CommandLogger::writeTcgPayload(std::ostream& os,
@@ -418,66 +444,156 @@ void CommandLogger::writeTcgPayload(std::ostream& os,
 
     os << "TCG Payload\n";
 
-    int indent = 1;
-    bool afterCall = false;
-    int uidCountAfterCall = 0;
+    // 1단계: 토큰 스트림을 의미 단위로 파싱하여 출력
+    //   - CALL invokingUID methodUID → "InvokingName.MethodName"
+    //   - { args } → "{ val1, val2, ... }"
+    //   - EOD → "EOD"
+    //   - { status reserved1 reserved2 } → "Status: N (Name)"
 
-    for (size_t i = 0; i < decoder.count(); i++) {
-        const auto& tok = decoder[i];
+    size_t pos = 0;
+    const size_t count = decoder.count();
 
-        // END_LIST/END_NAME은 인덴트를 먼저 줄이고 출력
-        if (tok.type == TokenType::EndList || tok.type == TokenType::EndName) {
-            if (indent > 1) indent--;
-        }
+    while (pos < count) {
+        const auto& tok = decoder[pos];
 
-        // 인덴트 적용
-        for (int d = 0; d < indent; d++) os << "  ";
-
-        if (tok.isControl()) {
-            os << tokenTypeName(tok.type) << "\n";
-            if (tok.type == TokenType::Call) {
-                afterCall = true;
-                uidCountAfterCall = 0;
+        // ── CALL invokingUID methodUID ──
+        if (tok.type == TokenType::Call) {
+            os << "  ";
+            pos++;
+            // invokingUID
+            if (pos < count && decoder[pos].isAtom()) {
+                os << formatAtomValue(decoder[pos]);
+                pos++;
             }
-            if (tok.type == TokenType::StartList || tok.type == TokenType::StartName) {
-                indent++;
-            }
-        } else if (tok.isByteSequence) {
-            os << tokenTypeName(tok.type) << ": ";
-            if (tok.byteData.size() == 8) {
-                uint64_t uidVal = bytesToUid(tok.byteData.data(), 8);
-                const char* name = nullptr;
-                if (afterCall && uidCountAfterCall == 0) {
-                    name = resolveUid(uidVal);
-                    uidCountAfterCall++;
-                } else if (afterCall && uidCountAfterCall == 1) {
-                    name = resolveMethodUid(uidVal);
-                    uidCountAfterCall++;
-                    afterCall = false;
-                } else {
-                    name = resolveUid(uidVal);
-                }
-                if (name) {
-                    os << name;
-                } else {
-                    os << std::hex;
-                    for (int b = 0; b < 8; b++)
-                        os << std::setfill('0') << std::setw(2) << (int)tok.byteData[b];
-                    os << std::dec;
-                }
-            } else if (tok.byteData.size() <= 16) {
-                os << std::hex;
-                for (size_t b = 0; b < tok.byteData.size(); b++)
-                    os << std::setfill('0') << std::setw(2) << (int)tok.byteData[b];
-                os << std::dec;
-            } else {
-                os << "(" << tok.byteData.size() << " bytes)";
+            // methodUID
+            if (pos < count && decoder[pos].isAtom()) {
+                os << "." << formatAtomValue(decoder[pos]);
+                pos++;
             }
             os << "\n";
-        } else {
-            os << tokenTypeName(tok.type) << ": " << (tok.isSigned ? tok.intVal : (int64_t)tok.uintVal) << "\n";
+            continue;
         }
+
+        // ── EndOfData ──
+        if (tok.type == TokenType::EndOfData) {
+            os << "  EOD\n";
+            pos++;
+
+            // EOD 직후의 { status reserved1 reserved2 } → "Status: N (Name)"
+            if (pos < count && decoder[pos].type == TokenType::StartList) {
+                pos++; // skip {
+                std::vector<uint64_t> statusVals;
+                while (pos < count && decoder[pos].type != TokenType::EndList) {
+                    if (decoder[pos].isAtom() && !decoder[pos].isByteSequence) {
+                        statusVals.push_back(decoder[pos].uintVal);
+                    }
+                    pos++;
+                }
+                if (pos < count) pos++; // skip }
+
+                if (!statusVals.empty()) {
+                    uint64_t st = statusVals[0];
+                    const char* stName = methodStatusName(st);
+                    os << "  Status: " << st;
+                    if (stName) os << " (" << stName << ")";
+                    os << "\n";
+                }
+            }
+            continue;
+        }
+
+        // ── EndOfSession ──
+        if (tok.type == TokenType::EndOfSession) {
+            os << "  END_OF_SESSION\n";
+            pos++;
+            continue;
+        }
+
+        // ── StartList — 재귀적으로 { val, val, [name=val], ... } 형태 출력 ──
+        if (tok.type == TokenType::StartList) {
+            writeListSemantic(os, decoder, pos, 1);
+            os << "\n";
+            continue;
+        }
+
+        // ── Bare atom (리스트 밖의 단독 값) ──
+        if (tok.isAtom()) {
+            os << "  " << formatAtomValue(tok) << "\n";
+            pos++;
+            continue;
+        }
+
+        // ── 기타 제어 토큰 ──
+        pos++;
     }
+}
+
+/// @brief 리스트를 의미 있는 한 줄 형태로 출력 (중첩 지원)
+/// 형식: { val1, val2, [name = val], { nested }, ... }
+void CommandLogger::writeListSemantic(std::ostream& os,
+                                       const TokenDecoder& decoder,
+                                       size_t& pos,
+                                       int depth) {
+    // indent
+    if (depth == 1) os << "  ";
+
+    os << "{ ";
+    pos++; // skip StartList
+
+    bool first = true;
+    const size_t count = decoder.count();
+
+    while (pos < count && decoder[pos].type != TokenType::EndList) {
+        if (!first) os << ", ";
+        first = false;
+
+        const auto& tok = decoder[pos];
+
+        // Named value pair: StartName key value EndName → [key = value]
+        if (tok.type == TokenType::StartName) {
+            pos++; // skip StartName
+            std::string key, val;
+            if (pos < count && decoder[pos].isAtom()) {
+                key = formatAtomValue(decoder[pos]);
+                pos++;
+            }
+            if (pos < count && decoder[pos].isAtom()) {
+                val = formatAtomValue(decoder[pos]);
+                pos++;
+            } else if (pos < count && decoder[pos].type == TokenType::StartList) {
+                // Named value가 리스트인 경우
+                std::ostringstream sub;
+                writeListSemantic(sub, decoder, pos, depth + 1);
+                val = sub.str();
+            }
+            if (pos < count && decoder[pos].type == TokenType::EndName) {
+                pos++; // skip EndName
+            }
+            os << "[" << key << " = " << val << "]";
+            continue;
+        }
+
+        // 중첩 리스트
+        if (tok.type == TokenType::StartList) {
+            std::ostringstream sub;
+            writeListSemantic(sub, decoder, pos, depth + 1);
+            os << sub.str();
+            continue;
+        }
+
+        // Atom value
+        if (tok.isAtom()) {
+            os << formatAtomValue(tok);
+            pos++;
+            continue;
+        }
+
+        // 예상치 못한 토큰 — skip
+        pos++;
+    }
+
+    os << " }";
+    if (pos < count) pos++; // skip EndList
 }
 
 // ── Raw Payload ─────────────────────────────────────

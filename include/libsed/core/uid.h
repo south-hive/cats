@@ -9,7 +9,7 @@ namespace uid {
 //  세션 매니저 UID
 //  TCG 세션 관리에 사용되는 기본 UID
 // ══════════════════════════════════════════════════════
-inline constexpr uint64_t SMUID          = 0x0000000000000000FF;  ///< Session Manager UID (세션 매니저 호출 대상)
+inline constexpr uint64_t SMUID          = 0x00000000000000FF;  ///< Session Manager UID (세션 매니저 호출 대상)
 inline constexpr uint64_t THIS_SP        = 0x0000000000000001;    ///< 현재 SP를 지칭하는 특수 UID
 
 // ══════════════════════════════════════════════════════

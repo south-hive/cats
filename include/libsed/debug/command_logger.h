@@ -16,6 +16,7 @@
 
 #include "../core/types.h"
 #include "../core/error.h"
+#include "../codec/token.h"
 #include <cstdint>
 #include <string>
 #include <fstream>
@@ -24,6 +25,9 @@
 #include <sstream>
 
 namespace libsed {
+
+class TokenDecoder;
+
 namespace debug {
 
 /// @brief IF-SEND/IF-RECV 명령을 파일에 기록하는 로거
@@ -111,6 +115,14 @@ private:
 
     /// @brief 8바이트 byte-sequence를 uint64_t (big-endian)로 변환
     static uint64_t bytesToUid(const uint8_t* data, size_t len);
+
+    /// @brief atom 토큰을 의미 있는 문자열로 변환 (UID 이름, 숫자, hex)
+    static std::string formatAtomValue(const Token& tok);
+
+    /// @brief 리스트를 의미 단위 한 줄 형태로 출력 (중첩 지원)
+    static void writeListSemantic(std::ostream& os,
+                                  const TokenDecoder& decoder,
+                                  size_t& pos, int depth);
 
     mutable std::mutex    mutex_;
     std::ofstream         file_;

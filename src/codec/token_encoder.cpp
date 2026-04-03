@@ -146,8 +146,9 @@ void TokenEncoder::encodeLongAtom(bool isByte, bool isSigned,
                                     const uint8_t* data, size_t len) {
     assert(len <= 0x00FFFFFF); // 16MB max
     uint8_t header0 = 0xE0;  // top 5 bits = 11100
-    if (isByte)   header0 |= 0x02;  // bit 1
-    if (isSigned) header0 |= 0x01;  // bit 0
+    if (isByte)   header0 |= 0x04;  // bit 2 (B flag)
+    if (isSigned) header0 |= 0x02;  // bit 1 (S flag)
+    // bit 0 is reserved (0)
 
     buffer_.push_back(header0);
     buffer_.push_back(static_cast<uint8_t>((len >> 16) & 0xFF));

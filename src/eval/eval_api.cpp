@@ -13,6 +13,8 @@
 #include "libsed/core/uid.h"
 #include "libsed/core/endian.h"
 #include "libsed/core/log.h"
+#include <thread>
+#include <chrono>
 
 namespace libsed {
 namespace eval {
@@ -1370,27 +1372,75 @@ void EvalApi::setSessionMaxComPacket(Session& session, uint32_t size) {
 // ════════════════════════════════════════════════════════
 
 Result EvalApi::stackReset(std::shared_ptr<ITransport> transport, uint16_t comId) {
-    // TCG Core Spec: ComID Management packet via Security Protocol 0x02
+    // TCG Core Spec: STACK_RESET via Security Protocol 0x02
+    // Request format (Table 202): ComID(2) + Extension(2) + RequestCode(4)
     Bytes request(512, 0);
     Endian::writeBe16(request.data(), comId);        // bytes 0-1: ComID
     Endian::writeBe16(request.data() + 2, 0);        // bytes 2-3: Extended ComID
     Endian::writeBe32(request.data() + 4, 2);        // bytes 4-7: request code = STACK_RESET
 
-    return transport->ifSend(0x02, comId, ByteSpan(request.data(), request.size()));
+    auto r = transport->ifSend(0x02, comId, ByteSpan(request.data(), request.size()));
+    if (r.failed()) return r;
+
+    // TCG Core Spec: Stack Reset 후 VERIFY_COMID로 ComID 상태가 idle(0)이 될 때까지 polling
+    // Response format (Table 203): ComID(2) + Ext(2) + RequestCode(4) + AvailDataLen(4) + State(4)
+    // State: 0=Issued(idle), 1=Associated, 2=Associated+StackResetInProgress
+    for (int attempt = 0; attempt < 20; attempt++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+        // VERIFY_COMID 요청 전송 (RequestCode = 0)
+        Bytes verifyReq(512, 0);
+        Endian::writeBe16(verifyReq.data(), comId);
+        Endian::writeBe16(verifyReq.data() + 2, 0);
+        Endian::writeBe32(verifyReq.data() + 4, 0);  // RequestCode = VERIFY
+
+        r = transport->ifSend(0x02, comId, ByteSpan(verifyReq.data(), verifyReq.size()));
+        if (r.failed()) return r;
+
+        Bytes response;
+        r = transport->ifRecv(0x02, comId, response, 512);
+        if (r.failed()) return r;
+
+        if (response.size() >= 16) {
+            uint32_t state = Endian::readBe32(response.data() + 12);  // offset 12: ComID State
+            if (state == 0) {
+                LIBSED_INFO("Stack reset complete for ComID 0x%04X", comId);
+                return ErrorCode::Success;
+            }
+            LIBSED_DEBUG("StackReset poll: ComID 0x%04X state=%u, retrying", comId, state);
+        }
+    }
+
+    LIBSED_WARN("StackReset timeout for ComID 0x%04X", comId);
+    return ErrorCode::Success;  // 타임아웃이어도 진행 허용
 }
 
 Result EvalApi::verifyComId(std::shared_ptr<ITransport> transport,
                              uint16_t comId, bool& active) {
-    Bytes response;
-    auto r = transport->ifRecv(0x02, comId, response, 512);
+    // TCG Core Spec: VERIFY_COMID via Security Protocol 0x02
+    // Request format (Table 202): ComID(2) + Extension(2) + RequestCode(4)
+    Bytes request(512, 0);
+    Endian::writeBe16(request.data(), comId);
+    Endian::writeBe16(request.data() + 2, 0);
+    Endian::writeBe32(request.data() + 4, 0);   // RequestCode = VERIFY
+
+    auto r = transport->ifSend(0x02, comId, ByteSpan(request.data(), request.size()));
     if (r.failed()) {
         active = false;
         return r;
     }
-    // Check if response indicates valid/active ComID
-    if (response.size() >= 4) {
-        uint16_t respComId = (static_cast<uint16_t>(response[0]) << 8) | response[1];
-        active = (respComId == comId);
+
+    Bytes response;
+    r = transport->ifRecv(0x02, comId, response, 512);
+    if (r.failed()) {
+        active = false;
+        return r;
+    }
+
+    // Response format (Table 203): ComID(2) + Ext(2) + RequestCode(4) + AvailDataLen(4) + State(4)
+    if (response.size() >= 16) {
+        uint32_t state = Endian::readBe32(response.data() + 12);  // offset 12: ComID State
+        active = (state == 0 || state == 1);  // 0=Issued/idle, 1=Associated
     } else {
         active = false;
     }

@@ -28,18 +28,18 @@ Bytes ParamEncoder::encodeStartSession(uint32_t hostSessionId,
         enc.endName();
     }
 
-    // Optional: HostExchangeAuthority
+    // Optional: HostExchangeAuthority (TCG Core Spec Table 225, named param index 1)
     if (!hostExchangeAuth.isNull()) {
         enc.startName();
-        enc.encodeUint(3); // HostExchangeAuthority
+        enc.encodeUint(1); // HostExchangeAuthority
         enc.encodeUid(hostExchangeAuth);
         enc.endName();
     }
 
-    // Optional: HostSigningAuthority
+    // Optional: HostSigningAuthority (TCG Core Spec Table 225, named param index 2)
     if (!hostSignAuth.isNull()) {
         enc.startName();
-        enc.encodeUint(4); // HostSigningAuthority
+        enc.encodeUint(2); // HostSigningAuthority
         enc.encodeUid(hostSignAuth);
         enc.endName();
     }

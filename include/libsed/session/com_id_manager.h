@@ -25,9 +25,9 @@ public:
     Result stackReset(uint16_t comId);
 
     /// Get the protocol ID for IF-SEND/IF-RECV
-    static constexpr uint8_t PROTOCOL_ID_LEVEL0 = 0x01;
-    static constexpr uint8_t PROTOCOL_ID_LEVEL1 = 0x02;
-    static constexpr uint8_t PROTOCOL_ID_COMID_MGMT = 0x02;
+    static constexpr uint8_t PROTOCOL_ID_LEVEL0 = 0x01;  ///< Level 0 Discovery
+    static constexpr uint8_t PROTOCOL_ID_LEVEL1 = 0x01;  ///< Level 1 TCG data (IF-SEND/IF-RECV)
+    static constexpr uint8_t PROTOCOL_ID_COMID_MGMT = 0x02;  ///< ComID Management
 
 private:
     std::shared_ptr<ITransport> transport_;
