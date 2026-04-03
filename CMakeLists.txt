@@ -215,6 +215,10 @@ if(LIBSED_BUILD_EXAMPLES)
     target_link_libraries(appnote_datastore   PRIVATE libsed)
     target_link_libraries(appnote_block_sid   PRIVATE libsed)
     target_link_libraries(appnote_ns_locking  PRIVATE libsed)
+
+    # ── Comprehensive Multi-Thread TC ──
+    add_executable(example_eval_mt_comp examples/eval_mt_comprehensive.cpp)
+    target_link_libraries(example_eval_mt_comp PRIVATE libsed Threads::Threads)
 endif()
 
 # ══════════════════════════════════════════════════════
