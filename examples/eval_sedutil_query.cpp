@@ -2,16 +2,20 @@
 /// @brief sedutil-cli --query 동일 동작 재현
 ///
 /// sedutil --query가 수행하는 것과 동일한 시나리오:
-///   1. Level 0 Discovery
-///   2. Properties Exchange
-///   3. Anonymous AdminSP Session → MSID 읽기
-///   4. Close Session
+///   1. (선택) sedutil-cli --query 먼저 실행하여 정상 동작 확인
+///   2. Level 0 Discovery + Feature Descriptor 출력
+///   3. StackReset
+///   4. Properties Exchange (TPer Properties + Host Properties)
+///   5. Anonymous AdminSP Session → MSID 읽기
+///   6. Close Session
 ///
-/// Usage: ./example_sedutil_query <device> [--log]
+/// Usage: ./example_sedutil_query <device> [--sedutil-first] [--log]
 
 #include <libsed/eval/eval_api.h>
 #include <libsed/transport/transport_factory.h>
 #include <libsed/debug/logging_transport.h>
+#include <libsed/discovery/discovery.h>
+#include <libsed/discovery/feature_descriptor.h>
 #include <libsed/method/method_call.h>
 #include <libsed/method/method_uids.h>
 #include <libsed/method/param_encoder.h>
@@ -21,6 +25,7 @@
 #include <iomanip>
 #include <thread>
 #include <chrono>
+#include <cstdlib>
 
 using namespace libsed;
 using namespace libsed::eval;
@@ -42,16 +47,95 @@ static void printHex(const Bytes& data, size_t max = 32) {
     if (data.size() > max) printf("..(%zu bytes)", data.size());
 }
 
+/// @brief Feature Descriptor 상세 출력 (sedutil --query 스타일)
+static void printFeatureDescriptors(const Discovery& disc) {
+    for (const auto& feat : disc.features()) {
+        uint16_t code = feat->featureCode();
+        printf("    Feature: %s (0x%04X)\n", feat->name().c_str(), code);
+
+        if (auto* f = dynamic_cast<const TPerFeature*>(feat.get())) {
+            printf("      Sync=%s Async=%s AckNak=%s BufferMgmt=%s Streaming=%s ComIDMgmt=%s\n",
+                   f->syncSupported ? "Y" : "N",
+                   f->asyncSupported ? "Y" : "N",
+                   f->ackNakSupported ? "Y" : "N",
+                   f->bufferMgmtSupported ? "Y" : "N",
+                   f->streamingSupported ? "Y" : "N",
+                   f->comIdMgmtSupported ? "Y" : "N");
+        }
+        else if (auto* f = dynamic_cast<const LockingFeature*>(feat.get())) {
+            printf("      LockingSupported=%s LockingEnabled=%s Locked=%s MediaEncrypt=%s MBREnabled=%s MBRDone=%s\n",
+                   f->lockingSupported ? "Y" : "N",
+                   f->lockingEnabled ? "Y" : "N",
+                   f->locked ? "Y" : "N",
+                   f->mediaEncryption ? "Y" : "N",
+                   f->mbrEnabled ? "Y" : "N",
+                   f->mbrDone ? "Y" : "N");
+        }
+        else if (auto* f = dynamic_cast<const GeometryFeature*>(feat.get())) {
+            printf("      Align=%s LogicalBlockSize=%u AlignmentGranularity=%llu LowestAlignedLBA=%llu\n",
+                   f->align ? "Y" : "N",
+                   f->logicalBlockSize,
+                   static_cast<unsigned long long>(f->alignmentGranularity),
+                   static_cast<unsigned long long>(f->lowestAlignedLBA));
+        }
+        else if (auto* f = dynamic_cast<const OpalV2Feature*>(feat.get())) {
+            printf("      BaseComID=0x%04X NumComIDs=%u RangeCrossing=%s\n",
+                   f->baseComId, f->numComIds, f->rangeCrossing ? "Y" : "N");
+            printf("      Admins=%u Users=%u InitialPIN=%u RevertedPIN=%u\n",
+                   f->numLockingSPAdminsSupported, f->numLockingSPUsersSupported,
+                   f->initialPinIndicator, f->revertedPinIndicator);
+        }
+        else if (auto* f = dynamic_cast<const OpalV1Feature*>(feat.get())) {
+            printf("      BaseComID=0x%04X NumComIDs=%u RangeCrossing=%s\n",
+                   f->baseComId, f->numComIds, f->rangeCrossing ? "Y" : "N");
+        }
+        else if (auto* f = dynamic_cast<const EnterpriseFeature*>(feat.get())) {
+            printf("      BaseComID=0x%04X NumComIDs=%u RangeCrossing=%s\n",
+                   f->baseComId, f->numComIds, f->rangeCrossing ? "Y" : "N");
+        }
+        else if (auto* f = dynamic_cast<const PyriteV1Feature*>(feat.get())) {
+            printf("      BaseComID=0x%04X NumComIDs=%u InitialPIN=%u RevertedPIN=%u\n",
+                   f->baseComId, f->numComIds, f->initialPinIndicator, f->revertedPinIndicator);
+        }
+        else if (auto* f = dynamic_cast<const PyriteV2Feature*>(feat.get())) {
+            printf("      BaseComID=0x%04X NumComIDs=%u InitialPIN=%u RevertedPIN=%u\n",
+                   f->baseComId, f->numComIds, f->initialPinIndicator, f->revertedPinIndicator);
+        }
+    }
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <device> [--log]\n";
+        std::cerr << "Usage: " << argv[0] << " <device> [--sedutil-first] [--log]\n";
         return 1;
     }
 
     std::string device = argv[1];
     bool enableLog = false;
-    for (int i = 2; i < argc; i++)
+    bool sedutilFirst = false;
+    for (int i = 2; i < argc; i++) {
         if (std::string(argv[i]) == "--log") enableLog = true;
+        if (std::string(argv[i]) == "--sedutil-first") sedutilFirst = true;
+    }
+
+    // ═══════════════════════════════════════════════
+    //  0. (선택) sedutil-cli --query 먼저 실행
+    // ═══════════════════════════════════════════════
+    if (sedutilFirst) {
+        std::cout << "══════════════════════════════════════════\n";
+        std::cout << "  sedutil-cli --query " << device << "\n";
+        std::cout << "══════════════════════════════════════════\n";
+        std::string cmd = "sedutil-cli --query " + device;
+        int rc = system(cmd.c_str());
+        std::cout << "\nsedutil-cli exit code: " << rc << "\n\n";
+        if (rc != 0) {
+            std::cerr << "sedutil-cli failed. Aborting.\n";
+            return 1;
+        }
+        std::cout << "══════════════════════════════════════════\n";
+        std::cout << "  Now running libsed equivalent...\n";
+        std::cout << "══════════════════════════════════════════\n\n";
+    }
 
     libsed::initialize();
     EvalApi api;
@@ -73,16 +157,17 @@ int main(int argc, char* argv[]) {
     int step = 0;
 
     // ═══════════════════════════════════════════════
-    //  1. Level 0 Discovery
+    //  1. Level 0 Discovery + Feature Descriptors
     // ═══════════════════════════════════════════════
     std::cout << "[" << ++step << "] Level 0 Discovery\n";
-    DiscoveryInfo info;
-    auto r = api.discovery0(transport, info);
+    Discovery disc;
+    auto r = disc.discover(transport);
     if (r.failed()) {
         std::cerr << "  FAIL: " << r.message() << "\n";
         return 1;
     }
 
+    DiscoveryInfo info = disc.buildInfo();
     std::cout << "  SSC        : " << sscName(info.primarySsc) << "\n";
     std::cout << "  ComID      : 0x" << std::hex << std::setfill('0')
               << std::setw(4) << info.baseComId << std::dec << "\n";
@@ -93,13 +178,16 @@ int main(int argc, char* argv[]) {
     std::cout << "  MBR        : " << (info.mbrEnabled ? "enabled" : "disabled")
               << (info.mbrDone ? " (done)" : "") << "\n";
 
+    std::cout << "\n  Feature Descriptors:\n";
+    printFeatureDescriptors(disc);
+    std::cout << "\n";
+
     if (info.baseComId == 0) {
         std::cerr << "  No valid ComID\n";
         return 1;
     }
 
     uint16_t comId = info.baseComId;
-    std::cout << "  OK\n\n";
 
     // ═══════════════════════════════════════════════
     //  2. StackReset
@@ -110,93 +198,24 @@ int main(int argc, char* argv[]) {
 
     // ═══════════════════════════════════════════════
     //  3. Properties Exchange
-    //  방법 A: api.exchangeProperties() (고수준)
-    //  방법 B: 직접 ifSend/ifRecv (props_diff와 동일)
     // ═══════════════════════════════════════════════
     std::cout << "[" << ++step << "] Properties Exchange\n";
 
-    // ── 방법 A: EvalApi 경유 ──
-    std::cout << "  [A] via api.exchangeProperties()...\n";
     PropertiesResult props;
     r = api.exchangeProperties(transport, comId, props);
     if (r.ok()) {
-        std::cout << "  [A] OK: MaxCPS=" << props.tperMaxComPacketSize << "\n";
+        std::cout << "  TPer Properties:\n";
+        std::cout << "    MaxComPacketSize = " << props.tperMaxComPacketSize << "\n";
+        std::cout << "    MaxPacketSize    = " << props.tperMaxPacketSize << "\n";
+        std::cout << "    MaxIndTokenSize  = " << props.tperMaxIndTokenSize << "\n";
+        std::cout << "    MaxAggTokenSize  = " << props.tperMaxAggTokenSize << "\n";
+        std::cout << "  Host Properties (echoed):\n";
+        std::cout << "    MaxComPacketSize = 2048\n";
+        std::cout << "    MaxPacketSize    = 2028\n";
+        std::cout << "    MaxIndTokenSize  = 1992\n";
+        std::cout << "  OK\n";
     } else {
-        std::cout << "  [A] FAIL: " << r.message() << "\n";
-
-        // StackReset 후 방법 B 시도
-        api.stackReset(transport, comId);
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-        std::cout << "  [B] via direct ifSend/ifRecv...\n";
-
-        // props_diff와 동일하게 패킷 직접 구성
-        ParamEncoder::HostProperties hp;
-        hp.maxComPacketSize = 2048;
-        hp.maxPacketSize = 2028;
-        hp.maxIndTokenSize = 1992;
-        Bytes params = ParamEncoder::encodeProperties(hp);
-        Bytes methodTokens = MethodCall::buildSmCall(method::SM_PROPERTIES, params);
-        PacketBuilder pb;
-        pb.setComId(comId);
-        Bytes sendData = pb.buildSessionManagerPacket(methodTokens);
-
-        // Send
-        r = transport->ifSend(0x01, comId, ByteSpan(sendData.data(), sendData.size()));
-        if (r.ok()) {
-            // Recv with polling
-            Bytes recvBuf;
-            for (int att = 0; att < 20; att++) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                recvBuf.clear();
-                r = transport->ifRecv(0x01, comId, recvBuf, 2048);
-                if (r.failed()) break;
-                if (recvBuf.size() >= 20) {
-                    uint32_t cpLen = Endian::readBe32(recvBuf.data() + 16);
-                    if (cpLen > 0) break;
-                }
-            }
-            if (r.ok() && recvBuf.size() >= 56) {
-                uint32_t tokenLen = Endian::readBe32(recvBuf.data() + 52);
-                // 토큰에서 status 파싱
-                // Status는 EOD 뒤 [ status 0 0 ]
-                const uint8_t* toks = recvBuf.data() + 56;
-                uint8_t status = 0xFF;
-                for (size_t i = 0; i + 4 < tokenLen; i++) {
-                    if (toks[i] == 0xF9) {  // EOD
-                        // 다음: F0 status 00 00 F1
-                        if (i + 3 < tokenLen && toks[i+1] == 0xF0)
-                            status = toks[i+2];
-                        break;
-                    }
-                }
-                std::cout << "  [B] Recv " << recvBuf.size() << " bytes, St=" << (int)status;
-                if (status == 0) std::cout << " (Success)";
-                else std::cout << " (0x" << std::hex << (int)status << std::dec << ")";
-                std::cout << "\n";
-
-                // [A] send payload와 비교
-                std::cout << "  [A vs B] Send size: A=" << props.raw.rawSendPayload.size()
-                          << " B=" << sendData.size() << "\n";
-                if (props.raw.rawSendPayload.size() == sendData.size()) {
-                    bool same = (props.raw.rawSendPayload == sendData);
-                    std::cout << "  [A vs B] Send payload: "
-                              << (same ? "IDENTICAL" : "DIFFERENT") << "\n";
-                    if (!same) {
-                        for (size_t i = 0; i < sendData.size(); i++) {
-                            if (props.raw.rawSendPayload[i] != sendData[i]) {
-                                printf("    offset 0x%04zX: A=0x%02X B=0x%02X\n",
-                                       i, props.raw.rawSendPayload[i], sendData[i]);
-                            }
-                        }
-                    }
-                } else {
-                    std::cout << "  [A vs B] Send payload: SIZE MISMATCH\n";
-                }
-            }
-        } else {
-            std::cout << "  [B] Send FAIL: " << r.message() << "\n";
-        }
+        std::cout << "  FAIL: " << r.message() << "\n";
     }
 
     uint32_t maxCPS = (props.tperMaxComPacketSize > 0)

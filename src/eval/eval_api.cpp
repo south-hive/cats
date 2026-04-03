@@ -121,37 +121,35 @@ Result EvalApi::exchangePropertiesCustom(std::shared_ptr<ITransport> transport,
     if (!result.raw.methodResult.isSuccess())
         return result.raw.methodResult.toResult();
 
-    // Decode TPer properties from response
-    // Response format: STARTNAME "HostProperties" { echo } ENDNAME
-    //                  STARTNAME "TPerProperties" { values } ENDNAME
+    // Decode properties from response
+    // TCG Core Spec: Response contains two named blocks in order:
+    //   STARTNAME "TPerProperties" { tper values } ENDNAME
+    //   STARTNAME "HostProperties" { echoed host values } ENDNAME
     auto stream = result.raw.methodResult.resultStream();
 
-    // Skip HostProperties echo (STARTNAME "HostProperties" ... ENDNAME)
-    if (stream.isStartName()) {
-        stream.expectStartName();
-        stream.skip(); // "HostProperties" string
-        stream.skipList(); // { echoed host values }
-        stream.expectEndName();
-    } else if (stream.isStartList()) {
-        stream.skipList(); // fallback: bare list format
-    }
-
-    // Parse TPerProperties
     ParamDecoder::TPerProperties tperProps;
-    if (stream.isStartName()) {
+
+    // Parse up to two named blocks, identifying each by its name string
+    for (int block = 0; block < 2 && stream.isStartName(); block++) {
         stream.expectStartName();
-        stream.skip(); // "TPerProperties" string
-        if (stream.isStartList()) {
-            stream.expectStartList();
-            ParamDecoder::decodeProperties(stream, tperProps);
-            stream.expectEndList();
+        auto nameStr = stream.readString();
+
+        if (nameStr && *nameStr == "TPerProperties") {
+            if (stream.isStartList()) {
+                stream.expectStartList();
+                ParamDecoder::decodeProperties(stream, tperProps);
+                stream.expectEndList();
+            }
+            stream.expectEndName();
+        } else if (nameStr && *nameStr == "HostProperties") {
+            // Skip echoed host properties
+            stream.skipList();
+            stream.expectEndName();
+        } else {
+            // Unknown block — skip it
+            stream.skipList();
+            stream.expectEndName();
         }
-        stream.expectEndName();
-    } else if (stream.isStartList()) {
-        // fallback: bare list format
-        stream.expectStartList();
-        ParamDecoder::decodeProperties(stream, tperProps);
-        stream.expectEndList();
     }
 
     result.tperMaxComPacketSize = tperProps.maxComPacketSize;
