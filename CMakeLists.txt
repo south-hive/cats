@@ -203,8 +203,10 @@ if(LIBSED_BUILD_EXAMPLES)
     # ── Application Note Examples ──
     add_executable(appnote_opal        examples/appnote_opal.cpp)
     add_executable(appnote_enterprise  examples/appnote_enterprise.cpp)
+    add_executable(appnote_mbr         examples/appnote_mbr.cpp)
     target_link_libraries(appnote_opal        PRIVATE libsed)
     target_link_libraries(appnote_enterprise  PRIVATE libsed)
+    target_link_libraries(appnote_mbr         PRIVATE libsed)
 endif()
 
 # ══════════════════════════════════════════════════════
