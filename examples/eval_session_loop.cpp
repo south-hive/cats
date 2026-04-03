@@ -159,7 +159,7 @@ int main(int argc, char* argv[]) {
         std::cout << "  Session: TSN=" << ssr.tperSessionNumber
                   << " HSN=" << ssr.hostSessionNumber << "\n";
 
-        // 2. SP Lifecycle 조회 (Locking SP 상태 확인)
+        // 2. SP Lifecycle 조회 (AdminSP 세션에서 Locking SP 상태 확인)
         RawResult raw;
         uint8_t lifecycle = 0;
         r = api.getSpLifecycle(session, uid::SP_LOCKING, lifecycle, raw);
@@ -175,14 +175,13 @@ int main(int argc, char* argv[]) {
             std::cout << "  Lifecycle query: " << r.message() << "\n";
         }
 
-        // 3. GlobalRange 잠금 상태 조회
-        LockingInfo lockInfo;
-        r = api.getLockingInfo(session, 0, lockInfo, raw);
-        if (r.ok()) {
-            std::cout << "  GlobalRange: RLE=" << lockInfo.readLockEnabled
-                      << " WLE=" << lockInfo.writeLockEnabled
-                      << " RL=" << lockInfo.readLocked
-                      << " WL=" << lockInfo.writeLocked << "\n";
+        // 3. MSID 읽기 (SID 권한으로 C_PIN_MSID 접근)
+        Bytes msidVal;
+        r = api.getCPin(session, uid::CPIN_MSID, msidVal, raw);
+        if (r.ok() && !msidVal.empty()) {
+            std::cout << "  MSID: " << msidVal.size() << " bytes\n";
+        } else {
+            std::cout << "  MSID read: " << r.message() << "\n";
         }
 
         // 4. CloseSession
