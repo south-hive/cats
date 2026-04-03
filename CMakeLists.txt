@@ -235,6 +235,10 @@ if(LIBSED_BUILD_EXAMPLES)
     add_executable(example_eval_props_diag examples/eval_props_diag.cpp)
     target_link_libraries(example_eval_props_diag PRIVATE libsed)
 
+    # ── Enterprise HW Flow Test ──
+    add_executable(example_eval_ent_hw examples/eval_enterprise_hw.cpp)
+    target_link_libraries(example_eval_ent_hw PRIVATE libsed)
+
     # ── Comprehensive Multi-Thread TC ──
     add_executable(example_eval_mt_comp examples/eval_mt_comprehensive.cpp)
     target_link_libraries(example_eval_mt_comp PRIVATE libsed Threads::Threads)
