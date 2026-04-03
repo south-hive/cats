@@ -66,7 +66,9 @@ Result EvalApi::discovery0Custom(std::shared_ptr<ITransport> transport,
 Result EvalApi::exchangeProperties(std::shared_ptr<ITransport> transport,
                                     uint16_t comId,
                                     PropertiesResult& result) {
-    return exchangePropertiesCustom(transport, comId, 65536, 65516, 65480, result);
+    // TCG Core Spec: Properties는 세션 전 기본 ComPacket 크기로 교환해야 함
+    // TPer 기본 MaxComPacketSize는 보통 2048 — 65536 요청 시 일부 TPer에서 0x0F 발생
+    return exchangePropertiesCustom(transport, comId, 2048, 2004, 1968, result);
 }
 
 Result EvalApi::exchangePropertiesCustom(std::shared_ptr<ITransport> transport,
@@ -94,12 +96,13 @@ Result EvalApi::exchangePropertiesCustom(std::shared_ptr<ITransport> transport,
     if (r.failed()) { result.raw.transportError = r.code(); return r; }
 
     // IF-RECV with polling — TPer가 응답 준비될 때까지 반복
-    // ComPacket.outstandingData > 0이면 아직 응답 미완성
+    // Properties는 세션 전이므로 TPer 기본 MaxComPacketSize(2048)를 사용
+    static constexpr size_t PROPS_RECV_SIZE = 2048;
     Bytes recvBuffer;
     PacketBuilder::ParsedResponse parsed;
     for (int attempt = 0; attempt < 20; attempt++) {
         recvBuffer.clear();
-        r = transport->ifRecv(0x01, comId, recvBuffer, 65536);
+        r = transport->ifRecv(0x01, comId, recvBuffer, PROPS_RECV_SIZE);
         if (r.failed()) { result.raw.transportError = r.code(); return r; }
 
         r = pb.parseResponse(recvBuffer, parsed);
