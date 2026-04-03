@@ -156,6 +156,8 @@ Result EvalApi::exchangePropertiesCustom(std::shared_ptr<ITransport> transport,
     result.tperMaxPacketSize    = tperProps.maxPacketSize;
     result.tperMaxIndTokenSize  = tperProps.maxIndTokenSize;
     result.tperMaxAggTokenSize  = tperProps.maxAggTokenSize;
+    result.tperMaxMethods       = tperProps.maxMethods;
+    result.tperMaxSubPackets    = tperProps.maxSubPackets;
 
     return ErrorCode::Success;
 }
@@ -711,10 +713,10 @@ Result EvalApi::sendStartSession(std::shared_ptr<ITransport> transport,
     paramEnc.encodeUid(params.spUid);
     paramEnc.encodeBool(params.write);
 
-    // StartSession_OPT fields
+    // StartSession_OPT fields (Opal SSC: optional named params indexed from 0)
     if (!params.hostChallenge.empty()) {
         paramEnc.startName();
-        paramEnc.encodeUint(0);  // HostChallenge keyword
+        paramEnc.encodeUint(0);  // HostChallenge (sedutil uses 0)
         paramEnc.encodeBytes(params.hostChallenge);
         paramEnc.endName();
     }

@@ -21,6 +21,8 @@ Bytes ParamEncoder::encodeStartSession(uint32_t hostSessionId,
     enc.encodeBool(write);
 
     // Optional: Host Challenge
+    // Opal SSC names optional params starting from 0: HostChallenge=0
+    // (NOT absolute Table 225 index). sedutil uses 0 and works with hardware.
     if (!hostChallenge.empty()) {
         enc.startName();
         enc.encodeUint(0); // HostChallenge
@@ -53,7 +55,8 @@ Bytes ParamEncoder::encodeProperties(const HostProperties& props) {
 
     // TCG Core Spec: Properties method parameter is a named value pair
     //   STARTNAME "HostProperties" STARTLIST { pairs... } ENDLIST ENDNAME
-    // sedutil reference: DtaDevOpal.cpp properties()
+    // Each property is a named value pair: STARTNAME string uint ENDNAME
+    // sedutil reference: DtaDevOpal.cpp properties() uses this exact encoding.
     enc.startName();
     enc.encodeString("HostProperties");
     enc.startList();

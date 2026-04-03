@@ -249,10 +249,18 @@ if(LIBSED_BUILD_TOOLS)
     add_executable(token_dump    tools/token_dump.cpp)
     add_executable(props_diff    tools/props_diff.cpp)
 
-    target_link_libraries(sed_discover  PRIVATE libsed)
-    target_link_libraries(sed_manage    PRIVATE libsed)
-    target_link_libraries(token_dump    PRIVATE libsed)
-    target_link_libraries(props_diff    PRIVATE libsed)
+    add_executable(ioctl_validator tools/ioctl_validator.cpp)
+
+    target_link_libraries(sed_discover    PRIVATE libsed)
+    target_link_libraries(sed_manage      PRIVATE libsed)
+    target_link_libraries(token_dump      PRIVATE libsed)
+    target_link_libraries(props_diff      PRIVATE libsed)
+    target_link_libraries(ioctl_validator PRIVATE libsed)
+endif()
+
+# ── ioctl_validator as CTest (offline, no hardware) ──
+if(LIBSED_BUILD_TOOLS AND LIBSED_BUILD_TESTS)
+    add_test(NAME ioctl_validator COMMAND ioctl_validator)
 endif()
 
 # ══════════════════════════════════════════════════════

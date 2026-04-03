@@ -49,19 +49,23 @@ Result ParamDecoder::decodeSyncSession(TokenStream& stream, SessionParams& out) 
 }
 
 Result ParamDecoder::decodeProperties(TokenStream& stream, TPerProperties& out) {
-    // Properties response: [ named pairs... ]
-    // Each pair: { string_name = uint_value }
+    // Properties response: [ Name1, Value1, Name2, Value2, ... ]
+    // Each pair is just two tokens: a String name and a Uint value.
+    // They are NOT enclosed in STARTNAME/ENDNAME.
 
-    while (stream.hasMore() && stream.isStartName()) {
-        stream.expectStartName();
+    while (stream.hasMore()) {
+        if (stream.isEndList()) break;
+
         auto nameStr = stream.readString();
-        if (!nameStr) { stream.skip(); stream.expectEndName(); continue; }
+        if (!nameStr) continue; // readString already consumed one token
 
         auto val = stream.readUint();
-        uint32_t v = val ? static_cast<uint32_t>(*val) : 0;
+        if (!val) continue; // readUint already consumed one token
+
+        uint32_t v = static_cast<uint32_t>(*val);
 
         if (*nameStr == "MaxMethods")              out.maxMethods = v;
-        else if (*nameStr == "MaxSubPackets")      out.maxSubPackets = v;
+        else if (*nameStr == "MaxSubpackets")      out.maxSubPackets = v;
         else if (*nameStr == "MaxPackets")         out.maxPackets = v;
         else if (*nameStr == "MaxComPacketSize")   out.maxComPacketSize = v;
         else if (*nameStr == "MaxResponseComPacketSize") out.maxResponseComPacketSize = v;
@@ -72,8 +76,6 @@ Result ParamDecoder::decodeProperties(TokenStream& stream, TPerProperties& out) 
         else if (*nameStr == "SequenceNumbers")    out.sequenceNumbers = v;
         else if (*nameStr == "AckNak")             out.ackNak = v;
         else if (*nameStr == "Async")              out.async = v;
-
-        stream.expectEndName();
     }
 
     return ErrorCode::Success;
