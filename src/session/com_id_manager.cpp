@@ -1,6 +1,8 @@
 #include "libsed/session/com_id_manager.h"
 #include "libsed/core/endian.h"
 #include "libsed/core/log.h"
+#include <thread>
+#include <chrono>
 
 namespace libsed {
 
@@ -74,8 +76,34 @@ Result ComIdManager::stackReset(uint16_t comId) {
                                  ByteSpan(request.data(), request.size()));
     if (r.failed()) return r;
 
-    LIBSED_INFO("Stack reset sent for ComID 0x%04X", comId);
-    return ErrorCode::Success;
+    // StackReset 완료 대기 — IF-RECV로 ComID 상태를 polling
+    // TCG Core Spec: reset 후 ComID 상태가 idle(0)이 될 때까지 대기
+    for (int attempt = 0; attempt < 20; attempt++) {
+        Bytes response;
+        r = transport_->ifRecv(PROTOCOL_ID_COMID_MGMT, comId, response, 512);
+        if (r.failed()) {
+            LIBSED_WARN("StackReset poll failed for ComID 0x%04X: %s",
+                         comId, r.message().c_str());
+            return r;
+        }
+
+        if (response.size() >= 8) {
+            uint32_t state = Endian::readBe32(response.data() + 4);
+            if (state == 0) {
+                // idle — reset 완료
+                LIBSED_INFO("Stack reset complete for ComID 0x%04X", comId);
+                return ErrorCode::Success;
+            }
+            LIBSED_DEBUG("StackReset poll: ComID 0x%04X state=%u, retrying",
+                          comId, state);
+        }
+
+        // 짧은 대기 후 재시도
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    LIBSED_WARN("StackReset timeout for ComID 0x%04X", comId);
+    return ErrorCode::Success;  // 타임아웃이어도 진행 허용
 }
 
 } // namespace libsed
