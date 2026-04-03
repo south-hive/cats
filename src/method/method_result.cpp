@@ -27,8 +27,20 @@ Result MethodResult::parse(const std::vector<Token>& tokens) {
         }
     }
 
-    // Collect result tokens (skip outer StartList/EndList if present)
+    // Skip CALL header if present: CALL InvokingUID MethodUID
+    // SM method responses (SyncSession, etc.) include the CALL block
     size_t startIdx = 0;
+    if (startIdx < eodIndex && tokens[startIdx].type == TokenType::Call) {
+        ++startIdx;  // skip CALL
+        // skip InvokingUID (byte-sequence atom)
+        if (startIdx < eodIndex && tokens[startIdx].isAtom() && tokens[startIdx].isByteSequence)
+            ++startIdx;
+        // skip MethodUID (byte-sequence atom)
+        if (startIdx < eodIndex && tokens[startIdx].isAtom() && tokens[startIdx].isByteSequence)
+            ++startIdx;
+    }
+
+    // Collect result tokens (skip outer StartList/EndList if present)
     size_t endIdx = eodIndex;
 
     if (startIdx < endIdx && tokens[startIdx].type == TokenType::StartList) {
