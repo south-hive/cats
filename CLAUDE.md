@@ -96,6 +96,20 @@ The recommended pattern injects an `INvmeDevice` implementation into `NvmeTransp
 
 8 unit test files in `tests/unit/` covering: token codec, packet building, discovery parsing, password hashing, endian conversion, session management, method calls, and debug/fault injection. Mock transport in `tests/mock/mock_transport.cpp` enables testing without hardware.
 
+## Application Note Examples
+
+TCG Storage Application Note documents mapped to EvalApi calls in `examples/`:
+
+| File | Content |
+|------|---------|
+| `appnote_opal.cpp` | Opal SSC full lifecycle (AppNote 3-13): Take Ownership → Activate → Configure Range → User/ACE → Lock/Unlock → MBR → Crypto Erase → Revert |
+| `appnote_enterprise.cpp` | Enterprise SSC: Band config, lock/unlock, BandMaster/EraseMaster passwords, erase, LockOnReset |
+| `appnote_mbr.cpp` | Shadow MBR deep dive: PBA write, boot cycle simulation, multi-user access, enable/disable |
+| `appnote_psid.cpp` | PSID Revert: locked-out recovery, post-revert state verification, MSID check |
+| `appnote_datastore.cpp` | DataStore (ByteTable): info query, write-read-compare, multi-table, chunked large data |
+| `appnote_block_sid.cpp` | NVMe Block SID Feature: set/verify/clear, power cycle behavior |
+| `appnote_ns_locking.cpp` | Configurable Namespace Locking: per-NS range config, NVMe Identify mapping |
+
 ## Developer Guide
 
-Comprehensive documentation in `docs/developer_guide.md` (in Korean) covers architecture, NVMe DI patterns, session management, multi-threading rules, TC Library util mapping, fault injection, and the SedContext/Worker integration pattern.
+Comprehensive documentation in `docs/developer_guide.md` (in Korean) covers architecture, NVMe DI patterns, session management, multi-threading rules, TC Library util mapping, fault injection, the SedContext/Worker integration pattern, and a full application note example catalog.

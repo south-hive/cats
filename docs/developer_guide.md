@@ -357,13 +357,58 @@ tc.disable();
 
 ## 9. Examples
 
+### 평가 API 예제
+
 | File | Description |
 |---|---|
 | `eval_step_by_step.cpp` | 기본 프로토콜 단계별 실행 |
 | `eval_tc_utils.cpp` | TC Library util 전체 데모 |
 | `eval_full_demo.cpp` | 120+ API 전체 데모 |
 | `eval_multi_session.cpp` | Multi-thread 6개 시나리오 |
+| `eval_worker_pattern.cpp` | Worker pool 패턴 |
 | `eval_fault_injection.cpp` | Debug layer + fault injection |
+| `eval_reset_scenarios.cpp` | Reset/Power-cycle 시나리오 |
+
+### 고수준 API 예제
+
+| File | Description |
+|---|---|
+| `opal_setup.cpp` | Opal 초기 설정 (고수준 OpalDevice API) |
+| `lock_unlock.cpp` | Range 잠금/해제 (고수준 API) |
+| `enterprise_band.cpp` | Enterprise Band 관리 (고수준 API) |
+| `discovery.cpp` | 디바이스 탐색 및 정보 출력 |
+
+### Application Note 예제
+
+TCG Storage Application Note 문서에 기반한 전체 워크플로우 예제입니다.
+모든 Application Note는 EvalApi (단계별 플랫 API)를 사용하며, 각 단계마다
+결과 확인과 오류 처리를 포함합니다.
+
+| File | Description | TCG Reference |
+|---|---|---|
+| `appnote_opal.cpp` | Opal SSC 전체 라이프사이클 (AppNote 3-13) | TCG Storage Application Note: Opal SSC |
+| `appnote_enterprise.cpp` | Enterprise SSC Band 관리 8개 시나리오 | TCG Storage Application Note: Enterprise SSC |
+| `appnote_mbr.cpp` | Shadow MBR 심층 — PBA 쓰기/부팅 사이클/다중 사용자 | TCG Storage Application Note: Shadow MBR |
+| `appnote_psid.cpp` | PSID Revert 비상 복구 및 상태 확인 | TCG Storage Application Note: PSID |
+| `appnote_datastore.cpp` | DataStore(ByteTable) 쓰기/읽기/비교/청크 처리 | TCG Storage Feature Set: DataStore Tables |
+| `appnote_block_sid.cpp` | NVMe Block SID Feature 설정/확인/해제 | TCG Storage Feature Set: Block SID Authentication |
+| `appnote_ns_locking.cpp` | Namespace별 잠금 범위 구성 및 NVMe Identify 매핑 | TCG Storage Feature Set: Configurable Namespace Locking |
+
+#### Opal Application Note 상세 (appnote_opal.cpp)
+
+| 함수 | AppNote 섹션 | 시나리오 |
+|---|---|---|
+| `appnote3_takeOwnership` | 3 | 소유권 확보 — MSID 읽기 → SID 비밀번호 설정 |
+| `appnote4_activateLockingSP` | 4 | Locking SP 활성화 |
+| `appnote5_configureLockingRange` | 5 | 잠금 범위 구성 (RangeStart/Length/RLE/WLE) |
+| `appnote6_setUserPassword` | 6 | 사용자 비밀번호 설정 (C_PIN_User1) |
+| `appnote7_enableUserInAce` | 7 | ACE에서 사용자 권한 활성화 |
+| `appnote8_lockRange` | 8 | 범위 잠금 (ReadLocked/WriteLocked) |
+| `appnote9_unlockRange` | 9 | 범위 잠금 해제 |
+| `appnote10_mbrShadow` | 10 | MBR 섀도잉 (PBA 이미지 쓰기/MBRDone) |
+| `appnote11_cryptoErase` | 11 | 암호화 소거 (ActiveKey 재생성) |
+| `appnote12_revertLockingSP` | 12 | Locking SP 복원 |
+| `appnote13_revertTPer` | 13 | TPer 복원 / PSID Revert |
 
 
 ## 10. Building Your Platform
