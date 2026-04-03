@@ -199,6 +199,10 @@ if(LIBSED_BUILD_EXAMPLES)
     target_link_libraries(example_eval_multi    PRIVATE libsed Threads::Threads)
     target_link_libraries(example_eval_worker   PRIVATE libsed Threads::Threads)
     target_link_libraries(example_eval_reset    PRIVATE libsed Threads::Threads)
+
+    # ── Application Note Examples ──
+    add_executable(appnote_opal        examples/appnote_opal.cpp)
+    target_link_libraries(appnote_opal        PRIVATE libsed)
 endif()
 
 # ══════════════════════════════════════════════════════
