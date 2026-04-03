@@ -40,6 +40,7 @@
 #include <libsed/eval/eval_api.h>
 #include <libsed/transport/nvme_transport.h>
 #include <libsed/transport/transport_factory.h>
+#include <libsed/debug/logging_transport.h>
 #include <libsed/security/hash_password.h>
 #include <libsed/sed_library.h>
 #include <iostream>
@@ -1083,11 +1084,16 @@ int main(int argc, char* argv[]) {
 
     libsed::initialize();
 
-    ss.transport = TransportFactory::createNvme(argv[1]);
-    if (!ss.transport || !ss.transport->isOpen()) {
+    auto rawTransport = TransportFactory::createNvme(argv[1]);
+    if (!rawTransport || !rawTransport->isOpen()) {
         std::cerr << "Cannot open " << argv[1] << "\n";
         return 1;
     }
+
+    // 명령 이력 로깅: 모든 IF-SEND/IF-RECV를 파일에 기록
+    ss.transport = debug::LoggingTransport::wrap(rawTransport, ".");
+    auto* lt = dynamic_cast<debug::LoggingTransport*>(ss.transport.get());
+    std::cout << "Command log: " << lt->logger()->filePath() << "\n";
 
     EvalApi api;
     TcgOption opt;
