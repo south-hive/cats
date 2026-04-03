@@ -63,6 +63,96 @@ using Clock = std::chrono::high_resolution_clock;
 
 static std::mutex g_printMutex;
 
+// ── 진단 힌트 시스템 ────────────────────────────────
+// 실패 시 원인을 추론하기 위한 힌트 맵.
+// 키: 단계 이름의 부분 매칭 + 에러 코드 조합
+
+/// @brief 실패한 단계에 대한 진단 힌트를 반환
+static const char* getDiagnosticHint(const char* stepName, const Result& r) {
+    // 에러 코드별 공통 힌트
+    int code = static_cast<int>(r.code());
+
+    // Transport 에러 (100번대)
+    if (code >= 100 && code < 200) {
+        if (code == 102) return "IF-SEND failed — 디바이스 경로 확인, NVMe driver 로드 여부 체크";
+        if (code == 103) return "IF-RECV failed — TPer 응답 없음, 디바이스 hang 의심";
+        if (code == 104) return "Timeout — TPer 처리 지연, 전원 사이클 후 재시도";
+        return "Transport 에러 — 디바이스 접근 권한(sudo) 및 경로 확인";
+    }
+
+    // Protocol 에러 (200번대)
+    if (code == 207) return "비정상 응답 — 이전 세션 잔재(stale), StackReset 필요";
+    if (code == 208) return "프로토콜 에러 — ComID 상태 오류, StackReset 후 재시도";
+
+    // Session 에러 (300번대)
+    if (code == 300) return "세션 미시작 상태 — StartSession이 선행되지 않음";
+    if (code == 304) return "세션 슬롯 부족 — 다른 세션이 열려있음, StackReset 필요";
+
+    // Method 에러 (400번대)
+    if (code == 401) return "권한 없음 — 인증 Authority/비밀번호 불일치, 또는 해당 작업의 ACE 미설정";
+    if (code == 403) return "SP Busy — 다른 세션이 SP를 점유 중, 잠시 후 재시도";
+    if (code == 405) return "SP Disabled — Locking SP가 비활성, Activate 필요";
+    if (code == 412) return "파라미터 오류 — UID, 범위, 컬럼 번호 확인";
+    if (code == 415) return "TPer Malfunction (0x0F) — 하드웨어 문제 또는 stale ComID, 전원 사이클 권장";
+    if (code == 463) return "메서드 실패 — TPer가 작업을 거부, 드라이브 상태 확인";
+
+    // Auth 에러 (600번대)
+    if (code == 600) return "인증 실패 — 비밀번호 불일치, Block SID 활성, 또는 Authority 잠김(lockout)";
+    if (code == 601) return "Lockout — 인증 시도 초과, 전원 사이클 또는 PSID 리셋 필요";
+
+    // 단계별 문맥 힌트
+    std::string step(stepName);
+
+    if (step.find("AdminSP") != std::string::npos ||
+        step.find("Anonymous") != std::string::npos) {
+        return "AdminSP 세션 열기 실패 — StackReset 미수행, Block SID, 또는 ComID stale 상태 의심";
+    }
+    if (step.find("LockingSP") != std::string::npos) {
+        return "LockingSP 세션 실패 — Locking SP가 Activate 되지 않았거나, 비밀번호 불일치";
+    }
+    if (step.find("SID") != std::string::npos && step.find("auth") != std::string::npos) {
+        return "SID 인증 실패 — 드라이브가 이미 다른 비밀번호로 소유됨, PSID 리셋 필요";
+    }
+    if (step.find("MSID") != std::string::npos) {
+        return "MSID 읽기 실패 — AdminSP 세션 문제, 드라이브 통신 상태 확인";
+    }
+    if (step.find("Activate") != std::string::npos) {
+        return "Activate 실패 — 이미 활성화 상태이거나 SID 권한 부족";
+    }
+    if (step.find("Block") != std::string::npos || step.find("BSID") != std::string::npos) {
+        return "Block SID 관련 실패 — NVMe Feature 0x0C 미지원, 또는 이미 설정됨";
+    }
+    if (step.find("Revert") != std::string::npos) {
+        return "Revert 실패 — 권한 부족, 세션이 ReadOnly, 또는 SP 상태 이상";
+    }
+    if (step.find("MBR") != std::string::npos || step.find("Mbr") != std::string::npos) {
+        return "MBR 실패 — MBR Feature 미지원, MBREnable 미설정, 또는 데이터 크기 초과";
+    }
+    if (step.find("DataStore") != std::string::npos || step.find("DS") != std::string::npos) {
+        return "DataStore 실패 — DataStore 테이블 미지원, 용량 초과, 또는 오프셋 범위 에러";
+    }
+    if (step.find("Range") != std::string::npos || step.find("Lock") != std::string::npos) {
+        return "Range/Lock 실패 — 범위 ID 유효성, RLE/WLE 미설정, 또는 ACE 권한 부족";
+    }
+    if (step.find("GenKey") != std::string::npos || step.find("ActiveKey") != std::string::npos) {
+        return "키 관련 실패 — 범위가 AES 키를 지원하지 않거나 권한 부족";
+    }
+    if (step.find("User") != std::string::npos || step.find("ACE") != std::string::npos) {
+        return "사용자/ACE 실패 — User Authority 미활성화, ACE UID 불일치, 또는 Admin 권한 필요";
+    }
+    if (step.find("CPin") != std::string::npos || step.find("Password") != std::string::npos) {
+        return "PIN 설정 실패 — C_PIN 객체 UID 불일치, 쓰기 세션이 아님, 또는 권한 부족";
+    }
+    if (step.find("StackReset") != std::string::npos) {
+        return "StackReset 실패 — ComID 유효성 확인, Transport 연결 상태 확인";
+    }
+    if (step.find("Properties") != std::string::npos) {
+        return "Properties 교환 실패 — ComID가 reset 상태가 아님, StackReset 선행 필요";
+    }
+
+    return "일반 실패 — sed_discover로 드라이브 상태 확인, 전원 사이클 후 재시도 권장";
+}
+
 #define TLOG(tid, ...) do { \
     std::lock_guard<std::mutex> lk(g_printMutex); \
     printf("[T%d] ", tid); \
@@ -73,8 +163,12 @@ static std::mutex g_printMutex;
 #define TSTEP(tid, name, r) do { \
     std::lock_guard<std::mutex> lk(g_printMutex); \
     printf("[T%d]   %-40s %s", tid, name, (r).ok() ? "OK" : "FAIL"); \
-    if ((r).failed()) printf(" (%s)", (r).message().c_str()); \
-    printf("\n"); \
+    if ((r).failed()) { \
+        printf(" (%s)\n", (r).message().c_str()); \
+        printf("[T%d]     → HINT: %s\n", tid, getDiagnosticHint(name, r)); \
+    } else { \
+        printf("\n"); \
+    } \
 } while(0)
 
 /// 간단한 카운팅 배리어 — N개 스레드가 모두 도달할 때까지 대기
@@ -747,71 +841,152 @@ static bool phase0_initialize(SharedState& ss) {
     RawResult raw;
 
     // 0. StackReset — 이전 stale 세션이 남아있을 수 있으므로 정리
-    api.stackReset(ss.transport, ss.baseComId);
+    std::cout << "  [0] StackReset + Properties exchange...\n";
+    auto r = api.stackReset(ss.transport, ss.baseComId);
+    if (r.failed()) {
+        std::cerr << "  [0] StackReset FAIL: " << r.message() << "\n";
+        std::cerr << "      → HINT: Transport 연결 확인. 디바이스 경로가 올바른지,\n";
+        std::cerr << "        sudo 권한으로 실행했는지 체크하세요.\n";
+        return false;
+    }
 
-    // Properties 재교환 (StackReset 후 필수)
     PropertiesResult props;
-    api.exchangeProperties(ss.transport, ss.baseComId, props);
+    r = api.exchangeProperties(ss.transport, ss.baseComId, props);
+    if (r.failed()) {
+        std::cerr << "  [0] Properties exchange FAIL: " << r.message() << "\n";
+        std::cerr << "      → HINT: ComID 0x" << std::hex << ss.baseComId << std::dec
+                  << " 상태 이상. 전원 사이클 후 재시도하세요.\n";
+        return false;
+    }
+    std::cout << "  [0] StackReset + Properties: OK\n";
 
-    // 1. Read MSID (Phase 0은 단일 스레드이므로 baseComId 사용)
+    // 1. Read MSID
+    std::cout << "  [1] Reading MSID (Anonymous AdminSP session)...\n";
     Session s1(ss.transport, ss.baseComId);
     StartSessionResult ssr;
-    auto r = api.startSession(s1, uid::SP_ADMIN, false, ssr);
-    if (r.failed()) { std::cerr << "Cannot open AdminSP\n"; return false; }
+    r = api.startSession(s1, uid::SP_ADMIN, false, ssr);
+    if (r.failed()) {
+        std::cerr << "  [1] AdminSP Anonymous Session FAIL: " << r.message() << "\n";
+        std::cerr << "      → HINT: 가능한 원인:\n";
+        std::cerr << "        1) BIOS가 Block SID를 설정함 → 전원 사이클(콜드 리부트) 후 재시도\n";
+        std::cerr << "        2) 이전 세션이 ComID에 남아있음 → 이미 StackReset 수행했으므로 HW 문제 의심\n";
+        std::cerr << "        3) 디바이스가 TCG를 지원하지 않음 → sed_discover로 확인\n";
+        return false;
+    }
 
     Bytes msid;
-    api.getCPin(s1, uid::CPIN_MSID, msid, raw);
+    r = api.getCPin(s1, uid::CPIN_MSID, msid, raw);
     api.closeSession(s1);
-    std::cout << "  MSID read: " << msid.size() << " bytes\n";
+    if (r.failed() || msid.empty()) {
+        std::cerr << "  [1] Get C_PIN_MSID FAIL: " << r.message() << "\n";
+        std::cerr << "      → HINT: MSID 읽기 실패. AdminSP 상태 이상 또는 C_PIN 테이블 접근 거부.\n";
+        return false;
+    }
+    std::cout << "  [1] MSID read: " << msid.size() << " bytes — OK\n";
 
-    // 2. Take ownership
+    // 2. Take ownership (SID auth → set SID PIN)
+    std::cout << "  [2] Take Ownership (SID auth with MSID)...\n";
     Session s2(ss.transport, ss.baseComId);
     r = api.startSessionWithAuth(s2, uid::SP_ADMIN, true, uid::AUTH_SID, msid, ssr);
     if (r.failed()) {
-        // SID may already be changed, try with provided password
+        std::cout << "      MSID로 SID 인증 실패 — 이미 소유된 드라이브일 수 있음, sidPw로 재시도\n";
         Bytes sidCred = HashPassword::passwordToBytes(ss.sidPw);
         r = api.startSessionWithAuth(s2, uid::SP_ADMIN, true, uid::AUTH_SID, sidCred, ssr);
-        if (r.failed()) { std::cerr << "Cannot auth as SID\n"; return false; }
+        if (r.failed()) {
+            std::cerr << "  [2] SID Auth FAIL (MSID + sidPw 모두 실패): " << r.message() << "\n";
+            std::cerr << "      → HINT: 가능한 원인:\n";
+            std::cerr << "        1) 드라이브가 다른 비밀번호로 소유됨 → PSID 리셋 필요\n";
+            std::cerr << "           (드라이브 라벨의 32자리 PSID 사용)\n";
+            std::cerr << "        2) Block SID 활성 상태 → 전원 사이클 후 재시도\n";
+            std::cerr << "        3) SID Authority lockout (시도 횟수 초과) → 전원 사이클\n";
+            return false;
+        }
+        std::cout << "      sidPw로 SID 인증 성공 (드라이브 이미 소유됨)\n";
     }
 
     Bytes newSidPin = HashPassword::passwordToBytes(ss.sidPw);
-    api.setCPin(s2, uid::CPIN_SID, newSidPin, raw);
-    std::cout << "  SID password set\n";
+    r = api.setCPin(s2, uid::CPIN_SID, newSidPin, raw);
+    if (r.failed()) {
+        std::cerr << "  [2] SetCPin(SID) FAIL: " << r.message() << "\n";
+        std::cerr << "      → HINT: 쓰기 권한 부족 또는 C_PIN 테이블 접근 거부.\n";
+        api.closeSession(s2);
+        return false;
+    }
+    std::cout << "  [2] SID password set — OK\n";
 
     // 3. Activate Locking SP
+    std::cout << "  [3] Checking Locking SP lifecycle...\n";
     uint8_t lifecycle = 0;
-    api.getSpLifecycle(s2, uid::SP_LOCKING, lifecycle, raw);
+    r = api.getSpLifecycle(s2, uid::SP_LOCKING, lifecycle, raw);
+    if (r.failed()) {
+        std::cerr << "  [3] GetSpLifecycle FAIL: " << r.message() << "\n";
+        std::cerr << "      → HINT: SP 테이블 읽기 실패. AdminSP 세션 상태 확인.\n";
+        api.closeSession(s2);
+        return false;
+    }
+
     if (lifecycle == 0x08) {  // Manufactured-Inactive
-        api.activate(s2, uid::SP_LOCKING, raw);
-        std::cout << "  Locking SP activated\n";
+        r = api.activate(s2, uid::SP_LOCKING, raw);
+        if (r.failed()) {
+            std::cerr << "  [3] Activate(Locking SP) FAIL: " << r.message() << "\n";
+            std::cerr << "      → HINT: SID 권한으로 Activate 불가. SP 상태 lifecycle=0x"
+                      << std::hex << (int)lifecycle << std::dec << " 확인.\n";
+            api.closeSession(s2);
+            return false;
+        }
+        std::cout << "  [3] Locking SP activated (was Manufactured-Inactive) — OK\n";
     } else {
-        std::cout << "  Locking SP already active (0x" << std::hex << (int)lifecycle << std::dec << ")\n";
+        std::cout << "  [3] Locking SP already active (lifecycle=0x"
+                  << std::hex << (int)lifecycle << std::dec << ") — OK\n";
     }
     api.closeSession(s2);
 
-    // 4. Set Admin1 password
+    // 4. Admin1 session → set passwords
+    std::cout << "  [4] Setting Admin1 / User1 passwords...\n";
     Bytes admin1Cred = HashPassword::passwordToBytes(ss.admin1Pw);
     Session s3(ss.transport, ss.baseComId);
     r = api.startSessionWithAuth(s3, uid::SP_LOCKING, true, uid::AUTH_ADMIN1, msid, ssr);
     if (r.failed()) {
+        std::cout << "      MSID로 Admin1 인증 실패 — admin1Pw로 재시도\n";
         r = api.startSessionWithAuth(s3, uid::SP_LOCKING, true, uid::AUTH_ADMIN1, admin1Cred, ssr);
     }
-    if (r.ok()) {
-        api.setAdmin1Password(s3, admin1Cred, raw);
-        std::cout << "  Admin1 password set\n";
-
-        // 5. Enable User1 + set password
-        api.enableUser(s3, 1, raw);
-        Bytes user1Pin = HashPassword::passwordToBytes(ss.user1Pw);
-        api.setCPin(s3, uid::CPIN_USER1, user1Pin, raw);
-        api.addAuthorityToAce(s3, uid::makeAceLockingRangeSetRdLocked(1).toUint64(),
-                               uid::AUTH_USER1, raw);
-        api.addAuthorityToAce(s3, uid::makeAceLockingRangeSetWrLocked(1).toUint64(),
-                               uid::AUTH_USER1, raw);
-        std::cout << "  User1 enabled + password set + ACE configured\n";
-        api.closeSession(s3);
+    if (r.failed()) {
+        std::cerr << "  [4] Admin1 Auth → LockingSP FAIL: " << r.message() << "\n";
+        std::cerr << "      → HINT: 가능한 원인:\n";
+        std::cerr << "        1) Locking SP가 Activate 되지 않았음 → Step 3 확인\n";
+        std::cerr << "        2) Admin1 비밀번호가 MSID도 admin1Pw도 아님\n";
+        std::cerr << "        3) 이전 비정상 종료로 Admin1 비밀번호가 다른 값으로 설정됨\n";
+        std::cerr << "           → PSID 리셋 후 재시도\n";
+        return false;
     }
 
+    r = api.setAdmin1Password(s3, admin1Cred, raw);
+    if (r.failed()) {
+        std::cerr << "  [4] SetAdmin1Password FAIL: " << r.message() << "\n";
+        std::cerr << "      → HINT: C_PIN_ADMIN1 쓰기 거부. 권한 또는 세션 상태 확인.\n";
+    }
+
+    // 5. Enable User1 + set password + ACE
+    r = api.enableUser(s3, 1, raw);
+    if (r.failed()) {
+        std::cerr << "  [5] EnableUser(1) FAIL: " << r.message() << "\n";
+        std::cerr << "      → HINT: User1 Authority 활성화 실패. Admin1 권한 확인.\n";
+    }
+
+    Bytes user1Pin = HashPassword::passwordToBytes(ss.user1Pw);
+    r = api.setCPin(s3, uid::CPIN_USER1, user1Pin, raw);
+    if (r.failed()) {
+        std::cerr << "  [5] SetCPin(User1) FAIL: " << r.message() << "\n";
+    }
+
+    api.addAuthorityToAce(s3, uid::makeAceLockingRangeSetRdLocked(1).toUint64(),
+                           uid::AUTH_USER1, raw);
+    api.addAuthorityToAce(s3, uid::makeAceLockingRangeSetWrLocked(1).toUint64(),
+                           uid::AUTH_USER1, raw);
+    std::cout << "  [5] User1 enabled + password + ACE — OK\n";
+    api.closeSession(s3);
+
+    std::cout << "  Phase 0 complete ✓\n";
     return true;
 }
 
@@ -828,7 +1003,13 @@ static void phase3_cleanup(SharedState& ss) {
     EvalApi api;
     RawResult raw;
 
+    // StackReset 선행 (스레드들이 사용한 ComID 정리)
+    api.stackReset(ss.transport, ss.baseComId);
+    PropertiesResult props;
+    api.exchangeProperties(ss.transport, ss.baseComId, props);
+
     // Revert Locking SP (Phase 3은 단일 스레드 — baseComId 사용)
+    std::cout << "  [1] Revert Locking SP...\n";
     Bytes admin1Cred = HashPassword::passwordToBytes(ss.admin1Pw);
     Session s1(ss.transport, ss.baseComId);
     StartSessionResult ssr;
@@ -836,20 +1017,32 @@ static void phase3_cleanup(SharedState& ss) {
                                        uid::AUTH_ADMIN1, admin1Cred, ssr);
     if (r.ok()) {
         r = api.revertSP(s1, uid::SP_LOCKING, raw);
-        std::cout << "  RevertSP (Locking): " << (r.ok() ? "OK" : r.message()) << "\n";
+        std::cout << "  [1] RevertSP (Locking): " << (r.ok() ? "OK" : r.message()) << "\n";
+        // RevertSP 후 세션은 TPer가 자동 종료 — closeSession 불필요
+    } else {
+        std::cerr << "  [1] Admin1 → LockingSP session FAIL: " << r.message() << "\n";
+        std::cerr << "      → HINT: Admin1 비밀번호 불일치. 스레드 실행 중 변경되었을 수 있음.\n";
+        std::cerr << "        수동 정리 필요: PSID 리셋 또는 올바른 Admin1 비밀번호로 revert\n";
     }
 
-    // Re-exchange properties after revert
+    // StackReset + Properties (RevertSP 후 ComID 상태 초기화)
+    api.stackReset(ss.transport, ss.baseComId);
     api.exchangeProperties(ss.transport, ss.baseComId, ss.props);
 
     // Revert TPer
+    std::cout << "  [2] Revert TPer...\n";
     Bytes sidCred = HashPassword::passwordToBytes(ss.sidPw);
     Session s2(ss.transport, ss.baseComId);
     r = api.startSessionWithAuth(s2, uid::SP_ADMIN, true,
                                   uid::AUTH_SID, sidCred, ssr);
     if (r.ok()) {
         r = api.revertSP(s2, uid::SP_ADMIN, raw);
-        std::cout << "  RevertSP (TPer):    " << (r.ok() ? "OK" : r.message()) << "\n";
+        std::cout << "  [2] RevertSP (TPer): " << (r.ok() ? "OK" : r.message()) << "\n";
+    } else {
+        std::cerr << "  [2] SID → AdminSP session FAIL: " << r.message() << "\n";
+        std::cerr << "      → HINT: SID 비밀번호 불일치. 스레드에서 비밀번호가 변경되었을 수 있음.\n";
+        std::cerr << "        수동 정리 필요: PSID 리셋 권장\n";
+        std::cerr << "        명령: ./sed_manage <device> psid-revert <PSID_ON_LABEL>\n";
     }
 
     std::cout << "  Cleanup complete — drive returned to factory state\n";
