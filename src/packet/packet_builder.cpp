@@ -48,9 +48,16 @@ Bytes PacketBuilder::buildComPacket(const Bytes& tokenPayload) {
     comHdr.serialize(result);
     result.insert(result.end(), packetData.begin(), packetData.end());
 
-    // Pad entire ComPacket to 512-byte boundary (some drives require this)
-    while (result.size() % 512 != 0) {
-        result.push_back(0);
+    // Pad to minimum 2048 bytes (sedutil IO_BUFFER_LENGTH).
+    // Some TPers reject packets smaller than their default buffer size.
+    static constexpr size_t MIN_COMPACKET_SIZE = 2048;
+    if (result.size() < MIN_COMPACKET_SIZE) {
+        result.resize(MIN_COMPACKET_SIZE, 0);
+    } else {
+        // Pad to 512-byte boundary
+        while (result.size() % 512 != 0) {
+            result.push_back(0);
+        }
     }
 
     return result;
