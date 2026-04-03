@@ -198,7 +198,7 @@ Result TableOps::getRandom(Bytes& randomData, uint32_t count) {
     TokenEncoder paramEnc;
     paramEnc.encodeUint(count);
 
-    MethodCall call(Uid(uid::THIS_SP), Uid(method::RANDOM));
+    MethodCall call{Uid(uid::THIS_SP), Uid(method::RANDOM)};
     call.setParams(paramEnc.data());
     auto tokens = call.build();
 

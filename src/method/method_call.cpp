@@ -97,7 +97,7 @@ Bytes MethodCall::buildAuthenticate(const Uid& authorityUid, const Bytes& creden
         paramEnc.endName();
     }
 
-    MethodCall call(Uid(uid::THIS_SP), Uid(method::AUTHENTICATE));
+    MethodCall call{Uid(uid::THIS_SP), Uid(method::AUTHENTICATE)};
     call.setParams(paramEnc.data());
     return call.build();
 }
