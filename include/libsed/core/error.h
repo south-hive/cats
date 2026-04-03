@@ -83,26 +83,49 @@ public:
     std::string message(int ev) const override {
         switch (static_cast<ErrorCode>(ev)) {
             case ErrorCode::Success:               return "Success";
+            // Transport (100-199)
             case ErrorCode::TransportNotAvailable:  return "Transport not available";
             case ErrorCode::TransportOpenFailed:    return "Failed to open transport";
             case ErrorCode::TransportSendFailed:    return "IF-SEND failed";
             case ErrorCode::TransportRecvFailed:    return "IF-RECV failed";
             case ErrorCode::TransportTimeout:       return "Transport timeout";
+            // Protocol (200-299)
             case ErrorCode::InvalidToken:           return "Invalid token";
             case ErrorCode::InvalidPacket:          return "Invalid packet";
             case ErrorCode::BufferTooSmall:         return "Buffer too small";
+            case ErrorCode::BufferOverflow:         return "Buffer overflow";
+            case ErrorCode::UnexpectedToken:        return "Unexpected token";
+            case ErrorCode::MalformedResponse:      return "Malformed response";
+            case ErrorCode::ProtocolError:          return "Protocol error";
+            // Session (300-399)
             case ErrorCode::SessionNotStarted:      return "Session not started";
             case ErrorCode::SessionAlreadyActive:   return "Session already active";
+            case ErrorCode::SessionClosed:          return "Session closed";
+            case ErrorCode::SessionSyncFailed:      return "Session sync failed";
+            case ErrorCode::NoSessionAvailable:     return "No session available";
+            // Method (400-499)
             case ErrorCode::MethodNotAuthorized:    return "Method not authorized";
+            case ErrorCode::MethodSpBusy:           return "SP busy";
+            case ErrorCode::MethodSpFailed:         return "SP failed";
+            case ErrorCode::MethodSpDisabled:       return "SP disabled";
+            case ErrorCode::MethodSpFrozen:         return "SP frozen";
+            case ErrorCode::MethodInvalidParam:     return "Invalid parameter";
+            case ErrorCode::MethodTPerMalfunction:  return "TPer malfunction";
             case ErrorCode::MethodFailed:           return "Method failed";
+            // Discovery (500-599)
             case ErrorCode::DiscoveryFailed:        return "Discovery failed";
+            case ErrorCode::DiscoveryInvalidData:   return "Discovery invalid data";
             case ErrorCode::UnsupportedSsc:         return "Unsupported SSC";
+            case ErrorCode::FeatureNotFound:        return "Feature not found";
+            // Auth (600-699)
             case ErrorCode::AuthFailed:             return "Authentication failed";
             case ErrorCode::AuthLockedOut:          return "Authority locked out";
+            case ErrorCode::InvalidCredential:      return "Invalid credential";
+            // General (900-999)
             case ErrorCode::NotImplemented:         return "Not implemented";
             case ErrorCode::InvalidArgument:        return "Invalid argument";
             case ErrorCode::InternalError:          return "Internal error";
-            default:                                return "Unknown error";
+            default:                                return "Unknown error (code=" + std::to_string(ev) + ")";
         }
     }
 
