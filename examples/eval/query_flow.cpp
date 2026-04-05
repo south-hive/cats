@@ -1,25 +1,23 @@
-/// @file eval_sedutil_query.cpp
-/// @brief sedutil-cli --query 동일 동작 재현
+/// @file query_flow.cpp
+/// @brief TCG SED 기본 조회 플로우 — sedutil --query와 동일한 동작.
 ///
-/// sedutil --query가 수행하는 것과 동일한 시나리오:
-///   1. (선택) sedutil-cli --query 먼저 실행하여 정상 동작 확인
-///   2. Level 0 Discovery + Feature Descriptor 출력
-///   3. StackReset
-///   4. Properties Exchange (TPer Properties + Host Properties)
-///   5. Anonymous AdminSP Session → MSID 읽기
-///   6. Close Session
+/// sedutil --query가 수행하는 전체 시퀀스를 libsed EvalApi로 재현합니다:
+///   1. Level 0 Discovery + Feature Descriptor 출력
+///   2. StackReset
+///   3. Properties Exchange (TPer/Host Properties)
+///   4. Anonymous AdminSP Session → MSID 읽기
+///   5. Close Session
 ///
-/// Usage: ./example_sedutil_query <device> [--sedutil-first] [--log]
+/// Options:
+///   --sedutil-first  sedutil-cli --query를 먼저 실행하여 비교
+///   --log            IF-SEND/IF-RECV 명령 이력 파일 기록
+///
+/// Usage: ./eval_query_flow <device> [--sedutil-first] [--log]
 
 #include <libsed/sed_library.h>
 #include <libsed/debug/logging_transport.h>
-#include <libsed/method/method_call.h>
-#include <libsed/method/param_encoder.h>
-#include <libsed/packet/packet_builder.h>
 #include <iostream>
 #include <iomanip>
-#include <thread>
-#include <chrono>
 #include <cstdlib>
 
 using namespace libsed;
@@ -75,6 +73,7 @@ int main(int argc, char* argv[]) {
         std::cout << "Log: " << lt->logger()->filePath() << "\n";
     }
 
+    std::cout << "Device: " << device << "\n\n";
     int step = 0;
 
     // ═══════════════════════════════════════════════
@@ -85,6 +84,7 @@ int main(int argc, char* argv[]) {
     auto r = disc.discover(transport);
     if (r.failed()) {
         std::cerr << "  FAIL: " << r.message() << "\n";
+        std::cerr << "  이 디바이스가 TCG SED를 지원하지 않거나 접근 권한이 없습니다.\n";
         return 1;
     }
 
@@ -93,6 +93,7 @@ int main(int argc, char* argv[]) {
     std::cout << "  ComID      : 0x" << std::hex << std::setfill('0')
               << std::setw(4) << info.baseComId << std::dec << "\n";
     std::cout << "  NumComIDs  : " << info.numComIds << "\n";
+    std::cout << "  TPer       : " << (info.tperPresent ? "YES" : "NO") << "\n";
     std::cout << "  Locking    : " << (info.lockingPresent ? "YES" : "NO")
               << (info.lockingEnabled ? " (enabled)" : " (disabled)")
               << (info.locked ? " [LOCKED]" : "") << "\n";
@@ -104,7 +105,7 @@ int main(int argc, char* argv[]) {
     std::cout << "\n";
 
     if (info.baseComId == 0) {
-        std::cerr << "  No valid ComID\n";
+        std::cerr << "  No valid ComID — TCG not supported.\n";
         return 1;
     }
 
@@ -115,7 +116,12 @@ int main(int argc, char* argv[]) {
     // ═══════════════════════════════════════════════
     std::cout << "[" << ++step << "] StackReset\n";
     r = api.stackReset(transport, comId);
-    std::cout << "  " << (r.ok() ? "OK" : r.message()) << "\n\n";
+    if (r.failed()) {
+        std::cout << "  WARN: " << r.message() << " (continuing)\n";
+    } else {
+        std::cout << "  OK\n";
+    }
+    std::cout << "\n";
 
     // ═══════════════════════════════════════════════
     //  3. Properties Exchange
@@ -124,7 +130,10 @@ int main(int argc, char* argv[]) {
 
     PropertiesResult props;
     r = api.exchangeProperties(transport, comId, props);
-    if (r.ok()) {
+
+    uint32_t maxCPS = 2048;
+    if (r.ok() && props.tperMaxComPacketSize > 0) {
+        maxCPS = props.tperMaxComPacketSize;
         std::cout << "  TPer Properties:\n";
         std::cout << "    MaxComPacketSize = " << props.tperMaxComPacketSize << "\n";
         std::cout << "    MaxPacketSize    = " << props.tperMaxPacketSize << "\n";
@@ -137,10 +146,8 @@ int main(int argc, char* argv[]) {
         std::cout << "  OK\n";
     } else {
         std::cout << "  FAIL: " << r.message() << "\n";
+        std::cout << "  Fallback: MaxComPacketSize=" << maxCPS << "\n";
     }
-
-    uint32_t maxCPS = (props.tperMaxComPacketSize > 0)
-                      ? props.tperMaxComPacketSize : 2048;
     std::cout << "\n";
 
     // ═══════════════════════════════════════════════

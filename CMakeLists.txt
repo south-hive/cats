@@ -179,38 +179,26 @@ endif()
 #  Examples
 # ══════════════════════════════════════════════════════
 if(LIBSED_BUILD_EXAMPLES)
-    add_executable(example_opal_setup    examples/opal_setup.cpp)
-    add_executable(example_lock_unlock   examples/lock_unlock.cpp)
-    add_executable(example_enterprise    examples/enterprise_band.cpp)
-    add_executable(example_discovery     examples/discovery.cpp)
-    add_executable(example_eval_fault    examples/eval_fault_injection.cpp)
-    add_executable(example_eval_steps   examples/eval_step_by_step.cpp)
-    add_executable(example_eval_utils   examples/eval_tc_utils.cpp)
-    add_executable(example_eval_full    examples/eval_full_demo.cpp)
-    add_executable(example_eval_multi   examples/eval_multi_session.cpp)
-    add_executable(example_eval_worker  examples/eval_worker_pattern.cpp)
-    add_executable(example_eval_reset   examples/eval_reset_scenarios.cpp)
+    # ── basic/ — 고수준 API 입문 예제 ──
+    add_executable(example_discovery     examples/basic/discovery.cpp)
+    add_executable(example_opal_setup    examples/basic/opal_setup.cpp)
+    add_executable(example_lock_unlock   examples/basic/lock_unlock.cpp)
+    add_executable(example_enterprise    examples/basic/enterprise_band.cpp)
 
+    target_link_libraries(example_discovery     PRIVATE libsed)
     target_link_libraries(example_opal_setup    PRIVATE libsed)
     target_link_libraries(example_lock_unlock   PRIVATE libsed)
     target_link_libraries(example_enterprise    PRIVATE libsed)
-    target_link_libraries(example_discovery     PRIVATE libsed)
-    target_link_libraries(example_eval_fault    PRIVATE libsed)
-    target_link_libraries(example_eval_steps    PRIVATE libsed)
-    target_link_libraries(example_eval_utils    PRIVATE libsed)
-    target_link_libraries(example_eval_full     PRIVATE libsed)
-    target_link_libraries(example_eval_multi    PRIVATE libsed Threads::Threads)
-    target_link_libraries(example_eval_worker   PRIVATE libsed Threads::Threads)
-    target_link_libraries(example_eval_reset    PRIVATE libsed Threads::Threads)
 
-    # ── Application Note Examples ──
-    add_executable(appnote_opal        examples/appnote_opal.cpp)
-    add_executable(appnote_enterprise  examples/appnote_enterprise.cpp)
-    add_executable(appnote_mbr         examples/appnote_mbr.cpp)
-    add_executable(appnote_psid        examples/appnote_psid.cpp)
-    add_executable(appnote_datastore   examples/appnote_datastore.cpp)
-    add_executable(appnote_block_sid   examples/appnote_block_sid.cpp)
-    add_executable(appnote_ns_locking  examples/appnote_ns_locking.cpp)
+    # ── appnote/ — TCG Application Note 구현 ──
+    add_executable(appnote_opal        examples/appnote/appnote_opal.cpp)
+    add_executable(appnote_enterprise  examples/appnote/appnote_enterprise.cpp)
+    add_executable(appnote_mbr         examples/appnote/appnote_mbr.cpp)
+    add_executable(appnote_psid        examples/appnote/appnote_psid.cpp)
+    add_executable(appnote_datastore   examples/appnote/appnote_datastore.cpp)
+    add_executable(appnote_block_sid   examples/appnote/appnote_block_sid.cpp)
+    add_executable(appnote_ns_locking  examples/appnote/appnote_ns_locking.cpp)
+
     target_link_libraries(appnote_opal        PRIVATE libsed)
     target_link_libraries(appnote_enterprise  PRIVATE libsed)
     target_link_libraries(appnote_mbr         PRIVATE libsed)
@@ -219,29 +207,22 @@ if(LIBSED_BUILD_EXAMPLES)
     target_link_libraries(appnote_block_sid   PRIVATE libsed)
     target_link_libraries(appnote_ns_locking  PRIVATE libsed)
 
-    # ── Basic Check (single session) ──
-    add_executable(example_eval_basic examples/eval_basic_check.cpp)
-    target_link_libraries(example_eval_basic PRIVATE libsed)
+    # ── eval/ — EvalApi 평가 예제 ──
+    add_executable(eval_query_flow     examples/eval/query_flow.cpp)
+    add_executable(eval_step_by_step   examples/eval/step_by_step.cpp)
+    add_executable(eval_full_demo      examples/eval/full_demo.cpp)
+    add_executable(eval_tc_utils       examples/eval/tc_utils.cpp)
+    add_executable(eval_worker         examples/eval/worker_pattern.cpp)
+    add_executable(eval_multithread    examples/eval/multithread.cpp)
+    add_executable(eval_reset          examples/eval/reset_scenarios.cpp)
 
-    # ── Session Loop (StartSession/Auth/Close 반복) ──
-    add_executable(example_eval_session_loop examples/eval_session_loop.cpp)
-    target_link_libraries(example_eval_session_loop PRIVATE libsed)
-
-    # ── sedutil --query 동일 동작 ──
-    add_executable(example_sedutil_query examples/eval_sedutil_query.cpp)
-    target_link_libraries(example_sedutil_query PRIVATE libsed)
-
-    # ── Properties Diagnostic ──
-    add_executable(example_eval_props_diag examples/eval_props_diag.cpp)
-    target_link_libraries(example_eval_props_diag PRIVATE libsed)
-
-    # ── Enterprise HW Flow Test ──
-    add_executable(example_eval_ent_hw examples/eval_enterprise_hw.cpp)
-    target_link_libraries(example_eval_ent_hw PRIVATE libsed)
-
-    # ── Comprehensive Multi-Thread TC ──
-    add_executable(example_eval_mt_comp examples/eval_mt_comprehensive.cpp)
-    target_link_libraries(example_eval_mt_comp PRIVATE libsed Threads::Threads)
+    target_link_libraries(eval_query_flow     PRIVATE libsed)
+    target_link_libraries(eval_step_by_step   PRIVATE libsed)
+    target_link_libraries(eval_full_demo      PRIVATE libsed)
+    target_link_libraries(eval_tc_utils       PRIVATE libsed)
+    target_link_libraries(eval_worker         PRIVATE libsed Threads::Threads)
+    target_link_libraries(eval_multithread    PRIVATE libsed Threads::Threads)
+    target_link_libraries(eval_reset          PRIVATE libsed Threads::Threads)
 endif()
 
 # ══════════════════════════════════════════════════════
