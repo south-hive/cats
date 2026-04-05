@@ -17,11 +17,8 @@
 /// Key: Worker never creates its own transport or device.
 ///      Everything flows down from NVMeThread via DI.
 
-#include <libsed/eval/sed_context.h>
-#include <libsed/eval/eval_api.h>
-#include <libsed/transport/nvme_transport.h>
-#include <libsed/security/hash_password.h>
 #include <libsed/sed_library.h>
+#include <libsed/transport/nvme_transport.h>
 #include <iostream>
 #include <vector>
 #include <memory>
@@ -298,8 +295,7 @@ public:
         // Activate Locking SP
         r = ctx.openSession(uid::SP_ADMIN, uid::AUTH_SID, sidPw_);
         if (r.ok()) {
-            RawResult raw;
-            ctx.api().activate(ctx.session(), uid::SP_LOCKING, raw);
+            r = ctx.api().activate(ctx.session(), uid::SP_LOCKING);
             printf("    [TCG] Activate LockingSP: %s\n", r.ok() ? "OK" : "FAIL");
             ctx.closeSession();
         }
@@ -336,29 +332,27 @@ public:
         auto r = ctx.openSession(uid::SP_LOCKING, uid::AUTH_ADMIN1, admin1Pw_);
         if (r.failed()) { printf("    Session fail\n"); return r; }
 
-        RawResult raw;
-
         // Read current state
         LockingInfo li;
-        ctx.api().getLockingInfo(ctx.session(), rangeId_, li, raw);
+        ctx.api().getLockingInfo(ctx.session(), rangeId_, li);
         printf("    Range %u: start=%lu len=%lu RLE=%d WLE=%d\n",
                rangeId_, li.rangeStart, li.rangeLength,
                li.readLockEnabled, li.writeLockEnabled);
 
         // Configure
-        ctx.api().setRange(ctx.session(), rangeId_, 0, 0, true, true, raw);
+        ctx.api().setRange(ctx.session(), rangeId_, 0, 0, true, true);
         printf("    setRange(RLE=true, WLE=true): OK\n");
 
         // Lock
-        ctx.api().setRangeLock(ctx.session(), rangeId_, true, true, raw);
+        ctx.api().setRangeLock(ctx.session(), rangeId_, true, true);
         printf("    Lock: OK\n");
 
         // Verify locked
-        ctx.api().getLockingInfo(ctx.session(), rangeId_, li, raw);
+        ctx.api().getLockingInfo(ctx.session(), rangeId_, li);
         printf("    Verify: RL=%d WL=%d\n", li.readLocked, li.writeLocked);
 
         // Unlock
-        ctx.api().setRangeLock(ctx.session(), rangeId_, false, false, raw);
+        ctx.api().setRangeLock(ctx.session(), rangeId_, false, false);
         printf("    Unlock: OK\n");
 
         ctx.closeSession();
@@ -439,16 +433,14 @@ public:
         auto r = ctx.openSession(uid::SP_LOCKING, uid::AUTH_ADMIN1, admin1Pw_);
         if (r.failed()) return r;
 
-        RawResult raw;
-
         // ByteTable info
         ByteTableInfo bti;
-        ctx.api().getByteTableInfo(ctx.session(), bti, raw);
+        ctx.api().getByteTableInfo(ctx.session(), bti);
         printf("    DataStore max=%u used=%u\n", bti.maxSize, bti.usedSize);
 
         // Write pattern
         Bytes pattern = {0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE};
-        ctx.api().tcgWriteDataStore(ctx.session(), 0, pattern, raw);
+        ctx.api().tcgWriteDataStore(ctx.session(), 0, pattern);
         printf("    Write 8B at offset 0: OK\n");
 
         // Read back
@@ -502,16 +494,14 @@ public:
                lockSession ? "OK" : "FAIL");
 
         if (ctx.hasSession() && lockSession) {
-            RawResult raw;
-
             // AdminSP: read lifecycle
             uint8_t lifecycle = 0;
-            ctx.api().getSpLifecycle(ctx.session(), uid::SP_LOCKING, lifecycle, raw);
+            ctx.api().getSpLifecycle(ctx.session(), uid::SP_LOCKING, lifecycle);
             printf("    [AdminSP] LockingSP lifecycle=%u\n", lifecycle);
 
             // LockingSP: read locking info
             LockingInfo li;
-            ctx.api().getLockingInfo(*lockSession, 0, li, raw);
+            ctx.api().getLockingInfo(*lockSession, 0, li);
             printf("    [LockingSP] Range0 RLE=%d WLE=%d\n",
                    li.readLockEnabled, li.writeLockEnabled);
 

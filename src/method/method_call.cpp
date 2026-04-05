@@ -72,7 +72,13 @@ Bytes MethodCall::buildGet(const Uid& objectUid, const CellBlock& cellBlock) {
 Bytes MethodCall::buildSet(const Uid& objectUid, const TokenList& values) {
     TokenEncoder paramEnc;
 
-    // Where (empty)
+    // Where (empty) — sedutil always includes this even when empty
+    paramEnc.startName();
+    paramEnc.encodeUint(0); // "Where" keyword
+    paramEnc.startList();
+    paramEnc.endList();
+    paramEnc.endName();
+
     // Values
     paramEnc.startName();
     paramEnc.encodeUint(1); // "Values" keyword

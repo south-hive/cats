@@ -11,25 +11,12 @@
 ///   2. SID 차단 확인 (인증 시도)
 ///   3. Block SID 상태 확인 및 전원 사이클 안내
 
-#include <libsed/eval/eval_api.h>
-#include <libsed/transport/transport_factory.h>
-#include <libsed/transport/i_nvme_device.h>
-#include <libsed/security/hash_password.h>
 #include <libsed/sed_library.h>
 #include <iostream>
 #include <iomanip>
 
 using namespace libsed;
 using namespace libsed::eval;
-
-// ── Helpers ─────────────────────────────────────────────
-
-static void step(int n, const std::string& name, Result r) {
-    std::cout << "  [Step " << n << "] " << name << ": "
-              << (r.ok() ? "OK" : "FAIL");
-    if (r.failed()) std::cout << " (" << r.message() << ")";
-    std::cout << "\n";
-}
 
 /// NVMe TCG Block SID Feature ID
 static constexpr uint8_t NVME_FEAT_TCG_BLOCK_SID = 0x0C;

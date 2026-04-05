@@ -50,13 +50,14 @@ Result EvalApi::discovery0(std::shared_ptr<ITransport> transport,
 
 Result EvalApi::discovery0Raw(std::shared_ptr<ITransport> transport,
                                Bytes& rawResponse) {
-    return transport->ifRecv(0x01, 0x0001, rawResponse, 2048);
+    // LAW 14: use polling — TPer may not have response ready immediately
+    return pollRecv(transport, 0x01, 0x0001, rawResponse, 2048);
 }
 
 Result EvalApi::discovery0Custom(std::shared_ptr<ITransport> transport,
                                   uint8_t protocolId, uint16_t comId,
                                   Bytes& rawResponse) {
-    return transport->ifRecv(protocolId, comId, rawResponse, 2048);
+    return pollRecv(transport, protocolId, comId, rawResponse, 2048);
 }
 
 // ════════════════════════════════════════════════════════
@@ -76,6 +77,17 @@ Result EvalApi::exchangePropertiesCustom(std::shared_ptr<ITransport> transport,
                                           uint32_t maxPacketSize,
                                           uint32_t maxIndTokenSize,
                                           PropertiesResult& result) {
+    // TCG Core Spec: ComID must be in Issued(idle) state before Properties.
+    // sedutil always does StackReset before Properties. Without this, the
+    // TPer may reject Properties if the ComID is still Associated from a
+    // previous session (e.g. after abnormal termination or power cycle).
+    auto resetResult = stackReset(transport, comId);
+    if (resetResult.failed()) {
+        LIBSED_WARN("StackReset before Properties failed (continuing): %s",
+                     resetResult.message().c_str());
+        // Continue anyway — some TPers may not support StackReset
+    }
+
     ParamEncoder::HostProperties hostProps;
     hostProps.maxComPacketSize = maxComPacketSize;
     hostProps.maxResponseComPacketSize = maxComPacketSize;
@@ -536,6 +548,30 @@ Bytes EvalApi::buildComPacket(Session& session, const Bytes& tokens) {
     pb.setComId(0); // caller should set this properly
     pb.setSessionNumbers(session.tperSessionNumber(), session.hostSessionNumber());
     return pb.buildComPacket(tokens);
+}
+
+Result EvalApi::pollRecv(std::shared_ptr<ITransport> transport,
+                          uint8_t protocolId, uint16_t comId,
+                          Bytes& outBuffer, size_t maxSize,
+                          int maxAttempts) {
+    // LAW 14: ifRecv must poll until ComPacket.length > 0
+    for (int attempt = 0; attempt < maxAttempts; attempt++) {
+        outBuffer.clear();
+        auto r = transport->ifRecv(protocolId, comId, outBuffer, maxSize);
+        if (r.failed()) return r;
+
+        // Check ComPacket.length at offset 16-19 (Rosetta Stone §1)
+        if (outBuffer.size() >= 20) {
+            uint32_t len = Endian::readBe32(outBuffer.data() + 16);
+            if (len > 0) return ErrorCode::Success;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    LIBSED_WARN("pollRecv timeout: protocol=0x%02X comId=0x%04X after %d attempts",
+                protocolId, comId, maxAttempts);
+    return ErrorCode::TransportTimeout;
 }
 
 // ════════════════════════════════════════════════════════
@@ -1791,6 +1827,267 @@ Result EvalApi::nvmeIoCmd(std::shared_ptr<ITransport> transport,
     auto* dev = getNvmeDevice(transport);
     if (!dev) return ErrorCode::TransportNotAvailable;
     return dev->ioCommand(cmd, cpl);
+}
+
+// ══════════════════════════════════════════════════════════
+//  RawResult 생략 가능한 편의 오버로드
+// ══════════════════════════════════════════════════════════
+
+Result EvalApi::authenticate(Session& session, uint64_t authorityUid, const Bytes& credential) {
+    RawResult raw;
+    return authenticate(session, authorityUid, credential, raw);
+}
+
+Result EvalApi::authenticate(Session& session, uint64_t authorityUid, const std::string& password) {
+    RawResult raw;
+    return authenticate(session, authorityUid, password, raw);
+}
+
+Result EvalApi::getCPin(Session& session, uint64_t cpinUid, Bytes& pin) {
+    RawResult raw;
+    return getCPin(session, cpinUid, pin, raw);
+}
+
+Result EvalApi::setCPin(Session& session, uint64_t cpinUid, const Bytes& newPin) {
+    RawResult raw;
+    return setCPin(session, cpinUid, newPin, raw);
+}
+
+Result EvalApi::setCPin(Session& session, uint64_t cpinUid, const std::string& newPassword) {
+    RawResult raw;
+    return setCPin(session, cpinUid, newPassword, raw);
+}
+
+Result EvalApi::setRange(Session& session, uint32_t rangeId, uint64_t rangeStart,
+                         uint64_t rangeLength, bool readLockEnabled, bool writeLockEnabled) {
+    RawResult raw;
+    return setRange(session, rangeId, rangeStart, rangeLength, readLockEnabled, writeLockEnabled, raw);
+}
+
+Result EvalApi::setRangeLock(Session& session, uint32_t rangeId, bool readLocked, bool writeLocked) {
+    RawResult raw;
+    return setRangeLock(session, rangeId, readLocked, writeLocked, raw);
+}
+
+Result EvalApi::getRangeInfo(Session& session, uint32_t rangeId, LockingRangeInfo& info) {
+    RawResult raw;
+    return getRangeInfo(session, rangeId, info, raw);
+}
+
+Result EvalApi::activate(Session& session, uint64_t spUid) {
+    RawResult raw;
+    return activate(session, spUid, raw);
+}
+
+Result EvalApi::revertSP(Session& session, uint64_t spUid) {
+    RawResult raw;
+    return revertSP(session, spUid, raw);
+}
+
+Result EvalApi::psidRevert(Session& session) {
+    RawResult raw;
+    return psidRevert(session, raw);
+}
+
+Result EvalApi::setMbrEnable(Session& session, bool enable) {
+    RawResult raw;
+    return setMbrEnable(session, enable, raw);
+}
+
+Result EvalApi::setMbrDone(Session& session, bool done) {
+    RawResult raw;
+    return setMbrDone(session, done, raw);
+}
+
+Result EvalApi::writeMbrData(Session& session, uint32_t offset, const Bytes& data) {
+    RawResult raw;
+    return writeMbrData(session, offset, data, raw);
+}
+
+Result EvalApi::readMbrData(Session& session, uint32_t offset, uint32_t length, Bytes& data) {
+    RawResult raw;
+    return readMbrData(session, offset, length, data, raw);
+}
+
+Result EvalApi::getMbrStatus(Session& session, bool& mbrEnabled, bool& mbrDone) {
+    RawResult raw;
+    return getMbrStatus(session, mbrEnabled, mbrDone, raw);
+}
+
+Result EvalApi::setMbrControlNsidOne(Session& session) {
+    RawResult raw;
+    return setMbrControlNsidOne(session, raw);
+}
+
+Result EvalApi::enableUser(Session& session, uint32_t userId) {
+    RawResult raw;
+    return enableUser(session, userId, raw);
+}
+
+Result EvalApi::setUserPassword(Session& session, uint32_t userId, const Bytes& newPin) {
+    RawResult raw;
+    return setUserPassword(session, userId, newPin, raw);
+}
+
+Result EvalApi::setUserPassword(Session& session, uint32_t userId, const std::string& newPassword) {
+    RawResult raw;
+    return setUserPassword(session, userId, newPassword, raw);
+}
+
+Result EvalApi::isUserEnabled(Session& session, uint32_t userId, bool& enabled) {
+    RawResult raw;
+    return isUserEnabled(session, userId, enabled, raw);
+}
+
+Result EvalApi::setAdmin1Password(Session& session, const Bytes& newPin) {
+    RawResult raw;
+    return setAdmin1Password(session, newPin, raw);
+}
+
+Result EvalApi::setAdmin1Password(Session& session, const std::string& newPassword) {
+    RawResult raw;
+    return setAdmin1Password(session, newPassword, raw);
+}
+
+Result EvalApi::assignUserToRange(Session& session, uint32_t userId, uint32_t rangeId) {
+    RawResult raw;
+    return assignUserToRange(session, userId, rangeId, raw);
+}
+
+Result EvalApi::setAuthorityEnabled(Session& session, uint64_t authorityUid, bool enabled) {
+    RawResult raw;
+    return setAuthorityEnabled(session, authorityUid, enabled, raw);
+}
+
+Result EvalApi::addAuthorityToAce(Session& session, uint64_t aceUid, uint64_t authorityUid) {
+    RawResult raw;
+    return addAuthorityToAce(session, aceUid, authorityUid, raw);
+}
+
+Result EvalApi::getLockingInfo(Session& session, uint32_t rangeId, LockingInfo& info) {
+    RawResult raw;
+    return getLockingInfo(session, rangeId, info, raw);
+}
+
+Result EvalApi::getSpLifecycle(Session& session, uint64_t spUid, uint8_t& lifecycle) {
+    RawResult raw;
+    return getSpLifecycle(session, spUid, lifecycle, raw);
+}
+
+Result EvalApi::getActiveKey(Session& session, uint32_t rangeId, Uid& keyUid) {
+    RawResult raw;
+    return getActiveKey(session, rangeId, keyUid, raw);
+}
+
+Result EvalApi::cryptoErase(Session& session, uint32_t rangeId) {
+    RawResult raw;
+    return cryptoErase(session, rangeId, raw);
+}
+
+Result EvalApi::genKey(Session& session, uint64_t objectUid) {
+    RawResult raw;
+    return genKey(session, objectUid, raw);
+}
+
+Result EvalApi::setLockOnReset(Session& session, uint32_t rangeId, bool lockOnReset) {
+    RawResult raw;
+    return setLockOnReset(session, rangeId, lockOnReset, raw);
+}
+
+Result EvalApi::configureBand(Session& session, uint32_t bandId, uint64_t bandStart,
+                              uint64_t bandLength, bool readLockEnabled, bool writeLockEnabled) {
+    RawResult raw;
+    return configureBand(session, bandId, bandStart, bandLength, readLockEnabled, writeLockEnabled, raw);
+}
+
+Result EvalApi::lockBand(Session& session, uint32_t bandId) {
+    RawResult raw;
+    return lockBand(session, bandId, raw);
+}
+
+Result EvalApi::unlockBand(Session& session, uint32_t bandId) {
+    RawResult raw;
+    return unlockBand(session, bandId, raw);
+}
+
+Result EvalApi::getBandInfo(Session& session, uint32_t bandId, LockingInfo& info) {
+    RawResult raw;
+    return getBandInfo(session, bandId, info, raw);
+}
+
+Result EvalApi::setBandMasterPassword(Session& session, uint32_t bandId, const Bytes& newPin) {
+    RawResult raw;
+    return setBandMasterPassword(session, bandId, newPin, raw);
+}
+
+Result EvalApi::setEraseMasterPassword(Session& session, const Bytes& newPin) {
+    RawResult raw;
+    return setEraseMasterPassword(session, newPin, raw);
+}
+
+Result EvalApi::eraseBand(Session& session, uint32_t bandId) {
+    RawResult raw;
+    return eraseBand(session, bandId, raw);
+}
+
+Result EvalApi::eraseAllBands(Session& session, uint32_t maxBands) {
+    RawResult raw;
+    return eraseAllBands(session, maxBands, raw);
+}
+
+Result EvalApi::setBandLockOnReset(Session& session, uint32_t bandId, bool lockOnReset) {
+    RawResult raw;
+    return setBandLockOnReset(session, bandId, lockOnReset, raw);
+}
+
+Result EvalApi::getByteTableInfo(Session& session, ByteTableInfo& info) {
+    RawResult raw;
+    return getByteTableInfo(session, info, raw);
+}
+
+Result EvalApi::tcgWriteDataStore(Session& session, uint32_t offset, const Bytes& data) {
+    RawResult raw;
+    return tcgWriteDataStore(session, offset, data, raw);
+}
+
+Result EvalApi::tcgWriteDataStoreN(Session& session, uint32_t tableNumber, uint32_t offset, const Bytes& data) {
+    RawResult raw;
+    return tcgWriteDataStoreN(session, tableNumber, offset, data, raw);
+}
+
+Result EvalApi::getAllLockingInfo(Session& session, std::vector<LockingInfo>& ranges, uint32_t maxRanges) {
+    RawResult raw;
+    return getAllLockingInfo(session, ranges, maxRanges, raw);
+}
+
+Result EvalApi::getAceInfo(Session& session, uint64_t aceUid, AceInfo& info) {
+    RawResult raw;
+    return getAceInfo(session, aceUid, info, raw);
+}
+
+Result EvalApi::getRandom(Session& session, uint32_t count, Bytes& randomData) {
+    RawResult raw;
+    return getRandom(session, count, randomData, raw);
+}
+
+Result EvalApi::getClock(Session& session, uint64_t& clockValue) {
+    RawResult raw;
+    return getClock(session, clockValue, raw);
+}
+
+Result EvalApi::tableSetBool(Session& session, uint64_t objectUid, uint32_t column, bool value) {
+    RawResult raw;
+    return tableSetBool(session, objectUid, column, value, raw);
+}
+
+Result EvalApi::tableGetUint(Session& session, uint64_t objectUid, uint32_t column, uint64_t& value) {
+    RawResult raw;
+    return tableGetUint(session, objectUid, column, value, raw);
+}
+
+Result EvalApi::getCPinTriesRemaining(Session& session, uint64_t cpinUid, uint32_t& remaining) {
+    RawResult raw;
+    return getCPinTriesRemaining(session, cpinUid, remaining, raw);
 }
 
 } // namespace eval

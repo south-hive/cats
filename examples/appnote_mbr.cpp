@@ -18,9 +18,6 @@
 ///   5. 다중 사용자 MBR 접근 (Admin1 vs User1 권한)
 ///   6. MBR 섀도잉 비활성화
 
-#include <libsed/eval/eval_api.h>
-#include <libsed/transport/transport_factory.h>
-#include <libsed/security/hash_password.h>
 #include <libsed/sed_library.h>
 #include <iostream>
 #include <iomanip>
@@ -30,23 +27,6 @@
 
 using namespace libsed;
 using namespace libsed::eval;
-
-// ── Helpers ─────────────────────────────────────────────
-
-static void printHex(const std::string& label, const Bytes& d, size_t maxLen = 32) {
-    std::cout << "    " << label << " (" << d.size() << " bytes): ";
-    for (size_t i = 0; i < std::min(d.size(), maxLen); i++)
-        printf("%02X ", d[i]);
-    if (d.size() > maxLen) std::cout << "...";
-    std::cout << "\n";
-}
-
-static void step(int n, const std::string& name, Result r) {
-    std::cout << "  [Step " << n << "] " << name << ": "
-              << (r.ok() ? "OK" : "FAIL");
-    if (r.failed()) std::cout << " (" << r.message() << ")";
-    std::cout << "\n";
-}
 
 // ════════════════════════════════════════════════════════
 //  1. Enable MBR Shadow
@@ -72,7 +52,6 @@ static bool mbr_enableShadow(EvalApi& api,
     std::cout << "╚══════════════════════════════════════════╝\n";
 
     Bytes admin1Cred = HashPassword::passwordToBytes(admin1Pw);
-    RawResult raw;
 
     Session session(transport, comId);
     StartSessionResult ssr;
@@ -83,16 +62,16 @@ static bool mbr_enableShadow(EvalApi& api,
 
     // Check current MBR status
     bool mbrEnabled = false, mbrDone = false;
-    r = api.getMbrStatus(session, mbrEnabled, mbrDone, raw);
+    r = api.getMbrStatus(session, mbrEnabled, mbrDone);
     step(2, "Get current MBR status", r);
     std::cout << "    Before: MBREnable=" << mbrEnabled << " MBRDone=" << mbrDone << "\n";
 
     // Enable
-    r = api.setMbrEnable(session, true, raw);
+    r = api.setMbrEnable(session, true);
     step(3, "Set MBREnable=true", r);
 
     // Verify
-    r = api.getMbrStatus(session, mbrEnabled, mbrDone, raw);
+    r = api.getMbrStatus(session, mbrEnabled, mbrDone);
     step(4, "Verify MBR status", r);
     std::cout << "    After:  MBREnable=" << mbrEnabled << " MBRDone=" << mbrDone << "\n";
 
@@ -156,13 +135,12 @@ static bool mbr_writePbaImage(EvalApi& api,
     // Write in 512-byte chunks
     const uint32_t chunkSize = 512;
     uint32_t written = 0;
-    RawResult raw;
 
     step(2, "Write PBA image (" + std::to_string(pbaSize) + " bytes)", Result(ErrorCode::Success));
     for (uint32_t offset = 0; offset < pbaSize; offset += chunkSize) {
         uint32_t len = std::min(chunkSize, pbaSize - offset);
         Bytes chunk(pbaImage.begin() + offset, pbaImage.begin() + offset + len);
-        r = api.writeMbrData(session, offset, chunk, raw);
+        r = api.writeMbrData(session, offset, chunk);
         if (r.ok()) {
             written += len;
         } else {
@@ -214,11 +192,10 @@ static bool mbr_readAndVerify(EvalApi& api,
     const uint32_t totalSize = 4096;
     const uint32_t chunkSize = 512;
     Bytes fullData;
-    RawResult raw;
 
     for (uint32_t offset = 0; offset < totalSize; offset += chunkSize) {
         Bytes chunk;
-        r = api.readMbrData(session, offset, chunkSize, chunk, raw);
+        r = api.readMbrData(session, offset, chunkSize, chunk);
         if (r.ok()) {
             fullData.insert(fullData.end(), chunk.begin(), chunk.end());
         } else {
@@ -279,7 +256,6 @@ static bool mbr_doneFlow(EvalApi& api,
     std::cout << "╚══════════════════════════════════════════╝\n";
 
     Bytes admin1Cred = HashPassword::passwordToBytes(admin1Pw);
-    RawResult raw;
 
     Session session(transport, comId);
     StartSessionResult ssr;
@@ -289,20 +265,20 @@ static bool mbr_doneFlow(EvalApi& api,
     if (r.failed()) return false;
 
     // Simulate post-power-cycle: MBRDone = false
-    r = api.setMbrDone(session, false, raw);
+    r = api.setMbrDone(session, false);
     step(2, "Set MBRDone=false (simulate power cycle)", r);
 
     bool mbrEnabled = false, mbrDone = false;
-    r = api.getMbrStatus(session, mbrEnabled, mbrDone, raw);
+    r = api.getMbrStatus(session, mbrEnabled, mbrDone);
     step(3, "Check status (pre-auth state)", r);
     std::cout << "    MBREnable=" << mbrEnabled << " MBRDone=" << mbrDone << "\n";
     std::cout << "    >> Host sees: Shadow MBR (PBA image)\n";
 
     // Simulate PBA completed authentication → set MBRDone = true
-    r = api.setMbrDone(session, true, raw);
+    r = api.setMbrDone(session, true);
     step(4, "Set MBRDone=true (PBA auth complete)", r);
 
-    r = api.getMbrStatus(session, mbrEnabled, mbrDone, raw);
+    r = api.getMbrStatus(session, mbrEnabled, mbrDone);
     step(5, "Check status (post-auth state)", r);
     std::cout << "    MBREnable=" << mbrEnabled << " MBRDone=" << mbrDone << "\n";
     std::cout << "    >> Host sees: Real disk data\n";
@@ -339,8 +315,6 @@ static bool mbr_multiUser(EvalApi& api,
     std::cout << "║  5. Multi-User MBR Access                 ║\n";
     std::cout << "╚══════════════════════════════════════════╝\n";
 
-    RawResult raw;
-
     // --- User1 session ---
     Bytes user1Cred = HashPassword::passwordToBytes(user1Pw);
     Session session1(transport, comId);
@@ -354,12 +328,12 @@ static bool mbr_multiUser(EvalApi& api,
     }
 
     // User1 sets MBRDone
-    r = api.setMbrDone(session1, true, raw);
+    r = api.setMbrDone(session1, true);
     step(2, "User1: Set MBRDone=true", r);
     std::cout << "    User1 MBRDone: " << (r.ok() ? "SUCCESS (allowed)" : "DENIED") << "\n";
 
     // User1 tries to change MBREnable (should fail — Admin1 only)
-    r = api.setMbrEnable(session1, false, raw);
+    r = api.setMbrEnable(session1, false);
     step(3, "User1: Set MBREnable=false (expect denied)", r);
     std::cout << "    User1 MBREnable: " << (r.ok() ? "SUCCESS (unexpected)" : "DENIED (expected)") << "\n";
 
@@ -375,7 +349,7 @@ static bool mbr_multiUser(EvalApi& api,
     step(5, "Admin1 auth — verify MBR status", r);
     if (r.ok()) {
         bool mbrEnabled = false, mbrDone = false;
-        api.getMbrStatus(session2, mbrEnabled, mbrDone, raw);
+        api.getMbrStatus(session2, mbrEnabled, mbrDone);
         std::cout << "    MBREnable=" << mbrEnabled << " MBRDone=" << mbrDone << "\n";
         api.closeSession(session2);
     }
@@ -407,7 +381,6 @@ static bool mbr_disable(EvalApi& api,
     std::cout << "╚══════════════════════════════════════════╝\n";
 
     Bytes admin1Cred = HashPassword::passwordToBytes(admin1Pw);
-    RawResult raw;
 
     Session session(transport, comId);
     StartSessionResult ssr;
@@ -416,11 +389,11 @@ static bool mbr_disable(EvalApi& api,
     step(1, "Admin1 auth to LockingSP", r);
     if (r.failed()) return false;
 
-    r = api.setMbrEnable(session, false, raw);
+    r = api.setMbrEnable(session, false);
     step(2, "Set MBREnable=false", r);
 
     bool mbrEnabled = false, mbrDone = false;
-    r = api.getMbrStatus(session, mbrEnabled, mbrDone, raw);
+    r = api.getMbrStatus(session, mbrEnabled, mbrDone);
     step(3, "Verify MBR status", r);
     std::cout << "    MBREnable=" << mbrEnabled << " MBRDone=" << mbrDone << "\n";
 

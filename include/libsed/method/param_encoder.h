@@ -53,39 +53,6 @@ public:
 
     /// Encode Authenticate method parameters
     static Bytes encodeAuthenticate(const Uid& authority, const Bytes& challenge);
-
-    // ── Locking range parameters ─────────────────────
-
-    /// Encode Set values for a locking range
-    static Bytes encodeLockingRangeSet(
-        std::optional<uint64_t> rangeStart,
-        std::optional<uint64_t> rangeLength,
-        std::optional<bool> readLockEnabled,
-        std::optional<bool> writeLockEnabled,
-        std::optional<bool> readLocked,
-        std::optional<bool> writeLocked
-    );
-
-    // ── MBR Control parameters ───────────────────────
-
-    static Bytes encodeMbrControl(
-        std::optional<bool> enable,
-        std::optional<bool> done
-    );
-
-    // ── PIN/credential parameters ────────────────────
-
-    /// Encode Set for C_PIN table (set password)
-    static Bytes encodePinSet(const Bytes& newPin);
-    static Bytes encodePinSet(const std::string& newPin);
-
-    // ── Authority enable ─────────────────────────────
-
-    static Bytes encodeAuthorityEnable(bool enabled);
-
-private:
-    /// Encode a simple set-values list
-    static Bytes encodeSetValues(const std::function<void(TokenEncoder&)>& valueWriter);
 };
 
 } // namespace libsed

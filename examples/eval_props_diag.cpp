@@ -13,16 +13,13 @@
 ///
 /// Usage: ./example_eval_props_diag <device> [--with-sedutil]
 
-#include <libsed/eval/eval_api.h>
-#include <libsed/transport/transport_factory.h>
+#include <libsed/sed_library.h>
 #include <libsed/method/method_call.h>
-#include <libsed/method/method_uids.h>
 #include <libsed/method/param_encoder.h>
 #include <libsed/packet/packet_builder.h>
 #include <libsed/codec/token_encoder.h>
 #include <libsed/codec/token_decoder.h>
 #include <libsed/core/endian.h>
-#include <libsed/sed_library.h>
 #include <iostream>
 #include <iomanip>
 #include <thread>
@@ -279,8 +276,7 @@ int main(int argc, char* argv[]) {
 
             // MSID 읽기
             Bytes msid;
-            RawResult raw;
-            r = api.getCPin(session, uid::CPIN_MSID, msid, raw);
+            r = api.getCPin(session, uid::CPIN_MSID, msid);
             if (r.ok() && !msid.empty()) {
                 printf("  [S7] MSID (%zu bytes): ", msid.size());
                 for (size_t i = 0; i < msid.size() && i < 32; i++)
@@ -323,8 +319,7 @@ int main(int argc, char* argv[]) {
                    ssr.tperSessionNumber, ssr.hostSessionNumber);
 
             Bytes msid;
-            RawResult raw;
-            r = api.getCPin(session, uid::CPIN_MSID, msid, raw);
+            r = api.getCPin(session, uid::CPIN_MSID, msid);
             if (r.ok() && !msid.empty()) {
                 printf("  [S8] MSID (%zu bytes): ", msid.size());
                 for (size_t i = 0; i < msid.size() && i < 32; i++)

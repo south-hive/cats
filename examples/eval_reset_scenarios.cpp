@@ -18,15 +18,11 @@
 ///  11. 중간 실패 (다단계 설정 부분 실패)
 ///  12. MBR 리셋 시나리오
 
-#include "libsed/sed_library.h"
-#include "libsed/eval/eval_api.h"
-#include "libsed/eval/sed_context.h"
-#include "libsed/debug/test_context.h"
-#include "libsed/debug/fault_builder.h"
-#include "libsed/debug/test_session.h"
-#include "libsed/transport/i_nvme_device.h"
-#include "libsed/transport/nvme_transport.h"
-#include "libsed/security/hash_password.h"
+#include <libsed/sed_library.h>
+#include <libsed/debug/test_context.h>
+#include <libsed/debug/fault_builder.h>
+#include <libsed/debug/test_session.h>
+#include <libsed/transport/nvme_transport.h>
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -187,14 +183,13 @@ void scenario_power_cycle() {
            r.ok() ? "OK" : "FAIL (simulated)");
 
     if (ctx->hasSession()) {
-        RawResult raw;
         // Range 0 설정: RLE=true, WLE=true
-        r = ctx->api().setRange(ctx->session(), 0, 0, 0, true, true, raw);
+        r = ctx->api().setRange(ctx->session(), 0, 0, 0, true, true);
         printf("  [Pre-Reset] setRange(RLE=true, WLE=true): %s\n",
                r.ok() ? "OK" : "FAIL (simulated)");
 
         // LockOnReset=true 설정
-        r = ctx->api().setLockOnReset(ctx->session(), 0, true, raw);
+        r = ctx->api().setLockOnReset(ctx->session(), 0, true);
         printf("  [Pre-Reset] setLockOnReset(true): %s\n",
                r.ok() ? "OK" : "FAIL (simulated)");
 
@@ -317,9 +312,8 @@ void scenario_controller_reset() {
            r.ok() ? "OK" : "FAIL (simulated)");
 
     if (ctx->hasSession()) {
-        RawResult raw;
         LockingInfo li;
-        ctx->api().getLockingInfo(ctx->session(), 0, li, raw);
+        ctx->api().getLockingInfo(ctx->session(), 0, li);
         printf("  [Step 1] Range 0 읽기: RLE=%d WLE=%d\n",
                li.readLockEnabled, li.writeLockEnabled);
     }
@@ -335,8 +329,7 @@ void scenario_controller_reset() {
 
     // 패킷 드롭이 발생할 작업 시도
     if (ctx->hasSession()) {
-        RawResult raw;
-        r = ctx->api().setRange(ctx->session(), 0, 0, 0, true, true, raw);
+        r = ctx->api().setRange(ctx->session(), 0, 0, 0, true, true);
         printf("  [Step 2] 작업 시도 (드롭 예상): %s\n",
                r.ok() ? "OK" : "FAIL (패킷 드롭됨)");
     }
@@ -392,21 +385,19 @@ void scenario_lock_on_reset() {
            r.ok() ? "OK" : "FAIL (simulated)");
 
     if (ctx->hasSession()) {
-        RawResult raw;
-
         // ReadLockEnabled=true, WriteLockEnabled=true
-        r = ctx->api().setRange(ctx->session(), 0, 0, 0, true, true, raw);
+        r = ctx->api().setRange(ctx->session(), 0, 0, 0, true, true);
         printf("  [Step 1] setRange(RLE=true, WLE=true): %s\n",
                r.ok() ? "OK" : "FAIL (simulated)");
 
         // LockOnReset=true
-        r = ctx->api().setLockOnReset(ctx->session(), 0, true, raw);
+        r = ctx->api().setLockOnReset(ctx->session(), 0, true);
         printf("  [Step 1] setLockOnReset(true): %s\n",
                r.ok() ? "OK" : "FAIL (simulated)");
 
         // Step 2: 초기 상태 확인 — 잠금 해제 상태
         LockingInfo li;
-        ctx->api().getLockingInfo(ctx->session(), 0, li, raw);
+        ctx->api().getLockingInfo(ctx->session(), 0, li);
         printf("  [Step 2] 리셋 전: ReadLocked=%d WriteLocked=%d\n",
                li.readLocked, li.writeLocked);
 
@@ -429,9 +420,8 @@ void scenario_lock_on_reset() {
 
     r = ctx2->openSession(uid::SP_LOCKING, uid::AUTH_ADMIN1, "admin1_pw");
     if (ctx2->hasSession()) {
-        RawResult raw;
         LockingInfo li;
-        ctx2->api().getLockingInfo(ctx2->session(), 0, li, raw);
+        ctx2->api().getLockingInfo(ctx2->session(), 0, li);
         printf("  [Step 4] 리셋 후: ReadLocked=%d WriteLocked=%d\n",
                li.readLocked, li.writeLocked);
         printf("  [Step 4] (실제 드라이브: LockOnReset=true이면 둘 다 true 기대)\n");
@@ -546,8 +536,7 @@ void scenario_revert_tper() {
            r.ok() ? "OK" : "FAIL (simulated)");
 
     if (ctx->hasSession()) {
-        RawResult raw;
-        r = ctx->api().activate(ctx->session(), uid::SP_LOCKING, raw);
+        r = ctx->api().activate(ctx->session(), uid::SP_LOCKING);
         printf("  [Step 2] Activate LockingSP: %s\n",
                r.ok() ? "OK" : "FAIL (simulated)");
         ctx->closeSession();
@@ -556,8 +545,7 @@ void scenario_revert_tper() {
     // Step 3: Locking Range 설정
     r = ctx->openSession(uid::SP_LOCKING, uid::AUTH_ADMIN1, "new_sid_password");
     if (ctx->hasSession()) {
-        RawResult raw;
-        r = ctx->api().setRange(ctx->session(), 0, 0, 0, true, true, raw);
+        r = ctx->api().setRange(ctx->session(), 0, 0, 0, true, true);
         printf("  [Step 3] setRange(RLE=true, WLE=true): %s\n",
                r.ok() ? "OK" : "FAIL (simulated)");
         ctx->closeSession();
@@ -566,9 +554,8 @@ void scenario_revert_tper() {
     // Step 4: RevertTPer 실행 (AdminSP 세션으로)
     r = ctx->openSession(uid::SP_ADMIN, uid::AUTH_SID, "new_sid_password");
     if (ctx->hasSession()) {
-        RawResult raw;
         // revertSP on AdminSP는 사실상 RevertTPer와 동등
-        r = ctx->api().revertSP(ctx->session(), uid::SP_ADMIN, raw);
+        r = ctx->api().revertSP(ctx->session(), uid::SP_ADMIN);
         printf("  [Step 4] RevertTPer (revertSP/AdminSP): %s\n",
                r.ok() ? "OK" : "FAIL (simulated)");
         // Revert 후 세션이 자동으로 종료될 수 있음
@@ -624,8 +611,7 @@ void scenario_psid_revert() {
 
     r = ctx->openSession(uid::SP_ADMIN, uid::AUTH_SID, "sid_locked");
     if (ctx->hasSession()) {
-        RawResult raw;
-        ctx->api().activate(ctx->session(), uid::SP_LOCKING, raw);
+        ctx->api().activate(ctx->session(), uid::SP_LOCKING);
         printf("  [Step 1] Activate LockingSP: %s\n",
                r.ok() ? "OK" : "FAIL (simulated)");
         ctx->closeSession();
@@ -633,9 +619,8 @@ void scenario_psid_revert() {
 
     r = ctx->openSession(uid::SP_LOCKING, uid::AUTH_ADMIN1, "sid_locked");
     if (ctx->hasSession()) {
-        RawResult raw;
-        ctx->api().setRange(ctx->session(), 0, 0, 0, true, true, raw);
-        ctx->api().setRangeLock(ctx->session(), 0, true, true, raw);
+        ctx->api().setRange(ctx->session(), 0, 0, 0, true, true);
+        ctx->api().setRangeLock(ctx->session(), 0, true, true);
         printf("  [Step 1] Range 잠금 설정 완료\n");
         ctx->closeSession();
     }
@@ -651,8 +636,7 @@ void scenario_psid_revert() {
 
     // Step 3: PSID Revert 실행
     if (ctx->hasSession()) {
-        RawResult raw;
-        r = ctx->api().psidRevert(ctx->session(), raw);
+        r = ctx->api().psidRevert(ctx->session());
         printf("  [Step 3] PSID Revert: %s\n",
                r.ok() ? "OK" : "FAIL (simulated)");
         ctx->closeSession();
@@ -712,17 +696,15 @@ void scenario_concurrent_reset() {
 
     // Step 2: AdminSP 세션에서 Locking SP Revert 실행
     if (ctx->hasSession()) {
-        RawResult raw;
-        r = ctx->api().revertSP(ctx->session(), uid::SP_LOCKING, raw);
+        r = ctx->api().revertSP(ctx->session(), uid::SP_LOCKING);
         printf("  [Step 2] RevertSP(LockingSP) via AdminSP: %s\n",
                r.ok() ? "OK" : "FAIL (simulated)");
     }
 
     // Step 3: LockingSP 세션에서 작업 시도 (세션이 무효화되어야 함)
     if (lockSession) {
-        RawResult raw;
         LockingInfo li;
-        r = ctx->api().getLockingInfo(*lockSession, 0, li, raw);
+        r = ctx->api().getLockingInfo(*lockSession, 0, li);
         printf("  [Step 3] LockingSP 세션으로 작업 시도: %s\n",
                r.ok() ? "OK (예상 외)" : "FAIL (예상됨: 세션 무효화)");
         printf("  [Step 3] 에러 코드: %s\n", r.message().c_str());
@@ -824,12 +806,11 @@ void scenario_sanitize_tcg_state() {
            r.ok() ? "OK" : "FAIL (simulated)");
 
     if (ctx->hasSession()) {
-        RawResult raw;
-        r = ctx->api().setRange(ctx->session(), 0, 0, 0, true, true, raw);
+        r = ctx->api().setRange(ctx->session(), 0, 0, 0, true, true);
         printf("  [Step 1] setRange(RLE=true, WLE=true): %s\n",
                r.ok() ? "OK" : "FAIL (simulated)");
 
-        r = ctx->api().setRangeLock(ctx->session(), 0, true, true, raw);
+        r = ctx->api().setRangeLock(ctx->session(), 0, true, true);
         printf("  [Step 1] Lock Range 0: %s\n",
                r.ok() ? "OK" : "FAIL (simulated)");
         ctx->closeSession();
@@ -903,8 +884,7 @@ void scenario_partial_failure() {
     // 1-b: Locking SP 활성화
     r = ctx->openSession(uid::SP_ADMIN, uid::AUTH_SID, "sid_partial");
     if (ctx->hasSession()) {
-        RawResult raw;
-        r = ctx->api().activate(ctx->session(), uid::SP_LOCKING, raw);
+        r = ctx->api().activate(ctx->session(), uid::SP_LOCKING);
         printf("  [Step 1b] Activate LockingSP: %s\n",
                r.ok() ? "OK" : "FAIL (simulated)");
         ctx->closeSession();
@@ -923,15 +903,13 @@ void scenario_partial_failure() {
     // 1-c: Locking Range 설정 (여기서 실패 예상)
     r = ctx->openSession(uid::SP_LOCKING, uid::AUTH_ADMIN1, "sid_partial");
     if (ctx->hasSession()) {
-        RawResult raw;
-
         // Admin1 비밀번호 설정 (성공해야 함)
-        r = ctx->api().setAdmin1Password(ctx->session(), "admin1_partial", raw);
+        r = ctx->api().setAdmin1Password(ctx->session(), "admin1_partial");
         printf("  [Step 2] setAdmin1Password: %s\n",
                r.ok() ? "OK" : "FAIL");
 
         // Range 설정 (Fault로 인해 실패 예상)
-        r = ctx->api().setRange(ctx->session(), 0, 0, 0, true, true, raw);
+        r = ctx->api().setRange(ctx->session(), 0, 0, 0, true, true);
         printf("  [Step 2] setRange: %s\n",
                r.ok() ? "OK (Fault 미발동)" : "FAIL (Fault 발동됨)");
 
@@ -946,9 +924,8 @@ void scenario_partial_failure() {
 
     r = ctx->openSession(uid::SP_LOCKING, uid::AUTH_ADMIN1, "admin1_partial");
     if (ctx->hasSession()) {
-        RawResult raw;
         LockingInfo li;
-        ctx->api().getLockingInfo(ctx->session(), 0, li, raw);
+        ctx->api().getLockingInfo(ctx->session(), 0, li);
         printf("  [Step 3] Range 0: RLE=%d WLE=%d (실패 후 상태)\n",
                li.readLockEnabled, li.writeLockEnabled);
         ctx->closeSession();
@@ -960,8 +937,7 @@ void scenario_partial_failure() {
 
     r = ctx->openSession(uid::SP_LOCKING, uid::AUTH_ADMIN1, "admin1_partial");
     if (ctx->hasSession()) {
-        RawResult raw;
-        r = ctx->api().setRange(ctx->session(), 0, 0, 0, true, true, raw);
+        r = ctx->api().setRange(ctx->session(), 0, 0, 0, true, true);
         printf("  [Step 4] 재시도 setRange(RLE=true, WLE=true): %s\n",
                r.ok() ? "OK (복구 성공)" : "FAIL");
         ctx->closeSession();
@@ -997,8 +973,7 @@ void scenario_mbr_reset() {
     ctx->takeOwnership("sid_mbr");
     auto r = ctx->openSession(uid::SP_ADMIN, uid::AUTH_SID, "sid_mbr");
     if (ctx->hasSession()) {
-        RawResult raw;
-        ctx->api().activate(ctx->session(), uid::SP_LOCKING, raw);
+        ctx->api().activate(ctx->session(), uid::SP_LOCKING);
         ctx->closeSession();
     }
 
@@ -1008,21 +983,19 @@ void scenario_mbr_reset() {
            r.ok() ? "OK" : "FAIL (simulated)");
 
     if (ctx->hasSession()) {
-        RawResult raw;
-
         // MBR Enable
-        r = ctx->api().setMbrEnable(ctx->session(), true, raw);
+        r = ctx->api().setMbrEnable(ctx->session(), true);
         printf("  [Step 1] setMbrEnable(true): %s\n",
                r.ok() ? "OK" : "FAIL (simulated)");
 
         // MBR Done
-        r = ctx->api().setMbrDone(ctx->session(), true, raw);
+        r = ctx->api().setMbrDone(ctx->session(), true);
         printf("  [Step 1] setMbrDone(true): %s\n",
                r.ok() ? "OK" : "FAIL (simulated)");
 
         // MBR 상태 확인
         bool mbrEnabled = false, mbrDone = false;
-        r = ctx->api().getMbrStatus(ctx->session(), mbrEnabled, mbrDone, raw);
+        r = ctx->api().getMbrStatus(ctx->session(), mbrEnabled, mbrDone);
         printf("  [Step 1] MBR 상태: Enable=%d Done=%d\n",
                mbrEnabled, mbrDone);
 
@@ -1034,13 +1007,13 @@ void scenario_mbr_reset() {
             0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00
         };
-        r = ctx->api().writeMbrData(ctx->session(), 0, mbrData, raw);
+        r = ctx->api().writeMbrData(ctx->session(), 0, mbrData);
         printf("  [Step 2] writeMbrData (%zuB): %s\n",
                mbrData.size(), r.ok() ? "OK" : "FAIL (simulated)");
 
         // MBR 데이터 읽기 확인
         Bytes readBack;
-        r = ctx->api().readMbrData(ctx->session(), 0, 16, readBack, raw);
+        r = ctx->api().readMbrData(ctx->session(), 0, 16, readBack);
         printf("  [Step 2] readMbrData: %s (%zuB)\n",
                r.ok() ? "OK" : "FAIL (simulated)", readBack.size());
 
@@ -1050,8 +1023,7 @@ void scenario_mbr_reset() {
     // Step 3: Revert 실행 (Locking SP 리버트)
     r = ctx->openSession(uid::SP_ADMIN, uid::AUTH_SID, "sid_mbr");
     if (ctx->hasSession()) {
-        RawResult raw;
-        r = ctx->api().revertSP(ctx->session(), uid::SP_LOCKING, raw);
+        r = ctx->api().revertSP(ctx->session(), uid::SP_LOCKING);
         printf("  [Step 3] RevertSP(LockingSP): %s\n",
                r.ok() ? "OK" : "FAIL (simulated)");
         ctx->closeSession();

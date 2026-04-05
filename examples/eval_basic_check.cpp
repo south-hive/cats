@@ -15,32 +15,13 @@
 ///   ./example_eval_basic <device>
 ///   예: ./example_eval_basic /dev/nvme0
 
-#include <libsed/eval/eval_api.h>
-#include <libsed/transport/transport_factory.h>
-#include <libsed/debug/logging_transport.h>
 #include <libsed/sed_library.h>
+#include <libsed/debug/logging_transport.h>
 #include <iostream>
 #include <iomanip>
 
 using namespace libsed;
 using namespace libsed::eval;
-
-static void printHex(const Bytes& data, size_t max = 32) {
-    for (size_t i = 0; i < data.size() && i < max; i++)
-        printf("%02X", data[i]);
-    if (data.size() > max) printf("..(%zu bytes)", data.size());
-}
-
-static const char* sscName(SscType ssc) {
-    switch (ssc) {
-        case SscType::Opal20:     return "Opal 2.0";
-        case SscType::Opal10:     return "Opal 1.0";
-        case SscType::Enterprise: return "Enterprise";
-        case SscType::Pyrite10:   return "Pyrite 1.0";
-        case SscType::Pyrite20:   return "Pyrite 2.0";
-        default:                  return "Unknown";
-    }
-}
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
@@ -170,8 +151,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "── Step 5: Read C_PIN<MSID> ──\n";
     Bytes msid;
-    RawResult raw;
-    r = api.getCPin(session, uid::CPIN_MSID, msid, raw);
+    r = api.getCPin(session, uid::CPIN_MSID, msid);
     if (r.ok() && !msid.empty()) {
         std::cout << "  MSID (" << msid.size() << " bytes): ";
         printHex(msid);

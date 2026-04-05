@@ -14,28 +14,14 @@
 ///   ./example_eval_session_loop <device> <sid_pw> [count] [--log]
 ///   예: ./example_eval_session_loop /dev/nvme0 myPassword 10 --log
 
-#include <libsed/eval/eval_api.h>
-#include <libsed/transport/transport_factory.h>
-#include <libsed/debug/logging_transport.h>
-#include <libsed/security/hash_password.h>
 #include <libsed/sed_library.h>
+#include <libsed/debug/logging_transport.h>
 #include <iostream>
 #include <iomanip>
 #include <chrono>
 
 using namespace libsed;
 using namespace libsed::eval;
-
-static const char* sscName(SscType ssc) {
-    switch (ssc) {
-        case SscType::Opal20:     return "Opal 2.0";
-        case SscType::Opal10:     return "Opal 1.0";
-        case SscType::Enterprise: return "Enterprise";
-        case SscType::Pyrite10:   return "Pyrite 1.0";
-        case SscType::Pyrite20:   return "Pyrite 2.0";
-        default:                  return "Unknown";
-    }
-}
 
 int main(int argc, char* argv[]) {
     if (argc < 3) {
@@ -116,8 +102,7 @@ int main(int argc, char* argv[]) {
         }
 
         Bytes msid;
-        RawResult raw;
-        r = api.getCPin(s, uid::CPIN_MSID, msid, raw);
+        r = api.getCPin(s, uid::CPIN_MSID, msid);
         api.closeSession(s);
 
         if (r.ok() && !msid.empty()) {
@@ -160,9 +145,8 @@ int main(int argc, char* argv[]) {
                   << " HSN=" << ssr.hostSessionNumber << "\n";
 
         // 2. SP Lifecycle 조회 (AdminSP 세션에서 Locking SP 상태 확인)
-        RawResult raw;
         uint8_t lifecycle = 0;
-        r = api.getSpLifecycle(session, uid::SP_LOCKING, lifecycle, raw);
+        r = api.getSpLifecycle(session, uid::SP_LOCKING, lifecycle);
         if (r.ok()) {
             std::cout << "  Locking SP lifecycle: 0x"
                       << std::hex << std::setfill('0') << std::setw(2)
@@ -177,7 +161,7 @@ int main(int argc, char* argv[]) {
 
         // 3. MSID 읽기 (SID 권한으로 C_PIN_MSID 접근)
         Bytes msidVal;
-        r = api.getCPin(session, uid::CPIN_MSID, msidVal, raw);
+        r = api.getCPin(session, uid::CPIN_MSID, msidVal);
         if (r.ok() && !msidVal.empty()) {
             std::cout << "  MSID: " << msidVal.size() << " bytes\n";
         } else {

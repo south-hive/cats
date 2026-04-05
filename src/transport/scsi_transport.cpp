@@ -1,5 +1,6 @@
 #include "libsed/transport/scsi_transport.h"
 #include "libsed/core/log.h"
+#include "libsed/core/endian.h"
 
 #if defined(__linux__) && !defined(__ANDROID__)
 #include <fcntl.h>
@@ -145,7 +146,14 @@ Result ScsiTransport::ifRecv(uint8_t protocolId, uint16_t comId,
 
     size_t copyLen = std::min(recvBuf.size(), buffer.size());
     std::memcpy(buffer.data(), recvBuf.data(), copyLen);
-    bytesReceived = copyLen;
+
+    // Extract actual payload size from ComPacket header (Rosetta Stone §1)
+    if (copyLen >= 20) {
+        uint32_t comPacketLen = Endian::readBe32(buffer.data() + 16);
+        bytesReceived = std::min(static_cast<size_t>(comPacketLen + 20), copyLen);
+    } else {
+        bytesReceived = copyLen;
+    }
 
     return ErrorCode::Success;
 #else

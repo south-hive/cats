@@ -4,10 +4,8 @@
 /// Shows how each protocol step can be executed independently
 /// with fault injection between steps, raw payload inspection, etc.
 
-#include <libsed/eval/eval_api.h>
-#include <libsed/debug/debug.h>
-#include <libsed/transport/transport_factory.h>
 #include <libsed/sed_library.h>
+#include <libsed/debug/debug.h>
 #include <iostream>
 #include <iomanip>
 
@@ -94,8 +92,7 @@ void manualStepByStep(const std::string& device) {
     // ── Step 4: Read MSID (C_PIN table, no auth needed) ──
     std::cout << "\n[Step 4] Get C_PIN(MSID)\n";
     Bytes msidPin;
-    RawResult raw;
-    r = api.getCPin(session, uid::CPIN_MSID, msidPin, raw);
+    r = api.getCPin(session, uid::CPIN_MSID, msidPin);
     std::cout << "  Result: " << r.message() << "\n";
     if (r.ok()) {
         std::cout << "  MSID PIN (" << msidPin.size() << " bytes):\n    ";

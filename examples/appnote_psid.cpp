@@ -10,32 +10,12 @@
 ///   2. Revert 후 상태 확인
 ///   3. Revert 후 MSID 확인 (SID == MSID 초기화)
 
-#include <libsed/eval/eval_api.h>
-#include <libsed/transport/transport_factory.h>
-#include <libsed/security/hash_password.h>
 #include <libsed/sed_library.h>
 #include <iostream>
 #include <iomanip>
 
 using namespace libsed;
 using namespace libsed::eval;
-
-// ── Helpers ─────────────────────────────────────────────
-
-static void printHex(const std::string& label, const Bytes& d, size_t maxLen = 32) {
-    std::cout << "    " << label << " (" << d.size() << " bytes): ";
-    for (size_t i = 0; i < std::min(d.size(), maxLen); i++)
-        printf("%02X ", d[i]);
-    if (d.size() > maxLen) std::cout << "...";
-    std::cout << "\n";
-}
-
-static void step(int n, const std::string& name, Result r) {
-    std::cout << "  [Step " << n << "] " << name << ": "
-              << (r.ok() ? "OK" : "FAIL");
-    if (r.failed()) std::cout << " (" << r.message() << ")";
-    std::cout << "\n";
-}
 
 // ════════════════════════════════════════════════════════
 //  1. PSID Revert When Locked Out
@@ -89,8 +69,7 @@ static bool psid_revertWhenLockedOut(EvalApi& api,
     }
 
     // Step 3: PSID Revert
-    RawResult raw;
-    r = api.psidRevert(session, raw);
+    r = api.psidRevert(session);
     step(3, "PSID Revert", r);
 
     // Session is auto-closed by TPer after Revert
@@ -153,8 +132,7 @@ static bool psid_verifyStateAfterRevert(EvalApi& api,
 
     if (r.ok()) {
         uint8_t lifecycle = 0;
-        RawResult raw;
-        r = api.getSpLifecycle(session, uid::SP_LOCKING, lifecycle, raw);
+        r = api.getSpLifecycle(session, uid::SP_LOCKING, lifecycle);
         std::cout << "    Locking SP lifecycle: 0x" << std::hex << (int)lifecycle << std::dec;
         if (lifecycle == 0x08)      std::cout << " (Manufactured)";
         else if (lifecycle == 0x09) std::cout << " (Manufactured-Inactive)";
@@ -198,8 +176,7 @@ static bool psid_checkMsidAfterRevert(EvalApi& api,
 
     // Step 2: Read MSID
     Bytes msidPin;
-    RawResult raw;
-    r = api.getCPin(session, uid::CPIN_MSID, msidPin, raw);
+    r = api.getCPin(session, uid::CPIN_MSID, msidPin);
     step(2, "Read C_PIN_MSID", r);
     if (r.ok()) printHex("MSID", msidPin);
 

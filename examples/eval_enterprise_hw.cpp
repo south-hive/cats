@@ -10,12 +10,8 @@
 ///   --log        Enable wire-level logging to current directory
 ///   --comid N    Test only ComID offset N (0-based from baseComId). Default: all.
 
-#include <libsed/eval/eval_api.h>
-#include <libsed/transport/transport_factory.h>
-#include <libsed/debug/logging_transport.h>
-#include <libsed/discovery/discovery.h>
-#include <libsed/discovery/feature_descriptor.h>
 #include <libsed/sed_library.h>
+#include <libsed/debug/logging_transport.h>
 #include <iostream>
 #include <iomanip>
 #include <cstring>
@@ -24,79 +20,6 @@ using namespace libsed;
 using namespace libsed::eval;
 
 // ── Helpers ──────────────────────────────────────────
-
-static const char* sscName(SscType ssc) {
-    switch (ssc) {
-        case SscType::Opal20:     return "Opal 2.0";
-        case SscType::Opal10:     return "Opal 1.0";
-        case SscType::Enterprise: return "Enterprise";
-        case SscType::Pyrite10:   return "Pyrite 1.0";
-        case SscType::Pyrite20:   return "Pyrite 2.0";
-        default:                  return "Unknown";
-    }
-}
-
-static void printHex(const Bytes& data, size_t max = 64) {
-    for (size_t i = 0; i < data.size() && i < max; i++)
-        printf("%02X", data[i]);
-    if (data.size() > max) printf("..(%zu bytes total)", data.size());
-}
-
-static void printFeatureDescriptors(const Discovery& disc) {
-    for (const auto& feat : disc.features()) {
-        uint16_t code = feat->featureCode();
-        printf("    Feature: %s (0x%04X)\n", feat->name().c_str(), code);
-
-        if (auto* f = dynamic_cast<const TPerFeature*>(feat.get())) {
-            printf("      Sync=%s Async=%s AckNak=%s BufferMgmt=%s Streaming=%s ComIDMgmt=%s\n",
-                   f->syncSupported ? "Y" : "N",
-                   f->asyncSupported ? "Y" : "N",
-                   f->ackNakSupported ? "Y" : "N",
-                   f->bufferMgmtSupported ? "Y" : "N",
-                   f->streamingSupported ? "Y" : "N",
-                   f->comIdMgmtSupported ? "Y" : "N");
-        }
-        else if (auto* f = dynamic_cast<const LockingFeature*>(feat.get())) {
-            printf("      LockingSupported=%s LockingEnabled=%s Locked=%s MediaEncrypt=%s MBREnabled=%s MBRDone=%s\n",
-                   f->lockingSupported ? "Y" : "N",
-                   f->lockingEnabled ? "Y" : "N",
-                   f->locked ? "Y" : "N",
-                   f->mediaEncryption ? "Y" : "N",
-                   f->mbrEnabled ? "Y" : "N",
-                   f->mbrDone ? "Y" : "N");
-        }
-        else if (auto* f = dynamic_cast<const GeometryFeature*>(feat.get())) {
-            printf("      Align=%s LogicalBlockSize=%u AlignmentGranularity=%llu LowestAlignedLBA=%llu\n",
-                   f->align ? "Y" : "N",
-                   f->logicalBlockSize,
-                   static_cast<unsigned long long>(f->alignmentGranularity),
-                   static_cast<unsigned long long>(f->lowestAlignedLBA));
-        }
-        else if (auto* f = dynamic_cast<const OpalV2Feature*>(feat.get())) {
-            printf("      BaseComID=0x%04X NumComIDs=%u RangeCrossing=%s\n",
-                   f->baseComId, f->numComIds, f->rangeCrossing ? "Y" : "N");
-            printf("      Admins=%u Users=%u InitialPIN=%u RevertedPIN=%u\n",
-                   f->numLockingSPAdminsSupported, f->numLockingSPUsersSupported,
-                   f->initialPinIndicator, f->revertedPinIndicator);
-        }
-        else if (auto* f = dynamic_cast<const OpalV1Feature*>(feat.get())) {
-            printf("      BaseComID=0x%04X NumComIDs=%u RangeCrossing=%s\n",
-                   f->baseComId, f->numComIds, f->rangeCrossing ? "Y" : "N");
-        }
-        else if (auto* f = dynamic_cast<const EnterpriseFeature*>(feat.get())) {
-            printf("      BaseComID=0x%04X NumComIDs=%u RangeCrossing=%s\n",
-                   f->baseComId, f->numComIds, f->rangeCrossing ? "Y" : "N");
-        }
-        else if (auto* f = dynamic_cast<const PyriteV1Feature*>(feat.get())) {
-            printf("      BaseComID=0x%04X NumComIDs=%u InitialPIN=%u RevertedPIN=%u\n",
-                   f->baseComId, f->numComIds, f->initialPinIndicator, f->revertedPinIndicator);
-        }
-        else if (auto* f = dynamic_cast<const PyriteV2Feature*>(feat.get())) {
-            printf("      BaseComID=0x%04X NumComIDs=%u InitialPIN=%u RevertedPIN=%u\n",
-                   f->baseComId, f->numComIds, f->initialPinIndicator, f->revertedPinIndicator);
-        }
-    }
-}
 
 /// @brief Print raw payload hex for diagnostic (first N bytes)
 static void printRawPayload(const char* label, const Bytes& data, size_t max = 128) {

@@ -2,6 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## MANDATORY: Read Before Any Encoding/Protocol Change
+
+- **`docs/hammurabi_code.md`** — 15 immutable laws from every bug. Violate none.
+- **`docs/rosetta_stone.md`** — Byte-exact encoding reference. The translation table.
+- **`docs/work_history.md`** — Session-by-session work log. Check when resuming work.
+- **`tools/ioctl_validator`** — 17 tests, 5 TCG sequences. Run after ANY encoding change.
+
 ## Project Overview
 
 **libsed** — A C++17 library for TCG SED (Self-Encrypting Drive) evaluation and control. Provides a flat, step-by-step API (`EvalApi`) with 120+ methods for testing individual TCG protocol steps in isolation, enabling fault injection, wire-level payload inspection, and multi-threaded evaluation scenarios. Supports Opal 2.0, Enterprise, and Pyrite SSCs over NVMe/ATA/SCSI transports.
@@ -120,13 +127,15 @@ Comprehensive documentation in `docs/developer_guide.md` (in Korean) covers arch
 
 ## Current Debug Status (2026-04-03)
 
-### Problem: Properties 메서드만 0x0C (InvalidParameter) 반환
-
-**증상**: `sedutil-cli --query`는 정상 동작하지만, libsed의 Properties exchange만 status 0x0C를 반환. Discovery, StackReset, StartSession(AdminSP), MSID Read, CloseSession은 모두 정상.
+### Problem: SED 소프트웨어 시뮬레이터 개발 중
+하드웨어 없이 테스트하기 위해 `ITransport`를 구현하는 소프트웨어 SED 시뮬레이터 제작 예정.
 
 ### 이미 수정 완료된 버그들
 
-1. **SedErrorCategory::message()** — 모든 ErrorCode에 대해 메시지 추가 (이전에 "Unknown error")
+1. **Properties 0x0C (Invalid Parameter) 해결** — `HostProperties` 인코딩 시 개별 속성에 대해 `STARTNAME`/`ENDNAME`을 제거하고 단순 `String-Uint` 쌍으로 수정. `MaxSubPackets` 오타 수정 (`MaxSubpackets`).
+2. **StartSession HostChallenge 인덱스 수정** — TCG Core Spec Table 225에 따라 `HostChallenge` 인덱스를 0에서 5로 수정.
+3. **SedErrorCategory::message()** — 모든 ErrorCode에 대해 메시지 추가 (이전에 "Unknown error")
+... (rest of the list) ...
 2. **MethodResult CALL header skip** — SM 메서드 응답(SyncSession, Properties, CloseSession)에 CALL 헤더가 포함되는데 이를 스킵하지 않아 MalformedResponse 발생 → 수정
 3. **StartSession named param index** — HostExchangeAuthority=3, HostSigningAuthority=4 (TCG Core Spec Table 225). 1,2로 잘못 변경되었다가 복구
 4. **Properties 토큰 인코딩** — `STARTNAME "HostProperties" STARTLIST { pairs } ENDLIST ENDNAME` 래퍼 추가 (이전에 bare list)

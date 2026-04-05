@@ -14,10 +14,6 @@
 ///   2. Discovery 및 전체 Range 열거
 ///   3. 다중 Namespace-Range 매핑 및 NVMe Identify
 
-#include <libsed/eval/eval_api.h>
-#include <libsed/transport/transport_factory.h>
-#include <libsed/transport/i_nvme_device.h>
-#include <libsed/security/hash_password.h>
 #include <libsed/sed_library.h>
 #include <iostream>
 #include <iomanip>
@@ -27,13 +23,6 @@ using namespace libsed;
 using namespace libsed::eval;
 
 // ── Helpers ─────────────────────────────────────────────
-
-static void step(int n, const std::string& name, Result r) {
-    std::cout << "  [Step " << n << "] " << name << ": "
-              << (r.ok() ? "OK" : "FAIL");
-    if (r.failed()) std::cout << " (" << r.message() << ")";
-    std::cout << "\n";
-}
 
 /// Parse NSZE (Namespace Size in LBAs) from NVMe Identify Namespace data
 static uint64_t parseNsze(const Bytes& identData) {
@@ -79,22 +68,20 @@ static bool ns_perNamespaceConfig(EvalApi& api,
     step(1, "Admin1 auth to LockingSP", r);
     if (r.failed()) return false;
 
-    RawResult raw;
-
     // Configure Range 1 → NS1
-    r = api.setRange(session, 1, ns1Start, ns1Len, true, true, raw);
+    r = api.setRange(session, 1, ns1Start, ns1Len, true, true);
     step(2, "Configure Range 1 -> NS1 (start=" + std::to_string(ns1Start) +
             " len=" + std::to_string(ns1Len) + ")", r);
 
     // Configure Range 2 → NS2
-    r = api.setRange(session, 2, ns2Start, ns2Len, true, true, raw);
+    r = api.setRange(session, 2, ns2Start, ns2Len, true, true);
     step(3, "Configure Range 2 -> NS2 (start=" + std::to_string(ns2Start) +
             " len=" + std::to_string(ns2Len) + ")", r);
 
     // Verify both ranges
     for (uint32_t rangeId = 1; rangeId <= 2; rangeId++) {
         LockingInfo info;
-        r = api.getLockingInfo(session, rangeId, info, raw);
+        r = api.getLockingInfo(session, rangeId, info);
         std::cout << "    Range " << rangeId << ": start=" << info.rangeStart
                   << " len=" << info.rangeLength
                   << " RLE=" << info.readLockEnabled
@@ -258,10 +245,9 @@ static bool ns_multiNamespaceRangeMapping(EvalApi& api,
     step(4, "Open LockingSP and compare actual ranges", r);
 
     if (r.ok()) {
-        RawResult raw;
         for (size_t i = 0; i < namespaces.size() && i < 9; i++) {
             LockingInfo info;
-            r = api.getLockingInfo(session, i + 1, info, raw);
+            r = api.getLockingInfo(session, i + 1, info);
             if (r.ok()) {
                 bool matchesNs = (info.rangeLength == namespaces[i].nsze);
                 std::cout << "      Range " << (i + 1) << ": actual start="

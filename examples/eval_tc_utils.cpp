@@ -15,11 +15,8 @@
 ///
 /// Also shows split StartSession_REQ/OPT + SyncSession_REQ/OPT usage.
 
-#include <libsed/eval/eval_api.h>
-#include <libsed/debug/debug.h>
-#include <libsed/transport/transport_factory.h>
-#include <libsed/security/hash_password.h>
 #include <libsed/sed_library.h>
+#include <libsed/debug/debug.h>
 #include <iostream>
 #include <iomanip>
 #include <cstring>
@@ -27,35 +24,6 @@
 using namespace libsed;
 using namespace libsed::eval;
 using namespace libsed::debug;
-
-// ════════════════════════════════════════════════════════
-//  Helpers
-// ════════════════════════════════════════════════════════
-
-static void dumpHex(const std::string& label, const Bytes& data, size_t max = 32) {
-    std::cout << "  " << label << " (" << data.size() << " bytes): ";
-    for (size_t i = 0; i < data.size() && i < max; i++) {
-        std::cout << std::hex << std::setw(2) << std::setfill('0')
-                  << static_cast<int>(data[i]) << " ";
-    }
-    if (data.size() > max) std::cout << "...";
-    std::cout << std::dec << "\n";
-}
-
-static const char* sscName(SscType ssc) {
-    switch (ssc) {
-        case SscType::Opal20:       return "Opal";
-        case SscType::Enterprise: return "Enterprise";
-        case SscType::Pyrite20:     return "Pyrite";
-        default:                  return "Unknown";
-    }
-}
-
-static void printResult(const std::string& step, Result r) {
-    std::cout << "  [" << step << "] "
-              << (r.ok() ? "OK" : "FAIL") << " - "
-              << r.message() << "\n";
-}
 
 // ════════════════════════════════════════════════════════
 //  1. getTcgOption — Drive capability summary
@@ -78,7 +46,7 @@ static void demo_getTcgOption(EvalApi& api, std::shared_ptr<ITransport> transpor
 
     TcgOption opt;
     auto r = api.getTcgOption(transport, opt);
-    printResult("getTcgOption", r);
+    step("getTcgOption", r);
     if (r.failed()) return;
 
     std::cout << "  SSC Type:            " << sscName(opt.sscType) << "\n";
@@ -116,7 +84,7 @@ static void demo_getSecurityStatus(EvalApi& api, std::shared_ptr<ITransport> tra
 
     SecurityStatus ss;
     auto r = api.getSecurityStatus(transport, ss);
-    printResult("getSecurityStatus", r);
+    step("getSecurityStatus", r);
     if (r.failed()) return;
 
     std::cout << "  TPer:       " << (ss.tperPresent ? "Present" : "Absent") << "\n";
@@ -151,7 +119,7 @@ static void demo_getSecurityFeatures(EvalApi& api, std::shared_ptr<ITransport> t
 
     std::vector<SecurityFeatureInfo> features;
     auto r = api.getAllSecurityFeatures(transport, features);
-    printResult("getAllSecurityFeatures", r);
+    step("getAllSecurityFeatures", r);
     if (r.failed()) return;
 
     for (auto& f : features) {
@@ -173,7 +141,7 @@ static void demo_getSecurityFeatures(EvalApi& api, std::shared_ptr<ITransport> t
             std::cout << "    MBR Done:     " << (f.mbrDone ? "Yes" : "No") << "\n";
         }
         if (!f.rawFeatureData.empty()) {
-            dumpHex("Raw Data", f.rawFeatureData, 16);
+            printHex("Raw Data", f.rawFeatureData, 16);
         }
     }
 
@@ -223,27 +191,27 @@ static void demo_splitSession(EvalApi& api,
 
         Bytes sentPayload;
         auto r = api.sendStartSession(transport, comId, params, sentPayload);
-        printResult("sendStartSession", r);
-        dumpHex("Sent payload", sentPayload);
+        step("sendStartSession", r);
+        printHex("Sent payload", sentPayload);
 
         if (r.ok()) {
             // Can inspect/corrupt sentPayload here before recv!
 
             SyncSessionResult syncResult;
             r = api.recvSyncSession(transport, comId, syncResult);
-            printResult("recvSyncSession", r);
+            step("recvSyncSession", r);
 
             if (r.ok()) {
                 std::cout << "    HSN:  " << syncResult.hostSessionNumber << "\n";
                 std::cout << "    TSN:  " << syncResult.tperSessionNumber << "\n";
                 if (!syncResult.spChallenge.empty())
-                    dumpHex("SP Challenge", syncResult.spChallenge);
+                    printHex("SP Challenge", syncResult.spChallenge);
                 if (syncResult.transTimeout != 0)
                     std::cout << "    TransTimeout:    " << syncResult.transTimeout << "\n";
                 if (syncResult.initialCredits != 0)
                     std::cout << "    InitialCredits:  " << syncResult.initialCredits << "\n";
             }
-            dumpHex("Recv payload", syncResult.raw.rawRecvPayload);
+            printHex("Recv payload", syncResult.raw.rawRecvPayload);
 
             // Note: session is now open but unmanaged. For a full test,
             // you'd need to send CloseSession. For demo we skip.
@@ -266,21 +234,21 @@ static void demo_splitSession(EvalApi& api,
 
         Bytes sentPayload;
         auto r = api.sendStartSession(transport, comId, params, sentPayload);
-        printResult("sendStartSession (SID auth)", r);
-        dumpHex("Sent payload", sentPayload, 64);
+        step("sendStartSession (SID auth)", r);
+        printHex("Sent payload", sentPayload, 64);
 
         if (r.ok()) {
             SyncSessionResult syncResult;
             r = api.recvSyncSession(transport, comId, syncResult);
-            printResult("recvSyncSession", r);
+            step("recvSyncSession", r);
 
             if (r.ok()) {
                 std::cout << "    HSN:  " << syncResult.hostSessionNumber << "\n";
                 std::cout << "    TSN:  " << syncResult.tperSessionNumber << "\n";
                 if (!syncResult.spChallenge.empty())
-                    dumpHex("SP Challenge", syncResult.spChallenge);
+                    printHex("SP Challenge", syncResult.spChallenge);
                 if (!syncResult.signedHash.empty())
-                    dumpHex("Signed Hash", syncResult.signedHash);
+                    printHex("Signed Hash", syncResult.signedHash);
             }
         }
     }
@@ -297,7 +265,7 @@ static void demo_splitSession(EvalApi& api,
         Session session(transport, comId);
         SyncSessionResult sr;
         auto r = api.startSyncSession(session, params, sr);
-        printResult("startSyncSession (LockingSP, Admin1)", r);
+        step("startSyncSession (LockingSP, Admin1)", r);
 
         if (r.ok()) {
             std::cout << "    HSN: " << sr.hostSessionNumber
@@ -329,7 +297,7 @@ static void demo_getLockingInfo(EvalApi& api, Session& session) {
     LockingInfo info;
     RawResult raw;
     auto r = api.getLockingInfo(session, 0, info, raw);
-    printResult("getLockingInfo(0)", r);
+    step("getLockingInfo(0)", r);
     if (r.ok()) {
         std::cout << "    Start:           " << info.rangeStart << "\n";
         std::cout << "    Length:          " << info.rangeLength << "\n";
@@ -344,7 +312,7 @@ static void demo_getLockingInfo(EvalApi& api, Session& session) {
     std::cout << "\n  --- All Ranges (up to 8) ---\n";
     std::vector<LockingInfo> ranges;
     r = api.getAllLockingInfo(session, ranges, 8, raw);
-    printResult("getAllLockingInfo", r);
+    step("getAllLockingInfo", r);
     for (auto& ri : ranges) {
         std::cout << "    Range " << ri.rangeId
                   << ": start=" << ri.rangeStart
@@ -376,7 +344,7 @@ static void demo_getByteTableInfo(EvalApi& api, Session& session) {
     ByteTableInfo info;
     RawResult raw;
     auto r = api.getByteTableInfo(session, info, raw);
-    printResult("getByteTableInfo", r);
+    step("getByteTableInfo", r);
     if (r.ok()) {
         std::cout << "  Table UID:  0x" << std::hex << info.tableUid << std::dec << "\n";
         std::cout << "  Max Size:   " << info.maxSize << " bytes\n";
@@ -413,16 +381,16 @@ static void demo_tcgDataOps(EvalApi& api, Session& session) {
 
     std::cout << "\n  --- TcgWrite (DataStore, offset=0, 16 bytes) ---\n";
     auto r = api.tcgWriteDataStore(session, 0, writeData, raw);
-    printResult("tcgWriteDataStore", r);
-    dumpHex("Written", writeData);
+    step("tcgWriteDataStore", r);
+    printHex("Written", writeData);
 
     // Read back
     std::cout << "\n  --- TcgRead (DataStore, offset=0, 16 bytes) ---\n";
     DataOpResult readResult;
     r = api.tcgReadDataStore(session, 0, 16, readResult);
-    printResult("tcgReadDataStore", r);
+    step("tcgReadDataStore", r);
     if (r.ok()) {
-        dumpHex("Read back", readResult.data);
+        printHex("Read back", readResult.data);
     }
 
     // Compare (write + read + verify)
@@ -430,26 +398,26 @@ static void demo_tcgDataOps(EvalApi& api, Session& session) {
     Bytes compareData = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88};
     DataOpResult cmpResult;
     r = api.tcgCompare(session, uid::TABLE_DATASTORE, 32, compareData, cmpResult);
-    printResult("tcgCompare", r);
+    step("tcgCompare", r);
     if (r.ok()) {
         std::cout << "  Match: " << (cmpResult.compareMatch ? "YES" : "NO") << "\n";
-        dumpHex("Expected", compareData);
-        dumpHex("Actual  ", cmpResult.data);
+        printHex("Expected", compareData);
+        printHex("Actual  ", cmpResult.data);
     }
 
     // Write to arbitrary table UID (generic tcgWrite)
     std::cout << "\n  --- TcgWrite (generic, custom table) ---\n";
     Bytes customData = {0xAA, 0xBB, 0xCC, 0xDD};
     r = api.tcgWrite(session, uid::TABLE_DATASTORE, 64, customData, raw);
-    printResult("tcgWrite(generic)", r);
+    step("tcgWrite(generic)", r);
 
     // Read from arbitrary table UID (generic tcgRead)
     std::cout << "\n  --- TcgRead (generic, offset=64, 4 bytes) ---\n";
     DataOpResult genRead;
     r = api.tcgRead(session, uid::TABLE_DATASTORE, 64, 4, genRead);
-    printResult("tcgRead(generic)", r);
+    step("tcgRead(generic)", r);
     if (r.ok()) {
-        dumpHex("Read", genRead.data);
+        printHex("Read", genRead.data);
     }
 }
 
@@ -473,7 +441,7 @@ static void demo_setMbrNsidOne(EvalApi& api, Session& session) {
 
     RawResult raw;
     auto r = api.setMbrControlNsidOne(session, raw);
-    printResult("setMbrControlNsidOne", r);
+    step("setMbrControlNsidOne", r);
 
     // Verify: read MBR control
     std::cout << "\n  --- Verify MBR state ---\n";
@@ -534,13 +502,13 @@ static void demo_faultBetweenSteps(EvalApi& api,
 
     Bytes sent;
     auto r = api.sendStartSession(transport, comId, params, sent);
-    printResult("sendStartSession", r);
+    step("sendStartSession", r);
 
     // Between Send and Recv — fault is armed and will fire on the next IF-RECV
 
     SyncSessionResult sr;
     r = api.recvSyncSession(transport, comId, sr);
-    printResult("recvSyncSession (corrupted)", r);
+    step("recvSyncSession (corrupted)", r);
 
     // Dump trace to see fault firing
     for (auto& ev : ts.trace()) {

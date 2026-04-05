@@ -37,12 +37,9 @@
 ///   Phase 2: 교차 검증 — 다른 스레드의 결과를 읽기 세션으로 확인
 ///   Phase 3: 정리 — Revert Locking SP, Revert TPer
 
-#include <libsed/eval/eval_api.h>
-#include <libsed/transport/nvme_transport.h>
-#include <libsed/transport/transport_factory.h>
-#include <libsed/debug/logging_transport.h>
-#include <libsed/security/hash_password.h>
 #include <libsed/sed_library.h>
+#include <libsed/transport/nvme_transport.h>
+#include <libsed/debug/logging_transport.h>
 #include <iostream>
 #include <iomanip>
 #include <thread>
@@ -258,7 +255,6 @@ struct SharedState {
 static void thread0_spLifecycleDiscovery(int tid, SharedState& ss) {
     TLOG(tid, "=== SP Lifecycle & Discovery ===");
     EvalApi api;
-    RawResult raw;
 
     // ── Phase 1: Discovery operations (no session needed) ──
 
@@ -319,7 +315,7 @@ static void thread0_spLifecycleDiscovery(int tid, SharedState& ss) {
 
         if (r.ok()) {
             uint8_t lifecycle = 0;
-            r = api.getSpLifecycle(session, uid::SP_LOCKING, lifecycle, raw);
+            r = api.getSpLifecycle(session, uid::SP_LOCKING, lifecycle);
             TSTEP(tid, "Get Locking SP lifecycle", r);
             ss.results[tid].record(r);
             if (r.ok()) TLOG(tid, "  Lifecycle: 0x%02X", lifecycle);
@@ -383,7 +379,6 @@ static void thread0_spLifecycleDiscovery(int tid, SharedState& ss) {
 static void thread1_lockingKeyMgmt(int tid, SharedState& ss) {
     TLOG(tid, "=== Locking & Key Management ===");
     EvalApi api;
-    RawResult raw;
 
     // ── Phase 1: Admin1 session ──
     Bytes admin1Cred = HashPassword::passwordToBytes(ss.admin1Pw);
@@ -397,18 +392,18 @@ static void thread1_lockingKeyMgmt(int tid, SharedState& ss) {
     if (r.failed()) { ss.barrier.wait(); return; }
 
     // 2-3. Configure ranges
-    r = api.setRange(session, 1, 0, 2048, true, true, raw);
+    r = api.setRange(session, 1, 0, 2048, true, true);
     TSTEP(tid, "Set Range 1 (0..2048 RLE WLE)", r);
     ss.results[tid].record(r);
 
-    r = api.setRange(session, 2, 2048, 2048, true, true, raw);
+    r = api.setRange(session, 2, 2048, 2048, true, true);
     TSTEP(tid, "Set Range 2 (2048..4096 RLE WLE)", r);
     ss.results[tid].record(r);
 
     // 4. Get individual range info
     for (uint32_t i = 1; i <= 2; i++) {
         LockingInfo li;
-        r = api.getLockingInfo(session, i, li, raw);
+        r = api.getLockingInfo(session, i, li);
         TSTEP(tid, (std::string("Get Range ") + std::to_string(i) + " info").c_str(), r);
         ss.results[tid].record(r);
         if (r.ok())
@@ -418,25 +413,25 @@ static void thread1_lockingKeyMgmt(int tid, SharedState& ss) {
 
     // 5. Enumerate all ranges
     std::vector<LockingInfo> allRanges;
-    r = api.getAllLockingInfo(session, allRanges, 9, raw);
+    r = api.getAllLockingInfo(session, allRanges, 9);
     TSTEP(tid, "getAllLockingInfo", r);
     ss.results[tid].record(r);
     if (r.ok()) TLOG(tid, "  Total ranges: %zu", allRanges.size());
 
     // 6. ActiveKey before GenKey
     Uid keyBefore;
-    r = api.getActiveKey(session, 1, keyBefore, raw);
+    r = api.getActiveKey(session, 1, keyBefore);
     TSTEP(tid, "GetActiveKey Range1 (before)", r);
     ss.results[tid].record(r);
 
     // 7. GenKey
-    r = api.genKey(session, uid::makeKAesUid(1).toUint64(), raw);
+    r = api.genKey(session, uid::makeKAesUid(1).toUint64());
     TSTEP(tid, "GenKey (K_AES Range1)", r);
     ss.results[tid].record(r);
 
     // 8. ActiveKey after GenKey
     Uid keyAfter;
-    r = api.getActiveKey(session, 1, keyAfter, raw);
+    r = api.getActiveKey(session, 1, keyAfter);
     TSTEP(tid, "GetActiveKey Range1 (after)", r);
     ss.results[tid].record(r);
     if (r.ok())
@@ -444,22 +439,22 @@ static void thread1_lockingKeyMgmt(int tid, SharedState& ss) {
              (keyBefore.toUint64() != keyAfter.toUint64()) ? "YES" : "NO");
 
     // 9. Lock Range 1
-    r = api.setRangeLock(session, 1, true, true, raw);
+    r = api.setRangeLock(session, 1, true, true);
     TSTEP(tid, "Lock Range 1 (Rd+Wr)", r);
     ss.results[tid].record(r);
 
     // 10. Unlock Range 1
-    r = api.setRangeLock(session, 1, false, false, raw);
+    r = api.setRangeLock(session, 1, false, false);
     TSTEP(tid, "Unlock Range 1", r);
     ss.results[tid].record(r);
 
     // 11. LockOnReset
-    r = api.setLockOnReset(session, 1, true, raw);
+    r = api.setLockOnReset(session, 1, true);
     TSTEP(tid, "Set LockOnReset Range1", r);
     ss.results[tid].record(r);
 
     // 12. CryptoErase Range 2
-    r = api.cryptoErase(session, 2, raw);
+    r = api.cryptoErase(session, 2);
     TSTEP(tid, "CryptoErase Range 2", r);
     ss.results[tid].record(r);
 
@@ -480,9 +475,9 @@ static void thread1_lockingKeyMgmt(int tid, SharedState& ss) {
                                       uid::AUTH_USER1, user1Cred, usr);
         if (r.failed()) { ss.results[tid].record(r); continue; }
 
-        r = api.setRangeLock(us, 1, true, true, raw);
+        r = api.setRangeLock(us, 1, true, true);
         ss.results[tid].record(r);
-        r = api.setRangeLock(us, 1, false, false, raw);
+        r = api.setRangeLock(us, 1, false, false);
         ss.results[tid].record(r);
         api.closeSession(us);
     }
@@ -520,7 +515,6 @@ static void thread1_lockingKeyMgmt(int tid, SharedState& ss) {
 static void thread2_mbrDataStore(int tid, SharedState& ss) {
     TLOG(tid, "=== MBR & DataStore ===");
     EvalApi api;
-    RawResult raw;
 
     Bytes admin1Cred = HashPassword::passwordToBytes(ss.admin1Pw);
     Session session(ss.transport, ss.comIds[tid]);
@@ -534,12 +528,12 @@ static void thread2_mbrDataStore(int tid, SharedState& ss) {
 
     // 2. MBR status
     bool mbrEn = false, mbrDn = false;
-    r = api.getMbrStatus(session, mbrEn, mbrDn, raw);
+    r = api.getMbrStatus(session, mbrEn, mbrDn);
     TSTEP(tid, "getMbrStatus", r);
     ss.results[tid].record(r);
 
     // 3. Enable MBR
-    r = api.setMbrEnable(session, true, raw);
+    r = api.setMbrEnable(session, true);
     TSTEP(tid, "setMbrEnable(true)", r);
     ss.results[tid].record(r);
 
@@ -548,30 +542,30 @@ static void thread2_mbrDataStore(int tid, SharedState& ss) {
     pba[0] = 0xEB; pba[1] = 0x3C; pba[2] = 0x90;
     std::memcpy(&pba[3], "TCGPBA", 6);
     pba[510] = 0x55; pba[511] = 0xAA;
-    r = api.writeMbrData(session, 0, pba, raw);
+    r = api.writeMbrData(session, 0, pba);
     TSTEP(tid, "writeMbrData (512B PBA)", r);
     ss.results[tid].record(r);
 
     // 5. Read MBR
     Bytes mbrRead;
-    r = api.readMbrData(session, 0, 512, mbrRead, raw);
+    r = api.readMbrData(session, 0, 512, mbrRead);
     TSTEP(tid, "readMbrData (512B)", r);
     ss.results[tid].record(r);
     if (r.ok()) TLOG(tid, "  MBR match: %s", (mbrRead == pba) ? "YES" : "NO");
 
     // 6. MBRDone = true
-    r = api.setMbrDone(session, true, raw);
+    r = api.setMbrDone(session, true);
     TSTEP(tid, "setMbrDone(true)", r);
     ss.results[tid].record(r);
 
     // 7. MBRDone = false (simulate power cycle)
-    r = api.setMbrDone(session, false, raw);
+    r = api.setMbrDone(session, false);
     TSTEP(tid, "setMbrDone(false) — boot sim", r);
     ss.results[tid].record(r);
 
     // 8. ByteTable info
     ByteTableInfo btInfo;
-    r = api.getByteTableInfo(session, btInfo, raw);
+    r = api.getByteTableInfo(session, btInfo);
     TSTEP(tid, "getByteTableInfo", r);
     ss.results[tid].record(r);
     if (r.ok()) TLOG(tid, "  DS maxSize=%u usedSize=%u", btInfo.maxSize, btInfo.usedSize);
@@ -579,7 +573,7 @@ static void thread2_mbrDataStore(int tid, SharedState& ss) {
     // 9. DataStore write
     Bytes dsData(64);
     for (int i = 0; i < 64; i++) dsData[i] = (uint8_t)((i * 7 + 0xAB) & 0xFF);
-    r = api.tcgWriteDataStore(session, 0, dsData, raw);
+    r = api.tcgWriteDataStore(session, 0, dsData);
     TSTEP(tid, "tcgWriteDataStore (64B)", r);
     ss.results[tid].record(r);
 
@@ -598,7 +592,7 @@ static void thread2_mbrDataStore(int tid, SharedState& ss) {
     if (r.ok()) TLOG(tid, "  compareMatch: %s", dsCmp.compareMatch ? "true" : "false");
 
     // 12. DataStore N (table 0)
-    r = api.tcgWriteDataStoreN(session, 0, 64, dsData, raw);
+    r = api.tcgWriteDataStoreN(session, 0, 64, dsData);
     TSTEP(tid, "tcgWriteDataStoreN (table0, offset64)", r);
     ss.results[tid].record(r);
 
@@ -608,7 +602,7 @@ static void thread2_mbrDataStore(int tid, SharedState& ss) {
     ss.results[tid].record(r);
 
     // 13. Disable MBR
-    r = api.setMbrEnable(session, false, raw);
+    r = api.setMbrEnable(session, false);
     TSTEP(tid, "setMbrEnable(false)", r);
     ss.results[tid].record(r);
 
@@ -635,7 +629,7 @@ static void thread2_mbrDataStore(int tid, SharedState& ss) {
         uint32_t written = 0;
         for (uint32_t off = 0; off < total; off += chunk) {
             Bytes c(bigData.begin() + off, bigData.begin() + off + chunk);
-            r = api.tcgWriteDataStore(s2, off, c, raw);
+            r = api.tcgWriteDataStore(s2, off, c);
             if (r.ok()) written += chunk;
             ss.results[tid].record(r);
         }
@@ -689,7 +683,6 @@ static void thread2_mbrDataStore(int tid, SharedState& ss) {
 static void thread3_securityAuthority(int tid, SharedState& ss) {
     TLOG(tid, "=== Security & Authority ===");
     EvalApi api;
-    RawResult raw;
 
     // 1. Block SID NVMe Get Feature
     {
@@ -713,13 +706,13 @@ static void thread3_securityAuthority(int tid, SharedState& ss) {
     if (r.failed()) { ss.barrier.wait(); return; }
 
     // 3. Enable User1
-    r = api.enableUser(session, 1, raw);
+    r = api.enableUser(session, 1);
     TSTEP(tid, "enableUser(1)", r);
     ss.results[tid].record(r);
 
     // 4. isUserEnabled
     bool enabled = false;
-    r = api.isUserEnabled(session, 1, enabled, raw);
+    r = api.isUserEnabled(session, 1, enabled);
     TSTEP(tid, "isUserEnabled(1)", r);
     ss.results[tid].record(r);
     if (r.ok()) TLOG(tid, "  User1 enabled: %s", enabled ? "true" : "false");
@@ -727,13 +720,13 @@ static void thread3_securityAuthority(int tid, SharedState& ss) {
     // 5. Add User1 to Range1 ACEs
     r = api.addAuthorityToAce(session,
             uid::makeAceLockingRangeSetRdLocked(1).toUint64(),
-            uid::AUTH_USER1, raw);
+            uid::AUTH_USER1);
     TSTEP(tid, "addAuthorityToAce (Range1 RdLock)", r);
     ss.results[tid].record(r);
 
     r = api.addAuthorityToAce(session,
             uid::makeAceLockingRangeSetWrLocked(1).toUint64(),
-            uid::AUTH_USER1, raw);
+            uid::AUTH_USER1);
     TSTEP(tid, "addAuthorityToAce (Range1 WrLock)", r);
     ss.results[tid].record(r);
 
@@ -741,24 +734,24 @@ static void thread3_securityAuthority(int tid, SharedState& ss) {
     AceInfo aceInfo;
     r = api.getAceInfo(session,
             uid::makeAceLockingRangeSetRdLocked(1).toUint64(),
-            aceInfo, raw);
+            aceInfo);
     TSTEP(tid, "getAceInfo (Range1 RdLock)", r);
     ss.results[tid].record(r);
 
     // 7. setCPin User1
     Bytes user1Pin = HashPassword::passwordToBytes(ss.user1Pw);
-    r = api.setCPin(session, uid::CPIN_USER1, user1Pin, raw);
+    r = api.setCPin(session, uid::CPIN_USER1, user1Pin);
     TSTEP(tid, "setCPin (User1)", r);
     ss.results[tid].record(r);
 
     // 8. setAdmin1Password (change to same value for test)
-    r = api.setAdmin1Password(session, admin1Cred, raw);
+    r = api.setAdmin1Password(session, admin1Cred);
     TSTEP(tid, "setAdmin1Password (re-set)", r);
     ss.results[tid].record(r);
 
     // 9. getRandom
     Bytes randData;
-    r = api.getRandom(session, 32, randData, raw);
+    r = api.getRandom(session, 32, randData);
     TSTEP(tid, "getRandom (32 bytes)", r);
     ss.results[tid].record(r);
     if (r.ok()) TLOG(tid, "  Random: %02X%02X%02X%02X...",
@@ -766,7 +759,7 @@ static void thread3_securityAuthority(int tid, SharedState& ss) {
 
     // 10. getClock
     uint64_t clockVal = 0;
-    r = api.getClock(session, clockVal, raw);
+    r = api.getClock(session, clockVal);
     TSTEP(tid, "getClock", r);
     ss.results[tid].record(r);
     if (r.ok()) TLOG(tid, "  Clock: %lu", clockVal);
@@ -780,25 +773,25 @@ static void thread3_securityAuthority(int tid, SharedState& ss) {
 
     // 12. Table SetBool (example: WriteLockEnabled on GlobalRange)
     r = api.tableSetBool(session, uid::LOCKING_GLOBALRANGE,
-                          uid::col::WRITE_LOCK_EN, false, raw);
+                          uid::col::WRITE_LOCK_EN, false);
     TSTEP(tid, "tableSetBool (GlobalRange WLE=false)", r);
     ss.results[tid].record(r);
 
     // 13. Table GetUint
     uint64_t akVal = 0;
     r = api.tableGetUint(session, uid::makeLockingRangeUid(1).toUint64(),
-                          uid::col::ACTIVE_KEY, akVal, raw);
+                          uid::col::ACTIVE_KEY, akVal);
     TSTEP(tid, "tableGetUint (Range1 ActiveKey)", r);
     ss.results[tid].record(r);
 
     // 14. setUserPassword
-    r = api.setUserPassword(session, 1, user1Pin, raw);
+    r = api.setUserPassword(session, 1, user1Pin);
     TSTEP(tid, "setUserPassword(1)", r);
     ss.results[tid].record(r);
 
     // 15. CPinTriesRemaining
     uint32_t remaining = 0;
-    r = api.getCPinTriesRemaining(session, uid::CPIN_USER1, remaining, raw);
+    r = api.getCPinTriesRemaining(session, uid::CPIN_USER1, remaining);
     TSTEP(tid, "getCPinTriesRemaining (User1)", r);
     ss.results[tid].record(r);
     if (r.ok()) TLOG(tid, "  Tries remaining: %u", remaining);
@@ -846,7 +839,6 @@ static bool phase0_initialize(SharedState& ss) {
     std::cout << "╚══════════════════════════════════════════╝\n";
 
     EvalApi api;
-    RawResult raw;
 
     // 0. StackReset — 이전 stale 세션이 남아있을 수 있으므로 정리
     std::cout << "  [0] StackReset + Properties exchange...\n";
@@ -884,7 +876,7 @@ static bool phase0_initialize(SharedState& ss) {
     }
 
     Bytes msid;
-    r = api.getCPin(s1, uid::CPIN_MSID, msid, raw);
+    r = api.getCPin(s1, uid::CPIN_MSID, msid);
     api.closeSession(s1);
     if (r.failed() || msid.empty()) {
         std::cerr << "  [1] Get C_PIN_MSID FAIL: " << r.message() << "\n";
@@ -915,7 +907,7 @@ static bool phase0_initialize(SharedState& ss) {
     }
 
     Bytes newSidPin = HashPassword::passwordToBytes(ss.sidPw);
-    r = api.setCPin(s2, uid::CPIN_SID, newSidPin, raw);
+    r = api.setCPin(s2, uid::CPIN_SID, newSidPin);
     if (r.failed()) {
         std::cerr << "  [2] SetCPin(SID) FAIL: " << r.message() << "\n";
         std::cerr << "      → HINT: 쓰기 권한 부족 또는 C_PIN 테이블 접근 거부.\n";
@@ -927,7 +919,7 @@ static bool phase0_initialize(SharedState& ss) {
     // 3. Activate Locking SP
     std::cout << "  [3] Checking Locking SP lifecycle...\n";
     uint8_t lifecycle = 0;
-    r = api.getSpLifecycle(s2, uid::SP_LOCKING, lifecycle, raw);
+    r = api.getSpLifecycle(s2, uid::SP_LOCKING, lifecycle);
     if (r.failed()) {
         std::cerr << "  [3] GetSpLifecycle FAIL: " << r.message() << "\n";
         std::cerr << "      → HINT: SP 테이블 읽기 실패. AdminSP 세션 상태 확인.\n";
@@ -936,7 +928,7 @@ static bool phase0_initialize(SharedState& ss) {
     }
 
     if (lifecycle == 0x08) {  // Manufactured-Inactive
-        r = api.activate(s2, uid::SP_LOCKING, raw);
+        r = api.activate(s2, uid::SP_LOCKING);
         if (r.failed()) {
             std::cerr << "  [3] Activate(Locking SP) FAIL: " << r.message() << "\n";
             std::cerr << "      → HINT: SID 권한으로 Activate 불가. SP 상태 lifecycle=0x"
@@ -971,29 +963,29 @@ static bool phase0_initialize(SharedState& ss) {
         return false;
     }
 
-    r = api.setAdmin1Password(s3, admin1Cred, raw);
+    r = api.setAdmin1Password(s3, admin1Cred);
     if (r.failed()) {
         std::cerr << "  [4] SetAdmin1Password FAIL: " << r.message() << "\n";
         std::cerr << "      → HINT: C_PIN_ADMIN1 쓰기 거부. 권한 또는 세션 상태 확인.\n";
     }
 
     // 5. Enable User1 + set password + ACE
-    r = api.enableUser(s3, 1, raw);
+    r = api.enableUser(s3, 1);
     if (r.failed()) {
         std::cerr << "  [5] EnableUser(1) FAIL: " << r.message() << "\n";
         std::cerr << "      → HINT: User1 Authority 활성화 실패. Admin1 권한 확인.\n";
     }
 
     Bytes user1Pin = HashPassword::passwordToBytes(ss.user1Pw);
-    r = api.setCPin(s3, uid::CPIN_USER1, user1Pin, raw);
+    r = api.setCPin(s3, uid::CPIN_USER1, user1Pin);
     if (r.failed()) {
         std::cerr << "  [5] SetCPin(User1) FAIL: " << r.message() << "\n";
     }
 
     api.addAuthorityToAce(s3, uid::makeAceLockingRangeSetRdLocked(1).toUint64(),
-                           uid::AUTH_USER1, raw);
+                           uid::AUTH_USER1);
     api.addAuthorityToAce(s3, uid::makeAceLockingRangeSetWrLocked(1).toUint64(),
-                           uid::AUTH_USER1, raw);
+                           uid::AUTH_USER1);
     std::cout << "  [5] User1 enabled + password + ACE — OK\n";
     api.closeSession(s3);
 
@@ -1012,7 +1004,6 @@ static void phase3_cleanup(SharedState& ss) {
     std::cout << "╚══════════════════════════════════════════╝\n";
 
     EvalApi api;
-    RawResult raw;
 
     // StackReset 선행 (스레드들이 사용한 ComID 정리)
     api.stackReset(ss.transport, ss.baseComId);
@@ -1028,7 +1019,7 @@ static void phase3_cleanup(SharedState& ss) {
     auto r = api.startSessionWithAuth(s1, uid::SP_LOCKING, true,
                                        uid::AUTH_ADMIN1, admin1Cred, ssr);
     if (r.ok()) {
-        r = api.revertSP(s1, uid::SP_LOCKING, raw);
+        r = api.revertSP(s1, uid::SP_LOCKING);
         std::cout << "  [1] RevertSP (Locking): " << (r.ok() ? "OK" : r.message()) << "\n";
         // RevertSP 후 세션은 TPer가 자동 종료 — closeSession 불필요
     } else {
@@ -1049,7 +1040,7 @@ static void phase3_cleanup(SharedState& ss) {
     r = api.startSessionWithAuth(s2, uid::SP_ADMIN, true,
                                   uid::AUTH_SID, sidCred, ssr);
     if (r.ok()) {
-        r = api.revertSP(s2, uid::SP_ADMIN, raw);
+        r = api.revertSP(s2, uid::SP_ADMIN);
         std::cout << "  [2] RevertSP (TPer): " << (r.ok() ? "OK" : r.message()) << "\n";
     } else {
         std::cerr << "  [2] SID → AdminSP session FAIL: " << r.message() << "\n";

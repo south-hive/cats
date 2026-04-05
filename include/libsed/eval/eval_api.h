@@ -665,6 +665,12 @@ public:
                                  uint64_t methodUid,
                                  const Bytes& paramTokens = {});
 
+    /// @brief ifRecv with polling (LAW 14) — retries until ComPacket.length > 0
+    static Result pollRecv(std::shared_ptr<ITransport> transport,
+                           uint8_t protocolId, uint16_t comId,
+                           Bytes& outBuffer, size_t maxSize,
+                           int maxAttempts = 20);
+
     /// @brief 세션 정보를 사용하여 ComPacket 구성 (정적 유틸리티)
     /// @param session 세션 객체
     /// @param tokens 포함할 토큰 바이트
@@ -1492,6 +1498,75 @@ public:
     /// @return 성공 또는 오류 코드
     static Result nvmeIoCmd(std::shared_ptr<ITransport> transport,
                             NvmeIoCmd& cmd, NvmeCompletion& cpl);
+
+    // ══════════════════════════════════════════════════
+    //  RawResult 생략 가능한 편의 오버로드
+    //  (RawResult가 필요 없는 일반적인 사용 패턴용)
+    // ══════════════════════════════════════════════════
+
+    Result authenticate(Session& session, uint64_t authorityUid, const Bytes& credential);
+    Result authenticate(Session& session, uint64_t authorityUid, const std::string& password);
+
+    Result getCPin(Session& session, uint64_t cpinUid, Bytes& pin);
+    Result setCPin(Session& session, uint64_t cpinUid, const Bytes& newPin);
+    Result setCPin(Session& session, uint64_t cpinUid, const std::string& newPassword);
+
+    Result setRange(Session& session, uint32_t rangeId, uint64_t rangeStart,
+                    uint64_t rangeLength, bool readLockEnabled, bool writeLockEnabled);
+    Result setRangeLock(Session& session, uint32_t rangeId, bool readLocked, bool writeLocked);
+    Result getRangeInfo(Session& session, uint32_t rangeId, LockingRangeInfo& info);
+
+    Result activate(Session& session, uint64_t spUid);
+    Result revertSP(Session& session, uint64_t spUid);
+    Result psidRevert(Session& session);
+
+    Result setMbrEnable(Session& session, bool enable);
+    Result setMbrDone(Session& session, bool done);
+    Result writeMbrData(Session& session, uint32_t offset, const Bytes& data);
+    Result readMbrData(Session& session, uint32_t offset, uint32_t length, Bytes& data);
+    Result getMbrStatus(Session& session, bool& mbrEnabled, bool& mbrDone);
+    Result setMbrControlNsidOne(Session& session);
+
+    Result enableUser(Session& session, uint32_t userId);
+    Result setUserPassword(Session& session, uint32_t userId, const Bytes& newPin);
+    Result setUserPassword(Session& session, uint32_t userId, const std::string& newPassword);
+    Result isUserEnabled(Session& session, uint32_t userId, bool& enabled);
+    Result setAdmin1Password(Session& session, const Bytes& newPin);
+    Result setAdmin1Password(Session& session, const std::string& newPassword);
+    Result assignUserToRange(Session& session, uint32_t userId, uint32_t rangeId);
+
+    Result setAuthorityEnabled(Session& session, uint64_t authorityUid, bool enabled);
+    Result addAuthorityToAce(Session& session, uint64_t aceUid, uint64_t authorityUid);
+
+    Result getLockingInfo(Session& session, uint32_t rangeId, LockingInfo& info);
+    Result getSpLifecycle(Session& session, uint64_t spUid, uint8_t& lifecycle);
+    Result getActiveKey(Session& session, uint32_t rangeId, Uid& keyUid);
+    Result cryptoErase(Session& session, uint32_t rangeId);
+    Result genKey(Session& session, uint64_t objectUid);
+    Result setLockOnReset(Session& session, uint32_t rangeId, bool lockOnReset);
+
+    Result configureBand(Session& session, uint32_t bandId, uint64_t bandStart,
+                         uint64_t bandLength, bool readLockEnabled, bool writeLockEnabled);
+    Result lockBand(Session& session, uint32_t bandId);
+    Result unlockBand(Session& session, uint32_t bandId);
+    Result getBandInfo(Session& session, uint32_t bandId, LockingInfo& info);
+    Result setBandMasterPassword(Session& session, uint32_t bandId, const Bytes& newPin);
+    Result setEraseMasterPassword(Session& session, const Bytes& newPin);
+    Result eraseBand(Session& session, uint32_t bandId);
+    Result eraseAllBands(Session& session, uint32_t maxBands);
+    Result setBandLockOnReset(Session& session, uint32_t bandId, bool lockOnReset);
+
+    Result getByteTableInfo(Session& session, ByteTableInfo& info);
+    Result tcgWriteDataStore(Session& session, uint32_t offset, const Bytes& data);
+    Result tcgWriteDataStoreN(Session& session, uint32_t tableNumber, uint32_t offset, const Bytes& data);
+
+    Result getAllLockingInfo(Session& session, std::vector<LockingInfo>& ranges, uint32_t maxRanges);
+    Result getAceInfo(Session& session, uint64_t aceUid, AceInfo& info);
+    Result getRandom(Session& session, uint32_t count, Bytes& randomData);
+    Result getClock(Session& session, uint64_t& clockValue);
+    Result tableSetBool(Session& session, uint64_t objectUid, uint32_t column, bool value);
+    Result tableGetUint(Session& session, uint64_t objectUid, uint32_t column, uint64_t& value);
+    Result getCPinTriesRemaining(Session& session, uint64_t cpinUid, uint32_t& remaining);
 };
 
 // ════════════════════════════════════════════════════════

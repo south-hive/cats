@@ -9,12 +9,8 @@
 ///   5. Stress testing with concurrent lock/unlock
 ///   6. Session pool pattern for eval frameworks
 
-#include <libsed/eval/eval_api.h>
-#include <libsed/transport/nvme_transport.h>
-#include <libsed/transport/transport_factory.h>
-#include <libsed/security/hash_password.h>
-#include <libsed/method/method_uids.h>
 #include <libsed/sed_library.h>
+#include <libsed/transport/nvme_transport.h>
 #include <iostream>
 #include <iomanip>
 #include <thread>
@@ -89,16 +85,14 @@ static void demo_dualSession(EvalApi& api,
 
     if (rA.ok() && rB.ok()) {
         // Interleaved operations on both sessions
-        RawResult rawA, rawB;
-
         // Read SP lifecycle from AdminSP
         uint8_t lifecycle = 0;
-        api.getSpLifecycle(sessionA, uid::SP_LOCKING, lifecycle, rawA);
+        api.getSpLifecycle(sessionA, uid::SP_LOCKING, lifecycle);
         std::cout << "  [A] Locking SP lifecycle = " << (int)lifecycle << "\n";
 
         // Read locking info from LockingSP
         LockingInfo li;
-        api.getLockingInfo(sessionB, 0, li, rawB);
+        api.getLockingInfo(sessionB, 0, li);
         std::cout << "  [B] GlobalRange: start=" << li.rangeStart
                   << " RLE=" << li.readLockEnabled << "\n";
 
@@ -159,8 +153,7 @@ static void demo_parallelRangeQuery(EvalApi& api,
                 return;
             }
 
-            RawResult raw;
-            r = threadApi.getLockingInfo(session, i, results[i], raw);
+            r = threadApi.getLockingInfo(session, i, results[i]);
             if (r.ok()) {
                 TLOG(i, "Range %u: start=%lu len=%lu RLE=%d",
                      i, results[i].rangeStart, results[i].rangeLength,
@@ -234,14 +227,12 @@ static void demo_lockUnlockStress(EvalApi& api,
                     continue;
                 }
 
-                RawResult raw;
-
                 // Lock
-                r = threadApi.setRangeLock(session, 0, true, true, raw);
+                r = threadApi.setRangeLock(session, 0, true, true);
                 if (r.ok()) lockOk++; else lockFail++;
 
                 // Unlock
-                r = threadApi.setRangeLock(session, 0, false, false, raw);
+                r = threadApi.setRangeLock(session, 0, false, false);
                 if (r.ok()) unlockOk++; else unlockFail++;
 
                 threadApi.closeSession(session);
@@ -338,8 +329,7 @@ static void demo_nvmeInterleaved(EvalApi& api,
                                   uid::AUTH_ADMIN1, cred, ssr);
     if (r.ok()) {
         LockingInfo li;
-        RawResult raw;
-        api.getLockingInfo(session, 0, li, raw);
+        api.getLockingInfo(session, 0, li);
         std::cout << "    GlobalRange locked=" << li.readLocked << "\n";
         api.closeSession(session);
     }
@@ -450,9 +440,8 @@ static void demo_sessionPool(std::shared_ptr<ITransport> transport,
         workers.emplace_back([&, i]() {
             for (int j = 0; j < 5; j++) {
                 auto session = pool.acquire();
-                RawResult raw;
                 LockingInfo li;
-                pool.api().getLockingInfo(*session, 0, li, raw);
+                pool.api().getLockingInfo(*session, 0, li);
                 TLOG(i, "Job %d: range0.start=%lu", j, li.rangeStart);
                 pool.release(std::move(session));
                 completed++;
@@ -504,8 +493,7 @@ static void demo_concurrentTcgNvme(EvalApi& api,
                                                      uid::AUTH_ADMIN1, cred, ssr);
             if (r.ok()) {
                 LockingInfo li;
-                RawResult raw;
-                threadApi.getLockingInfo(session, 0, li, raw);
+                threadApi.getLockingInfo(session, 0, li);
                 TLOG(0, "[TCG] iter=%d locked=%d", count, li.readLocked);
                 threadApi.closeSession(session);
             }

@@ -14,8 +14,13 @@ void TokenEncoder::encodeUint(uint64_t val) {
         return;
     }
 
-    // Short/medium/long atom: encode as unsigned integer bytes
+    // Short/medium/long atom: encode as unsigned integer bytes.
+    // Round up to power-of-2 byte length (1, 2, 4, 8) to match sedutil
+    // convention. While TCG Core Spec allows any length, sedutil and most
+    // TPer implementations use power-of-2 integer widths.
     size_t nBytes = Endian::minBytesUnsigned(val);
+    if (nBytes == 3) nBytes = 4;
+    else if (nBytes > 4 && nBytes < 8) nBytes = 8;
 
     if (nBytes <= 15) {
         uint8_t buf[8];
@@ -46,24 +51,17 @@ void TokenEncoder::encodeInt(int64_t val) {
     }
 
     size_t nBytes = Endian::minBytesSigned(val);
+    // Round up to power-of-2 byte width (LAW 2: same rule as encodeUint)
+    if (nBytes == 3) nBytes = 4;
+    else if (nBytes > 4 && nBytes < 8) nBytes = 8;
 
-    if (nBytes <= 15) {
-        uint8_t buf[8];
-        uint64_t uval = static_cast<uint64_t>(val);
-        size_t idx = 0;
-        for (int i = static_cast<int>(nBytes) - 1; i >= 0; --i) {
-            buf[idx++] = static_cast<uint8_t>((uval >> (i * 8)) & 0xFF);
-        }
-        encodeShortAtom(false, true, buf, nBytes);
-    } else {
-        uint8_t buf[8];
-        uint64_t uval = static_cast<uint64_t>(val);
-        size_t idx = 0;
-        for (int i = static_cast<int>(nBytes) - 1; i >= 0; --i) {
-            buf[idx++] = static_cast<uint8_t>((uval >> (i * 8)) & 0xFF);
-        }
-        encodeMediumAtom(false, true, buf, nBytes);
+    uint8_t buf[8];
+    uint64_t uval = static_cast<uint64_t>(val);
+    size_t idx = 0;
+    for (int i = static_cast<int>(nBytes) - 1; i >= 0; --i) {
+        buf[idx++] = static_cast<uint8_t>((uval >> (i * 8)) & 0xFF);
     }
+    encodeShortAtom(false, true, buf, nBytes);
 }
 
 // ══════════════════════════════════════════════════════

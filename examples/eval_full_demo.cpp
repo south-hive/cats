@@ -5,12 +5,8 @@
 /// ComID management, DataStore I/O, MBR, locking range, ACE, raw transport,
 /// session state, password hashing, table enumeration, and more.
 
-#include <libsed/eval/eval_api.h>
-#include <libsed/debug/debug.h>
-#include <libsed/transport/transport_factory.h>
-#include <libsed/security/hash_password.h>
-#include <libsed/method/method_uids.h>
 #include <libsed/sed_library.h>
+#include <libsed/debug/debug.h>
 #include <iostream>
 #include <iomanip>
 
@@ -18,14 +14,6 @@ using namespace libsed;
 using namespace libsed::eval;
 
 // ── Helpers ─────────────────────────────────────────
-
-static void printHex(const std::string& label, const Bytes& d, size_t max = 32) {
-    std::cout << "    " << label << " (" << d.size() << "B): ";
-    for (size_t i = 0; i < d.size() && i < max; i++)
-        std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)d[i] << " ";
-    if (d.size() > max) std::cout << "...";
-    std::cout << std::dec << "\n";
-}
 
 static void ok(const std::string& step, Result r) {
     std::cout << "  [" << step << "] " << (r.ok() ? "OK" : "FAIL") << "\n";

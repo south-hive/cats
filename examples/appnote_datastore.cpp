@@ -11,9 +11,6 @@
 ///   3. 다중 DataStore 테이블 (테이블 번호별 접근)
 ///   4. 대용량 데이터 처리 (청크 단위 쓰기/읽기)
 
-#include <libsed/eval/eval_api.h>
-#include <libsed/transport/transport_factory.h>
-#include <libsed/security/hash_password.h>
 #include <libsed/sed_library.h>
 #include <iostream>
 #include <iomanip>
@@ -23,23 +20,6 @@
 
 using namespace libsed;
 using namespace libsed::eval;
-
-// ── Helpers ─────────────────────────────────────────────
-
-static void printHex(const std::string& label, const Bytes& d, size_t maxLen = 32) {
-    std::cout << "    " << label << " (" << d.size() << " bytes): ";
-    for (size_t i = 0; i < std::min(d.size(), maxLen); i++)
-        printf("%02X ", d[i]);
-    if (d.size() > maxLen) std::cout << "...";
-    std::cout << "\n";
-}
-
-static void step(int n, const std::string& name, Result r) {
-    std::cout << "  [Step " << n << "] " << name << ": "
-              << (r.ok() ? "OK" : "FAIL");
-    if (r.failed()) std::cout << " (" << r.message() << ")";
-    std::cout << "\n";
-}
 
 // ════════════════════════════════════════════════════════
 //  1. Query ByteTable Info
@@ -71,9 +51,8 @@ static bool ds_queryByteTableInfo(EvalApi& api,
     step(1, "Admin1 auth to LockingSP (read-only)", r);
     if (r.failed()) return false;
 
-    RawResult raw;
     ByteTableInfo info;
-    r = api.getByteTableInfo(session, info, raw);
+    r = api.getByteTableInfo(session, info);
     step(2, "Get ByteTable info", r);
     if (r.ok()) {
         std::cout << "    Table UID:  0x" << std::hex << info.tableUid << std::dec << "\n";
@@ -135,8 +114,7 @@ static bool ds_writeReadCompare(EvalApi& api,
     printHex("Test data", testData, 16);
 
     // Write
-    RawResult raw;
-    r = api.tcgWriteDataStore(session, 0, testData, raw);
+    r = api.tcgWriteDataStore(session, 0, testData);
     step(3, "Write to DataStore (offset=0)", r);
 
     // Read
@@ -197,16 +175,14 @@ static bool ds_multipleDataStoreTables(EvalApi& api,
     step(1, "Admin1 auth to LockingSP", r);
     if (r.failed()) return false;
 
-    RawResult raw;
-
     // Table 0
     Bytes data0 = {'T','A','B','L','E','0','_','D','A','T','A'};
-    r = api.tcgWriteDataStoreN(session, 0, 0, data0, raw);
+    r = api.tcgWriteDataStoreN(session, 0, 0, data0);
     step(2, "Write to DataStore Table 0", r);
 
     // Table 1 (may not be supported)
     Bytes data1 = {'T','A','B','L','E','1','_','D','A','T','A'};
-    r = api.tcgWriteDataStoreN(session, 1, 0, data1, raw);
+    r = api.tcgWriteDataStoreN(session, 1, 0, data1);
     step(3, "Write to DataStore Table 1", r);
     if (r.failed())
         std::cout << "    Table 1 not supported on this drive (normal)\n";
@@ -279,11 +255,10 @@ static bool ds_largeDataHandling(EvalApi& api,
 
     // Write in chunks
     uint32_t written = 0;
-    RawResult raw;
     for (uint32_t offset = 0; offset < totalSize; offset += chunkSize) {
         uint32_t len = std::min(chunkSize, totalSize - offset);
         Bytes chunk(testData.begin() + offset, testData.begin() + offset + len);
-        r = api.tcgWriteDataStore(session, offset, chunk, raw);
+        r = api.tcgWriteDataStore(session, offset, chunk);
         if (r.ok()) {
             written += len;
         } else {

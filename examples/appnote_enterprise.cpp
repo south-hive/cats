@@ -15,9 +15,6 @@
 ///   7. 전체 Band 소거 (Erase All Bands)
 ///   8. Band LockOnReset 설정
 
-#include <libsed/eval/eval_api.h>
-#include <libsed/transport/transport_factory.h>
-#include <libsed/security/hash_password.h>
 #include <libsed/sed_library.h>
 #include <iostream>
 #include <iomanip>
@@ -25,15 +22,6 @@
 
 using namespace libsed;
 using namespace libsed::eval;
-
-// ── Helpers ─────────────────────────────────────────────
-
-static void step(int n, const std::string& name, Result r) {
-    std::cout << "  [Step " << n << "] " << name << ": "
-              << (r.ok() ? "OK" : "FAIL");
-    if (r.failed()) std::cout << " (" << r.message() << ")";
-    std::cout << "\n";
-}
 
 // ════════════════════════════════════════════════════════
 //  1. Configure Band
@@ -71,17 +59,15 @@ static bool ent_configureBand(EvalApi& api,
     step(1, "BandMaster" + std::to_string(bandId) + " auth to EnterpriseSP", r);
     if (r.failed()) return false;
 
-    RawResult raw;
-
     // Step 2: Configure band
-    r = api.configureBand(session, bandId, bandStart, bandLength, true, true, raw);
+    r = api.configureBand(session, bandId, bandStart, bandLength, true, true);
     step(2, "Configure Band " + std::to_string(bandId) +
             " (start=" + std::to_string(bandStart) +
             " len=" + std::to_string(bandLength) + ")", r);
 
     // Step 3: Verify
     LockingInfo info;
-    r = api.getBandInfo(session, bandId, info, raw);
+    r = api.getBandInfo(session, bandId, info);
     step(3, "Verify Band " + std::to_string(bandId), r);
     if (r.ok()) {
         std::cout << "    Start=" << info.rangeStart
@@ -129,12 +115,11 @@ static bool ent_lockBand(EvalApi& api,
     step(1, "BandMaster auth", r);
     if (r.failed()) return false;
 
-    RawResult raw;
-    r = api.lockBand(session, bandId, raw);
+    r = api.lockBand(session, bandId);
     step(2, "Lock Band " + std::to_string(bandId), r);
 
     LockingInfo info;
-    r = api.getBandInfo(session, bandId, info, raw);
+    r = api.getBandInfo(session, bandId, info);
     step(3, "Verify lock state", r);
     if (r.ok()) {
         std::cout << "    ReadLocked=" << info.readLocked
@@ -179,12 +164,11 @@ static bool ent_unlockBand(EvalApi& api,
     step(1, "BandMaster auth", r);
     if (r.failed()) return false;
 
-    RawResult raw;
-    r = api.unlockBand(session, bandId, raw);
+    r = api.unlockBand(session, bandId);
     step(2, "Unlock Band " + std::to_string(bandId), r);
 
     LockingInfo info;
-    r = api.getBandInfo(session, bandId, info, raw);
+    r = api.getBandInfo(session, bandId, info);
     step(3, "Verify unlock state", r);
     if (r.ok()) {
         std::cout << "    ReadLocked=" << info.readLocked
@@ -233,9 +217,8 @@ static bool ent_setBandMasterPassword(EvalApi& api,
     if (r.failed()) return false;
 
     // Step 2: Set new password
-    RawResult raw;
     Bytes newPin = HashPassword::passwordToBytes(newPw);
-    r = api.setBandMasterPassword(session, bandId, newPin, raw);
+    r = api.setBandMasterPassword(session, bandId, newPin);
     step(2, "Set BandMaster" + std::to_string(bandId) + " new password", r);
 
     // Step 3: Close
@@ -287,9 +270,8 @@ static bool ent_setEraseMasterPassword(EvalApi& api,
     if (r.failed()) return false;
 
     // Step 2: Set new password
-    RawResult raw;
     Bytes newPin = HashPassword::passwordToBytes(newPw);
-    r = api.setEraseMasterPassword(session, newPin, raw);
+    r = api.setEraseMasterPassword(session, newPin);
     step(2, "Set EraseMaster new password", r);
 
     // Step 3: Close
@@ -339,8 +321,7 @@ static bool ent_eraseBand(EvalApi& api,
     step(1, "EraseMaster auth", r);
     if (r.failed()) return false;
 
-    RawResult raw;
-    r = api.eraseBand(session, bandId, raw);
+    r = api.eraseBand(session, bandId);
     step(2, "Erase Band " + std::to_string(bandId), r);
 
     api.closeSession(session);
@@ -380,8 +361,7 @@ static bool ent_eraseAllBands(EvalApi& api,
     step(1, "EraseMaster auth", r);
     if (r.failed()) return false;
 
-    RawResult raw;
-    r = api.eraseAllBands(session, maxBands, raw);
+    r = api.eraseAllBands(session, maxBands);
     step(2, "Erase all bands (max=" + std::to_string(maxBands) + ")", r);
 
     api.closeSession(session);
@@ -423,12 +403,11 @@ static bool ent_setBandLockOnReset(EvalApi& api,
     step(1, "BandMaster auth", r);
     if (r.failed()) return false;
 
-    RawResult raw;
-    r = api.setBandLockOnReset(session, bandId, true, raw);
+    r = api.setBandLockOnReset(session, bandId, true);
     step(2, "Set LockOnReset=true for Band " + std::to_string(bandId), r);
 
     LockingInfo info;
-    r = api.getBandInfo(session, bandId, info, raw);
+    r = api.getBandInfo(session, bandId, info);
     step(3, "Verify Band info", r);
 
     api.closeSession(session);

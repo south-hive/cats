@@ -18,9 +18,6 @@
 ///   AppNote 12: Revert Locking SP (Locking SP 복원)
 ///   AppNote 13: Revert TPer / PSID Revert (TPer 복원)
 
-#include <libsed/eval/eval_api.h>
-#include <libsed/transport/transport_factory.h>
-#include <libsed/security/hash_password.h>
 #include <libsed/sed_library.h>
 #include <iostream>
 #include <iomanip>
@@ -29,23 +26,6 @@
 
 using namespace libsed;
 using namespace libsed::eval;
-
-// ── Helpers ─────────────────────────────────────────────
-
-static void printHex(const std::string& label, const Bytes& d, size_t maxLen = 32) {
-    std::cout << "    " << label << " (" << d.size() << " bytes): ";
-    for (size_t i = 0; i < std::min(d.size(), maxLen); i++)
-        printf("%02X ", d[i]);
-    if (d.size() > maxLen) std::cout << "...";
-    std::cout << "\n";
-}
-
-static void step(int n, const std::string& name, Result r) {
-    std::cout << "  [Step " << n << "] " << name << ": "
-              << (r.ok() ? "OK" : "FAIL");
-    if (r.failed()) std::cout << " (" << r.message() << ")";
-    std::cout << "\n";
-}
 
 // ════════════════════════════════════════════════════════
 //  AppNote 3: Take Ownership
@@ -81,8 +61,7 @@ static bool appnote3_takeOwnership(EvalApi& api,
 
     // Step 2: Read MSID
     Bytes msidPin;
-    RawResult raw;
-    r = api.getCPin(session, uid::CPIN_MSID, msidPin, raw);
+    r = api.getCPin(session, uid::CPIN_MSID, msidPin);
     step(2, "Read C_PIN_MSID", r);
     if (r.ok()) printHex("MSID", msidPin);
 
@@ -105,7 +84,7 @@ static bool appnote3_takeOwnership(EvalApi& api,
 
     // Step 5: Set new SID password
     Bytes newPin = HashPassword::passwordToBytes(newSidPw);
-    r = api.setCPin(session2, uid::CPIN_SID, newPin, raw);
+    r = api.setCPin(session2, uid::CPIN_SID, newPin);
     step(5, "Set C_PIN_SID to new password", r);
 
     // Step 6: Close session
@@ -152,18 +131,17 @@ static bool appnote4_activateLockingSP(EvalApi& api,
 
     // Step 2: Check current lifecycle
     uint8_t lifecycle = 0;
-    RawResult raw;
-    r = api.getSpLifecycle(session, uid::SP_LOCKING, lifecycle, raw);
+    r = api.getSpLifecycle(session, uid::SP_LOCKING, lifecycle);
     step(2, "Get Locking SP lifecycle", r);
     std::cout << "    Lifecycle before: 0x" << std::hex << (int)lifecycle << std::dec << "\n";
 
     // Step 3: Activate
-    r = api.activate(session, uid::SP_LOCKING, raw);
+    r = api.activate(session, uid::SP_LOCKING);
     step(3, "Activate Locking SP", r);
 
     // Step 4: Verify lifecycle changed
     uint8_t lifecycle2 = 0;
-    r = api.getSpLifecycle(session, uid::SP_LOCKING, lifecycle2, raw);
+    r = api.getSpLifecycle(session, uid::SP_LOCKING, lifecycle2);
     step(4, "Verify lifecycle after activation", r);
     std::cout << "    Lifecycle after: 0x" << std::hex << (int)lifecycle2 << std::dec << "\n";
 
@@ -209,14 +187,13 @@ static bool appnote5_configureLockingRange(EvalApi& api,
     if (r.failed()) return false;
 
     // Step 2: Configure Range 1
-    RawResult raw;
-    r = api.setRange(session, 1, rangeStart, rangeLen, true, true, raw);
+    r = api.setRange(session, 1, rangeStart, rangeLen, true, true);
     step(2, "Set Range 1 (start=" + std::to_string(rangeStart) +
             " len=" + std::to_string(rangeLen) + " RLE=1 WLE=1)", r);
 
     // Step 3: Verify
     LockingInfo info;
-    r = api.getLockingInfo(session, 1, info, raw);
+    r = api.getLockingInfo(session, 1, info);
     step(3, "Verify Range 1 configuration", r);
     if (r.ok()) {
         std::cout << "    RangeStart=" << info.rangeStart
@@ -264,9 +241,8 @@ static bool appnote6_setUserPassword(EvalApi& api,
     if (r.failed()) return false;
 
     // Step 2: Set User1 password
-    RawResult raw;
     Bytes user1Pin = HashPassword::passwordToBytes(user1Pw);
-    r = api.setCPin(session, uid::CPIN_USER1, user1Pin, raw);
+    r = api.setCPin(session, uid::CPIN_USER1, user1Pin);
     step(2, "Set C_PIN_User1", r);
 
     // Step 3: Close
@@ -310,27 +286,25 @@ static bool appnote7_enableUserInAce(EvalApi& api,
     step(1, "Admin1 auth to LockingSP", r);
     if (r.failed()) return false;
 
-    RawResult raw;
-
     // Step 2: Enable User1
-    r = api.enableUser(session, 1, raw);
+    r = api.enableUser(session, 1);
     step(2, "Enable User1 authority", r);
 
     // Step 3: Add User1 to Range1 ReadLock ACE
     r = api.addAuthorityToAce(session,
             uid::makeAceLockingRangeSetRdLocked(1).toUint64(),
-            uid::AUTH_USER1, raw);
+            uid::AUTH_USER1);
     step(3, "Add User1 to Range1 Set_RdLocked ACE", r);
 
     // Step 4: Add User1 to Range1 WriteLock ACE
     r = api.addAuthorityToAce(session,
             uid::makeAceLockingRangeSetWrLocked(1).toUint64(),
-            uid::AUTH_USER1, raw);
+            uid::AUTH_USER1);
     step(4, "Add User1 to Range1 Set_WrLocked ACE", r);
 
     // Step 5: Verify User1 is enabled
     bool enabled = false;
-    r = api.isUserEnabled(session, 1, enabled, raw);
+    r = api.isUserEnabled(session, 1, enabled);
     step(5, "Verify User1 enabled", r);
     std::cout << "    User1 enabled: " << (enabled ? "true" : "false") << "\n";
 
@@ -373,15 +347,13 @@ static bool appnote8_lockRange(EvalApi& api,
     step(1, "User1 auth to LockingSP", r);
     if (r.failed()) return false;
 
-    RawResult raw;
-
     // Step 2: Lock Range 1
-    r = api.setRangeLock(session, 1, true, true, raw);
+    r = api.setRangeLock(session, 1, true, true);
     step(2, "Lock Range 1 (RdLocked=1 WrLocked=1)", r);
 
     // Step 3: Verify
     LockingInfo info;
-    r = api.getLockingInfo(session, 1, info, raw);
+    r = api.getLockingInfo(session, 1, info);
     step(3, "Verify Range 1 lock state", r);
     if (r.ok()) {
         std::cout << "    ReadLocked=" << info.readLocked
@@ -427,15 +399,13 @@ static bool appnote9_unlockRange(EvalApi& api,
     step(1, "User1 auth to LockingSP", r);
     if (r.failed()) return false;
 
-    RawResult raw;
-
     // Step 2: Unlock Range 1
-    r = api.setRangeLock(session, 1, false, false, raw);
+    r = api.setRangeLock(session, 1, false, false);
     step(2, "Unlock Range 1 (RdLocked=0 WrLocked=0)", r);
 
     // Step 3: Verify
     LockingInfo info;
-    r = api.getLockingInfo(session, 1, info, raw);
+    r = api.getLockingInfo(session, 1, info);
     step(3, "Verify Range 1 unlock state", r);
     if (r.ok()) {
         std::cout << "    ReadLocked=" << info.readLocked
@@ -485,10 +455,8 @@ static bool appnote10_mbrShadow(EvalApi& api,
     step(1, "Admin1 auth to LockingSP", r);
     if (r.failed()) return false;
 
-    RawResult raw;
-
     // Step 2: Enable MBR shadowing
-    r = api.setMbrEnable(session, true, raw);
+    r = api.setMbrEnable(session, true);
     step(2, "Enable MBR shadowing (MBREnable=true)", r);
 
     // Step 3: Write PBA image (512 bytes synthetic data)
@@ -500,12 +468,12 @@ static bool appnote10_mbrShadow(EvalApi& api,
     std::memcpy(&pbaImage[3], "TCGPBA", 6);
     pbaImage[510] = 0x55; // Boot signature
     pbaImage[511] = 0xAA;
-    r = api.writeMbrData(session, 0, pbaImage, raw);
+    r = api.writeMbrData(session, 0, pbaImage);
     step(3, "Write PBA image to MBR table (512 bytes)", r);
 
     // Step 4: Read back and verify
     Bytes readBack;
-    r = api.readMbrData(session, 0, 512, readBack, raw);
+    r = api.readMbrData(session, 0, 512, readBack);
     step(4, "Read back MBR data", r);
     if (r.ok()) {
         bool match = (readBack == pbaImage);
@@ -515,12 +483,12 @@ static bool appnote10_mbrShadow(EvalApi& api,
     }
 
     // Step 5: Set MBRDone = true
-    r = api.setMbrDone(session, true, raw);
+    r = api.setMbrDone(session, true);
     step(5, "Set MBRDone=true (expose real MBR)", r);
 
     // Step 6: Verify MBR status
     bool mbrEnabled = false, mbrDone = false;
-    r = api.getMbrStatus(session, mbrEnabled, mbrDone, raw);
+    r = api.getMbrStatus(session, mbrEnabled, mbrDone);
     step(6, "Get MBR status", r);
     std::cout << "    MBREnabled=" << mbrEnabled << " MBRDone=" << mbrDone << "\n";
 
@@ -565,23 +533,21 @@ static bool appnote11_cryptoErase(EvalApi& api,
     step(1, "Admin1 auth to LockingSP", r);
     if (r.failed()) return false;
 
-    RawResult raw;
-
     // Step 2: Get current ActiveKey
     Uid keyBefore;
-    r = api.getActiveKey(session, 1, keyBefore, raw);
+    r = api.getActiveKey(session, 1, keyBefore);
     step(2, "Get ActiveKey before erase", r);
     if (r.ok())
         std::cout << "    ActiveKey before: 0x" << std::hex << keyBefore.toUint64()
                   << std::dec << "\n";
 
     // Step 3: Crypto Erase (regenerate key)
-    r = api.cryptoErase(session, 1, raw);
+    r = api.cryptoErase(session, 1);
     step(3, "Crypto Erase Range 1", r);
 
     // Step 4: Get new ActiveKey
     Uid keyAfter;
-    r = api.getActiveKey(session, 1, keyAfter, raw);
+    r = api.getActiveKey(session, 1, keyAfter);
     step(4, "Get ActiveKey after erase", r);
     if (r.ok()) {
         std::cout << "    ActiveKey after:  0x" << std::hex << keyAfter.toUint64()
@@ -630,8 +596,7 @@ static bool appnote12_revertLockingSP(EvalApi& api,
     if (r.failed()) return false;
 
     // Step 2: Revert Locking SP
-    RawResult raw;
-    r = api.revertSP(session, uid::SP_LOCKING, raw);
+    r = api.revertSP(session, uid::SP_LOCKING);
     step(2, "Revert Locking SP", r);
 
     // Note: Session is implicitly closed by TPer after Revert
@@ -669,7 +634,6 @@ static bool appnote13_revertTPer(EvalApi& api,
     std::cout << "╚══════════════════════════════════════════╝\n";
 
     Bytes sidCred = HashPassword::passwordToBytes(sidPw);
-    RawResult raw;
 
     // Path A: Try SID Revert first
     std::cout << "\n  --- Path A: SID Revert ---\n";
@@ -681,7 +645,7 @@ static bool appnote13_revertTPer(EvalApi& api,
         step(1, "SID auth to AdminSP", r);
 
         if (r.ok()) {
-            r = api.revertSP(session, uid::SP_ADMIN, raw);
+            r = api.revertSP(session, uid::SP_ADMIN);
             step(2, "Revert TPer (Admin SP)", r);
             // Session auto-closed by TPer after Revert
             if (r.ok()) {
@@ -707,7 +671,7 @@ static bool appnote13_revertTPer(EvalApi& api,
         step(1, "PSID auth to AdminSP", r);
         if (r.failed()) return false;
 
-        r = api.psidRevert(session, raw);
+        r = api.psidRevert(session);
         step(2, "PSID Revert", r);
         // Session auto-closed by TPer
         std::cout << "  >> PSID Revert complete. Drive reset to factory.\n";
