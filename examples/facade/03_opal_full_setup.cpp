@@ -4,16 +4,17 @@
 /// Opal 드라이브를 공장 초기 상태에서 완전히 설정합니다.
 /// AppNote 3~7에 해당하는 전체 플로우입니다.
 ///
-/// 사용법: ./facade_opal_setup /dev/nvme0 <sid_pw> <admin1_pw> <user1_pw>
+/// 사용법: ./facade_opal_setup /dev/nvme0 <sid_pw> <admin1_pw> <user1_pw> [--dump]
 
 #include <cats.h>
 #include <cstdio>
+#include <cstring>
 
 using namespace libsed;
 
 int main(int argc, char* argv[]) {
     if (argc < 5) {
-        printf("사용법: %s <device> <sid_pw> <admin1_pw> <user1_pw>\n", argv[0]);
+        printf("사용법: %s <device> <sid_pw> <admin1_pw> <user1_pw> [--dump]\n", argv[0]);
         return 1;
     }
 
@@ -23,6 +24,8 @@ int main(int argc, char* argv[]) {
     const char* user1Pw  = argv[4];
 
     SedDrive drive(device);
+    for (int i = 5; i < argc; i++)
+        if (std::strcmp(argv[i], "--dump") == 0) drive.enableDump();
 
     auto r = drive.query();
     if (r.failed()) { printf("조회 실패: %s\n", r.message().c_str()); return 1; }

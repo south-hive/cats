@@ -6,20 +6,24 @@
 /// Discovery에서 baseComId와 numComIds를 확인한 후,
 /// setComId()로 특정 PF를 선택할 수 있습니다.
 ///
-/// 사용법: ./facade_multi_pf /dev/nvme0
+/// 사용법: ./facade_multi_pf /dev/nvme0 [--dump]
 
 #include <cats.h>
 #include <cstdio>
+#include <cstring>
 
 using namespace libsed;
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        printf("사용법: %s <device>\n", argv[0]);
+        printf("사용법: %s <device> [--dump]\n", argv[0]);
         return 1;
     }
 
     SedDrive drive(argv[1]);
+    for (int i = 2; i < argc; i++)
+        if (std::strcmp(argv[i], "--dump") == 0) drive.enableDump();
+
     auto r = drive.query();
     if (r.failed()) { printf("조회 실패: %s\n", r.message().c_str()); return 1; }
 

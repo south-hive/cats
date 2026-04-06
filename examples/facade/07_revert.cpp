@@ -7,19 +7,20 @@
 /// 주의: 모든 설정과 데이터가 삭제됩니다!
 ///
 /// 사용법:
-///   ./facade_revert /dev/nvme0 sid <sid_password>
-///   ./facade_revert /dev/nvme0 psid <psid_from_label>
+///   ./facade_revert /dev/nvme0 sid <sid_password> [--dump]
+///   ./facade_revert /dev/nvme0 psid <psid_from_label> [--dump]
 
 #include <cats.h>
 #include <cstdio>
+#include <cstring>
 
 using namespace libsed;
 
 int main(int argc, char* argv[]) {
     if (argc < 4) {
         printf("사용법:\n");
-        printf("  %s <device> sid <sid_password>\n", argv[0]);
-        printf("  %s <device> psid <psid_from_label>\n", argv[0]);
+        printf("  %s <device> sid <sid_password> [--dump]\n", argv[0]);
+        printf("  %s <device> psid <psid_from_label> [--dump]\n", argv[0]);
         return 1;
     }
 
@@ -28,6 +29,9 @@ int main(int argc, char* argv[]) {
     const char* password = argv[3];
 
     SedDrive drive(device);
+    for (int i = 4; i < argc; i++)
+        if (std::strcmp(argv[i], "--dump") == 0) drive.enableDump();
+
     auto r = drive.query();
     if (r.failed()) { printf("조회 실패: %s\n", r.message().c_str()); return 1; }
 

@@ -4,20 +4,24 @@
 /// Enterprise SSC 드라이브의 Band를 설정하고 잠금/해제합니다.
 /// Opal의 Locking Range와 유사하지만, BandMaster/EraseMaster 인증 체계를 사용합니다.
 ///
-/// 사용법: ./facade_enterprise /dev/nvme0 <bandmaster_pw>
+/// 사용법: ./facade_enterprise /dev/nvme0 <bandmaster_pw> [--dump]
 
 #include <cats.h>
 #include <cstdio>
+#include <cstring>
 
 using namespace libsed;
 
 int main(int argc, char* argv[]) {
     if (argc < 3) {
-        printf("사용법: %s <device> <bandmaster_pw>\n", argv[0]);
+        printf("사용법: %s <device> <bandmaster_pw> [--dump]\n", argv[0]);
         return 1;
     }
 
     SedDrive drive(argv[1]);
+    for (int i = 3; i < argc; i++)
+        if (std::strcmp(argv[i], "--dump") == 0) drive.enableDump();
+
     auto r = drive.query();
     if (r.failed()) { printf("조회 실패: %s\n", r.message().c_str()); return 1; }
 

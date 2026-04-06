@@ -4,20 +4,24 @@
 /// SedSession은 RAII 패턴으로, 소멸 시 자동으로 세션을 닫습니다.
 /// 여러 세션을 동시에 열 수 있어 복잡한 TC 시나리오를 구현할 수 있습니다.
 ///
-/// 사용법: ./facade_multi_session /dev/nvme0 <sid_pw> <admin1_pw>
+/// 사용법: ./facade_multi_session /dev/nvme0 <sid_pw> <admin1_pw> [--dump]
 
 #include <cats.h>
 #include <cstdio>
+#include <cstring>
 
 using namespace libsed;
 
 int main(int argc, char* argv[]) {
     if (argc < 4) {
-        printf("사용법: %s <device> <sid_pw> <admin1_pw>\n", argv[0]);
+        printf("사용법: %s <device> <sid_pw> <admin1_pw> [--dump]\n", argv[0]);
         return 1;
     }
 
     SedDrive drive(argv[1]);
+    for (int i = 4; i < argc; i++)
+        if (std::strcmp(argv[i], "--dump") == 0) drive.enableDump();
+
     auto r = drive.query();
     if (r.failed()) { printf("조회 실패: %s\n", r.message().c_str()); return 1; }
 
