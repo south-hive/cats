@@ -24,6 +24,7 @@
 #include "transport/i_transport.h"
 #include "transport/i_nvme_device.h"
 #include "transport/transport_factory.h"
+#include "transport/sim_transport.h"
 
 // ── Discovery ──
 #include "discovery/discovery.h"

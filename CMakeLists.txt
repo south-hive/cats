@@ -57,6 +57,7 @@ set(LIBSED_SOURCES
     src/transport/nvme_transport.cpp
     src/transport/scsi_transport.cpp
     src/transport/transport_factory.cpp
+    src/transport/sim_transport.cpp
 
     # Discovery
     src/discovery/discovery.cpp
@@ -278,6 +279,35 @@ if(LIBSED_BUILD_TESTS)
     set_target_properties(ioctl_validator PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
     add_test(NAME ioctl_validator COMMAND ioctl_validator)
+
+    # ── Scenario tests (L1~L5, 102 scenarios) ──
+    add_executable(scenario_tests
+        tests/scenarios/scenario_main.cpp
+        tests/scenarios/test_L1_basic.cpp
+        tests/scenarios/test_L2_sequence.cpp
+        tests/scenarios/test_L3_cross.cpp
+        tests/scenarios/test_L4_negative.cpp
+        tests/scenarios/test_L5_advanced.cpp
+        tests/scenarios/test_sim_basic.cpp
+        tests/scenarios/test_sim_comprehensive.cpp
+        tests/mock/mock_transport.cpp
+    )
+    target_include_directories(scenario_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(scenario_tests PRIVATE libsed)
+    set_target_properties(scenario_tests PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+    add_test(NAME scenario_tests COMMAND scenario_tests)
+
+    # ── Device runner (real hardware test) ──
+    add_executable(device_runner
+        tests/scenarios/device_runner.cpp
+    )
+    target_link_libraries(device_runner PRIVATE libsed)
+    set_target_properties(device_runner PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
     add_executable(golden_validator
         tests/integration/golden_validator.cpp
