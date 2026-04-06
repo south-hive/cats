@@ -45,6 +45,9 @@
 // ── High-level device ──
 #include "sed_device.h"
 
+// ── Facade (TC developer API) ──
+#include "facade/sed_drive.h"
+
 namespace libsed {
 
 /// Initialize the library (call once at startup)

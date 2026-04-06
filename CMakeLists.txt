@@ -26,6 +26,9 @@ set(LIBSED_SOURCES
     src/sed_library.cpp
     src/sed_device.cpp
 
+    # Facade
+    src/facade/sed_drive.cpp
+
     # Codec
     src/codec/token.cpp
     src/codec/token_encoder.cpp
