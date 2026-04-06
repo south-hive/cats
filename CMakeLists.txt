@@ -192,17 +192,6 @@ endif()
 if(LIBSED_BUILD_EXAMPLES)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/examples)
 
-    # ── basic/ — 고수준 API 입문 예제 ──
-    add_executable(example_discovery     examples/basic/discovery.cpp)
-    add_executable(example_opal_setup    examples/basic/opal_setup.cpp)
-    add_executable(example_lock_unlock   examples/basic/lock_unlock.cpp)
-    add_executable(example_enterprise    examples/basic/enterprise_band.cpp)
-
-    target_link_libraries(example_discovery     PRIVATE libsed)
-    target_link_libraries(example_opal_setup    PRIVATE libsed)
-    target_link_libraries(example_lock_unlock   PRIVATE libsed)
-    target_link_libraries(example_enterprise    PRIVATE libsed)
-
     # ── appnote/ — TCG Application Note 구현 ──
     add_executable(appnote_opal        examples/appnote/appnote_opal.cpp)
     add_executable(appnote_enterprise  examples/appnote/appnote_enterprise.cpp)
