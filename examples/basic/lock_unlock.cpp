@@ -2,79 +2,68 @@
 /// Example: Lock and unlock an Opal drive
 
 #include <cats.h>
-#include <iostream>
-#include <string>
-
-void printUsage(const char* prog) {
-    std::cerr << "Usage: " << prog << " <device> <lock|unlock> <password> [range_id] [user_id] [--dump] [--log]\n";
-}
+#include <cstdio>
+#include <cstring>
 
 /// @scenario Opal 드라이브의 잠금 및 잠금 해제 작업
-/// @precondition Opal 2.0 설정 완료 (소유권 확보, Locking SP 활성화, Admin1 비밀번호 설정됨)
+/// @precondition Opal 설정 완료 (소유권 확보, Locking SP 활성화, User 설정됨)
 /// @steps
 ///   1. 커맨드 라인에서 장치 경로, 액션(lock/unlock), 비밀번호 파싱
-///   2. Transport 열기 및 고수준 API를 통한 세션 시작
-///   3. lock 시: Global Range ReadLocked=true, WriteLocked=true 설정
-///      unlock 시: Global Range ReadLocked=false, WriteLocked=false 설정
+///   2. SedDrive로 드라이브 조회
+///   3. lock/unlock 실행
 ///   4. Range 정보 조회하여 현재 잠금 상태 출력
-/// @expected
-///   - lock 액션: ReadLocked=true, WriteLocked=true로 전환
-///   - unlock 액션: ReadLocked=false, WriteLocked=false로 전환
-///   - 잘못된 액션 입력 시 사용법 출력
+/// @expected lock → ReadLocked=true/WriteLocked=true, unlock → false/false
 int main(int argc, char* argv[]) {
-    if (argc < 4) { printUsage(argv[0]); return 1; }
+    if (argc < 4) {
+        printf("Usage: %s <device> <lock|unlock> <password> [range] [user] [--dump]\n", argv[0]);
+        return 1;
+    }
 
-    libsed::cli::CliOptions cliOpts;
-    libsed::cli::scanFlags(argc, argv, cliOpts);
-
-    const std::string device   = argv[1];
-    const std::string action   = argv[2];
-    const std::string password = argv[3];
+    const char* device   = argv[1];
+    const char* action   = argv[2];
+    const char* password = argv[3];
     uint32_t rangeId = (argc > 4) ? std::stoul(argv[4]) : 0;
     uint32_t userId  = (argc > 5) ? std::stoul(argv[5]) : 1;
 
-    libsed::initialize();
+    libsed::SedDrive drive(device);
+    for (int i = 4; i < argc; i++)
+        if (std::strcmp(argv[i], "--dump") == 0) drive.enableDump();
 
-    auto rawTransport = libsed::TransportFactory::createNvme(device);
-    if (!rawTransport || !rawTransport->isOpen()) {
-        std::cerr << "Failed to open device: " << device << "\n";
-        return 1;
-    }
-    auto transport = libsed::cli::applyLogging(rawTransport, cliOpts);
-    auto sed = libsed::SedDevice::open(transport);
-    if (!sed) {
-        std::cerr << "Not a TCG SED device: " << device << "\n";
+    auto r = drive.query();
+    if (r.failed()) {
+        printf("Discovery failed: %s\n", r.message().c_str());
         return 1;
     }
 
-    libsed::Result r;
-    if (action == "lock") {
-        std::cout << "Locking range " << rangeId << "...\n";
-        r = sed->lockRange(rangeId, password, userId);
-    } else if (action == "unlock") {
-        std::cout << "Unlocking range " << rangeId << "...\n";
-        r = sed->unlockRange(rangeId, password, userId);
+    if (std::strcmp(action, "lock") == 0) {
+        printf("Locking range %u...\n", rangeId);
+        r = drive.lockRange(rangeId, password, userId);
+    } else if (std::strcmp(action, "unlock") == 0) {
+        printf("Unlocking range %u...\n", rangeId);
+        r = drive.unlockRange(rangeId, password, userId);
     } else {
-        printUsage(argv[0]);
+        printf("Unknown action: %s (use 'lock' or 'unlock')\n", action);
         return 1;
     }
 
     if (r.failed()) {
-        std::cerr << "Operation failed: " << r.message() << "\n";
+        printf("Operation failed: %s\n", r.message().c_str());
         return 1;
     }
 
-    std::cout << "Success!\n";
+    printf("Success!\n");
 
-    // Show range info
-    libsed::LockingRangeInfo info;
-    r = sed->getRangeInfo(rangeId, info, password, userId);
-    if (r.ok()) {
-        std::cout << "Range " << rangeId << " status:\n"
-                  << "  ReadLocked:  " << (info.readLocked ? "yes" : "no") << "\n"
-                  << "  WriteLocked: " << (info.writeLocked ? "yes" : "no") << "\n";
+    // Show range info via session
+    auto s = drive.login(libsed::Uid(libsed::uid::SP_LOCKING), password,
+                         libsed::uid::makeUserUid(userId));
+    if (s.ok()) {
+        libsed::LockingRangeInfo info;
+        if (s.getRangeInfo(rangeId, info).ok()) {
+            printf("Range %u status:\n", rangeId);
+            printf("  ReadLocked:  %s\n", info.readLocked ? "yes" : "no");
+            printf("  WriteLocked: %s\n", info.writeLocked ? "yes" : "no");
+        }
     }
 
-    libsed::shutdown();
     return 0;
 }

@@ -2,78 +2,73 @@
 /// Example: Enterprise SSC band management
 
 #include <cats.h>
-#include <iostream>
+#include <cstdio>
+#include <cstring>
 
 /// @scenario Enterprise SSC 드라이브의 Band 관리 (잠금/해제/정보 조회)
 /// @precondition Enterprise SSC 지원 드라이브, BandMaster 비밀번호 설정됨
 /// @steps
-///   1. 커맨드 라인에서 장치 경로, Band ID, 액션(lock/unlock/info), 비밀번호 파싱
-///   2. Transport 열기 및 Enterprise SSC 타입 확인
-///   3. lock 시: 지정된 Band의 ReadLocked/WriteLocked=true 설정
-///      unlock 시: 지정된 Band의 ReadLocked/WriteLocked=false 설정
-///      info 시: Band의 Start, Length, Locked 상태 출력
-/// @expected
-///   - Enterprise SSC가 아닌 경우 에러 메시지 출력
-///   - lock/unlock: Band 잠금 상태 변경 성공
-///   - info: Band 시작 LBA, 길이, 현재 잠금 상태 정상 출력
+///   1. 커맨드 라인에서 장치 경로, Band ID, 비밀번호, 액션 파싱
+///   2. SedDrive로 드라이브 조회 후 Enterprise SSC 확인
+///   3. lock/unlock/info 실행
+/// @expected Enterprise SSC가 아닌 경우 에러, 그 외 정상 동작
 int main(int argc, char* argv[]) {
     if (argc < 4) {
-        std::cerr << "Usage: " << argv[0] << " <device> <band_id> <password> [lock|unlock|info] [--dump] [--log]\n";
+        printf("Usage: %s <device> <band_id> <password> [lock|unlock|info] [--dump]\n", argv[0]);
         return 1;
     }
 
-    libsed::cli::CliOptions cliOpts;
-    libsed::cli::scanFlags(argc, argv, cliOpts);
+    const char* device   = argv[1];
+    uint32_t bandId      = std::stoul(argv[2]);
+    const char* password = argv[3];
+    const char* action   = (argc > 4) ? argv[4] : "info";
 
-    const std::string device   = argv[1];
-    uint32_t bandId            = std::stoul(argv[2]);
-    const std::string password = argv[3];
-    const std::string action   = (argc > 4) ? argv[4] : "info";
+    libsed::SedDrive drive(device);
+    for (int i = 4; i < argc; i++)
+        if (std::strcmp(argv[i], "--dump") == 0) drive.enableDump();
 
-    libsed::initialize();
-
-    auto rawTransport = libsed::TransportFactory::createNvme(device);
-    if (!rawTransport || !rawTransport->isOpen()) {
-        std::cerr << "Failed to open device: " << device << "\n";
-        return 1;
-    }
-    auto transport = libsed::cli::applyLogging(rawTransport, cliOpts);
-    auto sed = libsed::SedDevice::open(transport);
-    if (!sed) {
-        std::cerr << "Not a TCG SED device: " << device << "\n";
+    auto r = drive.query();
+    if (r.failed()) {
+        printf("Discovery failed: %s\n", r.message().c_str());
         return 1;
     }
 
-    auto* ent = sed->asEnterprise();
-    if (!ent) {
-        std::cerr << "Device is not Enterprise SSC\n";
+    if (drive.sscType() != libsed::SscType::Enterprise) {
+        printf("Device is not Enterprise SSC (SSC: %s)\n", drive.sscName());
         return 1;
     }
 
-    libsed::Result r;
+    printf("Device: %s (Enterprise SSC)\n\n", device);
 
-    if (action == "lock") {
-        r = ent->lockBand(password, bandId);
-        std::cout << (r.ok() ? "Band locked" : "Lock failed") << "\n";
-    } else if (action == "unlock") {
-        r = ent->unlockBand(password, bandId);
-        std::cout << (r.ok() ? "Band unlocked" : "Unlock failed") << "\n";
+    if (std::strcmp(action, "lock") == 0) {
+        r = drive.lockBand(bandId, password);
+        printf("%s\n", r.ok() ? "Band locked" : "Lock failed");
+    } else if (std::strcmp(action, "unlock") == 0) {
+        r = drive.unlockBand(bandId, password);
+        printf("%s\n", r.ok() ? "Band unlocked" : "Unlock failed");
     } else {
-        libsed::enterprise::BandInfo info;
-        r = ent->band().getBandInfo(password, bandId, info);
+        // Info: use session to get band details
+        auto s = drive.login(libsed::Uid(libsed::uid::SP_LOCKING), password,
+                             libsed::uid::makeBandMasterUid(bandId));
+        if (s.failed()) {
+            printf("Login failed: %s\n", s.openResult().message().c_str());
+            return 1;
+        }
+
+        libsed::LockingRangeInfo info;
+        r = s.getRangeInfo(bandId, info);
         if (r.ok()) {
-            std::cout << "Band " << bandId << ":\n"
-                      << "  Start:  " << info.rangeStart << "\n"
-                      << "  Length: " << info.rangeLength << "\n"
-                      << "  Locked: " << (info.locked ? "yes" : "no") << "\n";
+            printf("Band %u:\n", bandId);
+            printf("  Start:  %lu\n", (unsigned long)info.rangeStart);
+            printf("  Length: %lu\n", (unsigned long)info.rangeLength);
+            printf("  Locked: %s\n", (info.readLocked || info.writeLocked) ? "yes" : "no");
         }
     }
 
     if (r.failed()) {
-        std::cerr << "Error: " << r.message() << "\n";
+        printf("Error: %s\n", r.message().c_str());
         return 1;
     }
 
-    libsed::shutdown();
     return 0;
 }

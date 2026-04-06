@@ -2,167 +2,141 @@
 /// CLI tool: Manage SED drives (ownership, locking, user management, revert)
 
 #include <cats.h>
-#include <iostream>
-#include <string>
+#include <cstdio>
 #include <cstring>
+#include <string>
 
 static void printUsage(const char* prog) {
-    std::cerr
-        << "TCG SED Management Tool v" << LIBSED_VERSION_STRING << "\n\n"
-        << "Usage: " << prog << " <device> <command> [options]\n\n"
-        << "Commands:\n"
-        << "  take-ownership <new_password>          Set SID password (reads MSID automatically)\n"
-        << "  activate <sid_password>                Activate Locking SP\n"
-        << "  setup <sid_password> [admin1_password]  Full initial setup\n"
-        << "  lock <password> [range] [user]          Lock a range\n"
-        << "  unlock <password> [range] [user]        Unlock a range\n"
-        << "  range-info <password> [range] [user]    Show range info\n"
-        << "  configure-range <admin1_pw> <range> <start> <length>  Configure range\n"
-        << "  enable-user <admin1_pw> <user_id>      Enable a user\n"
-        << "  set-password <auth_pw> <user_id> <new_pw>  Set user password\n"
-        << "  crypto-erase <admin1_pw> [range]       Crypto-erase a range\n"
-        << "  revert <sid_password>                  Revert TPer (factory reset)\n"
-        << "  psid-revert <psid>                     Emergency PSID revert\n\n"
-        << "Flags:\n"
-        << "  --dump      Show IF-SEND/IF-RECV packets on stderr\n"
-        << "  --log       Write command log to file\n"
-        << "  --logdir D  Log file directory (default: .)\n";
+    printf("TCG SED Management Tool\n\n");
+    printf("Usage: %s <device> <command> [options] [--dump]\n\n", prog);
+    printf("Commands:\n");
+    printf("  take-ownership <new_password>          Set SID password (reads MSID automatically)\n");
+    printf("  activate <sid_password>                Activate Locking SP\n");
+    printf("  setup <sid_pw> <admin1_pw>             Full initial setup\n");
+    printf("  lock <password> [range] [user]          Lock a range\n");
+    printf("  unlock <password> [range] [user]        Unlock a range\n");
+    printf("  range-info <password> [range] [user]    Show range info\n");
+    printf("  configure-range <admin1_pw> <range> <start> <length>  Configure range\n");
+    printf("  setup-user <admin1_pw> <user_id> <user_pw> <range>    Setup user\n");
+    printf("  crypto-erase <admin1_pw> [range]       Crypto-erase a range\n");
+    printf("  revert <sid_password>                  Revert TPer (factory reset)\n");
+    printf("  psid-revert <psid>                     Emergency PSID revert\n\n");
+    printf("Flags:\n");
+    printf("  --dump    Show IF-SEND/IF-RECV packets on stderr\n");
 }
 
 int main(int argc, char* argv[]) {
     if (argc < 3) { printUsage(argv[0]); return 1; }
 
-    libsed::cli::CliOptions cliOpts;
-    libsed::cli::scanFlags(argc, argv, cliOpts);
+    const char* device  = argv[1];
+    const char* command = argv[2];
 
-    const std::string device = argv[1];
-    const std::string command = argv[2];
+    libsed::SedDrive drive(device);
+    for (int i = 3; i < argc; i++)
+        if (std::strcmp(argv[i], "--dump") == 0) drive.enableDump();
 
-    libsed::initialize();
-
-    auto transport = libsed::TransportFactory::createNvme(device);
-    if (!transport || !transport->isOpen()) {
-        std::cerr << "Failed to open: " << device << "\n";
-        return 1;
-    }
-    transport = libsed::cli::applyLogging(transport, cliOpts);
-
-    auto sed = libsed::SedDevice::open(transport);
-    if (!sed) {
-        std::cerr << "Failed to discover: " << device << "\n";
+    auto r = drive.query();
+    if (r.failed()) {
+        printf("Discovery failed: %s\n", r.message().c_str());
         return 1;
     }
 
-    const auto& info = sed->discovery();
-    std::cout << "Device: " << device << " (SSC: "
-              << static_cast<int>(info.primarySsc) << ")\n\n";
-
-    libsed::Result r;
+    printf("Device: %s (SSC: %s)\n\n", device, drive.sscName());
 
     // ── Commands ─────────────────────────────────────
-    if (command == "take-ownership") {
-        if (argc < 4) { std::cerr << "Missing password\n"; return 1; }
-        r = sed->takeOwnership(argv[3]);
-        std::cout << (r.ok() ? "Ownership taken.\n" : "Failed.\n");
+    if (std::strcmp(command, "take-ownership") == 0) {
+        if (argc < 4) { printf("Missing password\n"); return 1; }
+        r = drive.takeOwnership(argv[3]);
+        printf("%s\n", r.ok() ? "Ownership taken." : "Failed.");
 
-    } else if (command == "activate") {
-        if (argc < 4) { std::cerr << "Missing SID password\n"; return 1; }
-        auto* opal = sed->asOpal();
-        if (!opal) { std::cerr << "Not Opal\n"; return 1; }
-        r = opal->activateLockingSP(argv[3]);
-        std::cout << (r.ok() ? "Locking SP activated.\n" : "Failed.\n");
+    } else if (std::strcmp(command, "activate") == 0) {
+        if (argc < 4) { printf("Missing SID password\n"); return 1; }
+        r = drive.activateLocking(argv[3]);
+        printf("%s\n", r.ok() ? "Locking SP activated." : "Failed.");
 
-    } else if (command == "setup") {
-        if (argc < 4) { std::cerr << "Missing SID password\n"; return 1; }
-        std::string admin1 = (argc > 4) ? argv[4] : argv[3];
-        auto* opal = sed->asOpal();
-        if (!opal) { std::cerr << "Not Opal\n"; return 1; }
-        r = opal->initialSetup(argv[3], admin1);
-        std::cout << (r.ok() ? "Setup complete.\n" : "Setup failed.\n");
+    } else if (std::strcmp(command, "setup") == 0) {
+        if (argc < 5) { printf("Usage: setup <sid_pw> <admin1_pw>\n"); return 1; }
+        const char* sidPw = argv[3];
+        const char* admin1Pw = argv[4];
+        r = drive.takeOwnership(sidPw);
+        if (r.ok()) r = drive.activateLocking(sidPw);
+        if (r.ok()) r = drive.configureRange(1, 0, 1048576, admin1Pw);
+        printf("%s\n", r.ok() ? "Setup complete." : "Setup failed.");
 
-    } else if (command == "lock") {
-        if (argc < 4) { std::cerr << "Missing password\n"; return 1; }
+    } else if (std::strcmp(command, "lock") == 0) {
+        if (argc < 4) { printf("Missing password\n"); return 1; }
         uint32_t range = (argc > 4) ? std::stoul(argv[4]) : 0;
         uint32_t user  = (argc > 5) ? std::stoul(argv[5]) : 1;
-        r = sed->lockRange(range, argv[3], user);
-        std::cout << (r.ok() ? "Locked.\n" : "Lock failed.\n");
+        r = drive.lockRange(range, argv[3], user);
+        printf("%s\n", r.ok() ? "Locked." : "Lock failed.");
 
-    } else if (command == "unlock") {
-        if (argc < 4) { std::cerr << "Missing password\n"; return 1; }
+    } else if (std::strcmp(command, "unlock") == 0) {
+        if (argc < 4) { printf("Missing password\n"); return 1; }
         uint32_t range = (argc > 4) ? std::stoul(argv[4]) : 0;
         uint32_t user  = (argc > 5) ? std::stoul(argv[5]) : 1;
-        r = sed->unlockRange(range, argv[3], user);
-        std::cout << (r.ok() ? "Unlocked.\n" : "Unlock failed.\n");
+        r = drive.unlockRange(range, argv[3], user);
+        printf("%s\n", r.ok() ? "Unlocked." : "Unlock failed.");
 
-    } else if (command == "range-info") {
-        if (argc < 4) { std::cerr << "Missing password\n"; return 1; }
+    } else if (std::strcmp(command, "range-info") == 0) {
+        if (argc < 4) { printf("Missing password\n"); return 1; }
         uint32_t range = (argc > 4) ? std::stoul(argv[4]) : 0;
         uint32_t user  = (argc > 5) ? std::stoul(argv[5]) : 1;
+        auto s = drive.login(libsed::Uid(libsed::uid::SP_LOCKING), argv[3],
+                             libsed::uid::makeUserUid(user));
+        if (s.failed()) {
+            printf("Login failed: %s\n", s.openResult().message().c_str());
+            return 1;
+        }
         libsed::LockingRangeInfo ri;
-        r = sed->getRangeInfo(range, ri, argv[3], user);
+        r = s.getRangeInfo(range, ri);
         if (r.ok()) {
-            std::cout << "Range " << ri.rangeId << ":\n"
-                      << "  Start:          " << ri.rangeStart << "\n"
-                      << "  Length:         " << ri.rangeLength << "\n"
-                      << "  ReadLockEn:     " << ri.readLockEnabled << "\n"
-                      << "  WriteLockEn:    " << ri.writeLockEnabled << "\n"
-                      << "  ReadLocked:     " << ri.readLocked << "\n"
-                      << "  WriteLocked:    " << ri.writeLocked << "\n";
-        } else {
-            std::cerr << "Failed to get range info.\n";
+            printf("Range %u:\n", ri.rangeId);
+            printf("  Start:        %lu\n", (unsigned long)ri.rangeStart);
+            printf("  Length:       %lu\n", (unsigned long)ri.rangeLength);
+            printf("  ReadLockEn:   %d\n", ri.readLockEnabled);
+            printf("  WriteLockEn:  %d\n", ri.writeLockEnabled);
+            printf("  ReadLocked:   %d\n", ri.readLocked);
+            printf("  WriteLocked:  %d\n", ri.writeLocked);
         }
 
-    } else if (command == "configure-range") {
-        if (argc < 7) { std::cerr << "Usage: configure-range <pw> <range> <start> <len>\n"; return 1; }
-        r = sed->configureRange(std::stoul(argv[4]),
-                                 std::stoull(argv[5]), std::stoull(argv[6]),
-                                 argv[3]);
-        std::cout << (r.ok() ? "Range configured.\n" : "Failed.\n");
+    } else if (std::strcmp(command, "configure-range") == 0) {
+        if (argc < 7) { printf("Usage: configure-range <pw> <range> <start> <len>\n"); return 1; }
+        r = drive.configureRange(std::stoul(argv[4]),
+                                  std::stoull(argv[5]), std::stoull(argv[6]),
+                                  argv[3]);
+        printf("%s\n", r.ok() ? "Range configured." : "Failed.");
 
-    } else if (command == "enable-user") {
-        if (argc < 5) { std::cerr << "Usage: enable-user <admin1_pw> <user_id>\n"; return 1; }
-        auto* opal = sed->asOpal();
-        if (!opal) { std::cerr << "Not Opal\n"; return 1; }
-        r = opal->user().enableUser(argv[3], std::stoul(argv[4]));
-        std::cout << (r.ok() ? "User enabled.\n" : "Failed.\n");
+    } else if (std::strcmp(command, "setup-user") == 0) {
+        if (argc < 7) { printf("Usage: setup-user <admin1_pw> <user_id> <user_pw> <range>\n"); return 1; }
+        r = drive.setupUser(std::stoul(argv[4]), argv[5],
+                             std::stoul(argv[6]), argv[3]);
+        printf("%s\n", r.ok() ? "User setup complete." : "Failed.");
 
-    } else if (command == "set-password") {
-        if (argc < 6) { std::cerr << "Usage: set-password <auth_pw> <user_id> <new_pw>\n"; return 1; }
-        auto* opal = sed->asOpal();
-        if (!opal) { std::cerr << "Not Opal\n"; return 1; }
-        r = opal->user().setUserPassword(argv[3], std::stoul(argv[4]), argv[5], true);
-        std::cout << (r.ok() ? "Password set.\n" : "Failed.\n");
-
-    } else if (command == "crypto-erase") {
-        if (argc < 4) { std::cerr << "Missing admin1 password\n"; return 1; }
+    } else if (std::strcmp(command, "crypto-erase") == 0) {
+        if (argc < 4) { printf("Missing admin1 password\n"); return 1; }
         uint32_t range = (argc > 4) ? std::stoul(argv[4]) : 0;
-        auto* opal = sed->asOpal();
-        if (!opal) { std::cerr << "Not Opal\n"; return 1; }
-        r = opal->locking().cryptoErase(argv[3], range);
-        std::cout << (r.ok() ? "Crypto-erased.\n" : "Failed.\n");
+        r = drive.cryptoErase(range, argv[3]);
+        printf("%s\n", r.ok() ? "Crypto-erased." : "Failed.");
 
-    } else if (command == "revert") {
-        if (argc < 4) { std::cerr << "Missing SID password\n"; return 1; }
-        r = sed->revert(argv[3]);
-        std::cout << (r.ok() ? "Reverted to factory state.\n" : "Revert failed.\n");
+    } else if (std::strcmp(command, "revert") == 0) {
+        if (argc < 4) { printf("Missing SID password\n"); return 1; }
+        r = drive.revert(argv[3]);
+        printf("%s\n", r.ok() ? "Reverted to factory state." : "Revert failed.");
 
-    } else if (command == "psid-revert") {
-        if (argc < 4) { std::cerr << "Missing PSID\n"; return 1; }
-        auto* opal = sed->asOpal();
-        if (!opal) { std::cerr << "Not Opal\n"; return 1; }
-        r = opal->admin().psidRevert(argv[3]);
-        std::cout << (r.ok() ? "PSID revert complete.\n" : "PSID revert failed.\n");
+    } else if (std::strcmp(command, "psid-revert") == 0) {
+        if (argc < 4) { printf("Missing PSID\n"); return 1; }
+        r = drive.psidRevert(argv[3]);
+        printf("%s\n", r.ok() ? "PSID revert complete." : "PSID revert failed.");
 
     } else {
-        std::cerr << "Unknown command: " << command << "\n";
+        printf("Unknown command: %s\n", command);
         printUsage(argv[0]);
         return 1;
     }
 
     if (r.failed()) {
-        std::cerr << "Error: " << r.message() << "\n";
+        printf("Error: %s\n", r.message().c_str());
     }
 
-    libsed::shutdown();
     return r.ok() ? 0 : 1;
 }

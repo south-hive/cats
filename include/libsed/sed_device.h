@@ -12,9 +12,15 @@
 
 namespace libsed {
 
-/// Unified SED device interface
-/// Auto-detects SSC and provides both generic and SSC-specific access
-class SedDevice {
+/// @deprecated Use SedDrive instead. SedDevice will be removed in a future version.
+///
+/// SedDrive provides the same functionality with a simpler API:
+///   SedDrive drive("/dev/nvme0");
+///   drive.query();
+///   drive.takeOwnership("password");
+///
+/// See docs/tc_dev_guide.md for migration guide.
+class [[deprecated("Use SedDrive instead — see docs/tc_dev_guide.md")]] SedDevice {
 public:
     /// Open a device by path, auto-detect transport and SSC
     static std::unique_ptr<SedDevice> open(const std::string& devicePath);
