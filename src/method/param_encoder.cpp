@@ -53,14 +53,10 @@ Bytes ParamEncoder::encodeStartSession(uint32_t hostSessionId,
 Bytes ParamEncoder::encodeProperties(const HostProperties& props) {
     TokenEncoder enc;
 
-    // TCG Core Spec: Properties method parameter is a named value pair
-    //   STARTNAME "HostProperties" STARTLIST { pairs... } ENDLIST ENDNAME
-    // Each property is a named value pair: STARTNAME string uint ENDNAME
-    // sedutil reference: DtaDevOpal.cpp properties() uses this exact encoding.
-    enc.startName();
-    enc.encodeString("HostProperties");
-    enc.startList();
-
+    // sedutil sends property name-value pairs directly without outer
+    // "HostProperties" STARTNAME wrapper. Each property is:
+    //   STARTNAME string uint ENDNAME
+    // These go directly into the method call's STARTLIST...ENDLIST.
     enc.startName(); enc.encodeString("MaxComPacketSize");
     enc.encodeUint(props.maxComPacketSize); enc.endName();
 
@@ -78,9 +74,6 @@ Bytes ParamEncoder::encodeProperties(const HostProperties& props) {
 
     enc.startName(); enc.encodeString("MaxMethods");
     enc.encodeUint(props.maxMethods); enc.endName();
-
-    enc.endList();
-    enc.endName();
 
     return enc.data();
 }

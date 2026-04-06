@@ -348,10 +348,8 @@ static Packet buildSedutil_A1_Properties() {
     DtaCommand cmd;
     cmd.reset(OPAL_SMUID_UID, PROPERTIES);
 
-    cmd.addToken(OPAL_TOKEN::STARTLIST);
-
-    cmd.addToken(OPAL_TOKEN::STARTNAME);
-    cmd.addToken("HostProperties");
+    // Real sedutil-cli sends property pairs directly without
+    // "HostProperties" STARTNAME wrapper (confirmed via -vvvvv dump).
     cmd.addToken(OPAL_TOKEN::STARTLIST);
 
     cmd.addToken(OPAL_TOKEN::STARTNAME);
@@ -384,8 +382,6 @@ static Packet buildSedutil_A1_Properties() {
     cmd.addToken((uint64_t)1);
     cmd.addToken(OPAL_TOKEN::ENDNAME);
 
-    cmd.addToken(OPAL_TOKEN::ENDLIST);
-    cmd.addToken(OPAL_TOKEN::ENDNAME);
     cmd.addToken(OPAL_TOKEN::ENDLIST);
 
     cmd.complete();
