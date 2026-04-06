@@ -2,11 +2,13 @@
 /// Example: Lock and unlock an Opal drive
 
 #include <libsed/sed_library.h>
+#include <libsed/transport/transport_factory.h>
+#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <string>
 
 void printUsage(const char* prog) {
-    std::cerr << "Usage: " << prog << " <device> <lock|unlock> <password> [range_id] [user_id]\n";
+    std::cerr << "Usage: " << prog << " <device> <lock|unlock> <password> [range_id] [user_id] [--dump] [--log]\n";
 }
 
 /// @scenario Opal 드라이브의 잠금 및 잠금 해제 작업
@@ -24,6 +26,9 @@ void printUsage(const char* prog) {
 int main(int argc, char* argv[]) {
     if (argc < 4) { printUsage(argv[0]); return 1; }
 
+    libsed::cli::CliOptions cliOpts;
+    libsed::cli::scanFlags(argc, argv, cliOpts);
+
     const std::string device   = argv[1];
     const std::string action   = argv[2];
     const std::string password = argv[3];
@@ -32,9 +37,15 @@ int main(int argc, char* argv[]) {
 
     libsed::initialize();
 
-    auto sed = libsed::SedDevice::open(device);
+    auto rawTransport = libsed::TransportFactory::createNvme(device);
+    if (!rawTransport || !rawTransport->isOpen()) {
+        std::cerr << "Failed to open device: " << device << "\n";
+        return 1;
+    }
+    auto transport = libsed::cli::applyLogging(rawTransport, cliOpts);
+    auto sed = libsed::SedDevice::open(transport);
     if (!sed) {
-        std::cerr << "Failed to open device\n";
+        std::cerr << "Not a TCG SED device: " << device << "\n";
         return 1;
     }
 

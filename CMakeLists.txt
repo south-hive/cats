@@ -237,34 +237,23 @@ if(LIBSED_BUILD_TOOLS)
     add_executable(sed_discover  tools/sed_discover.cpp)
     add_executable(sed_manage    tools/sed_manage.cpp)
     add_executable(token_dump    tools/token_dump.cpp)
-    add_executable(props_diff    tools/props_diff.cpp)
-    add_executable(props_diag    tools/props_diag.cpp)
-
-    add_executable(ioctl_validator
-        tools/ioctl_validator.cpp
-        third_party/sedutil/DtaCommand.cpp
-        third_party/sedutil/DtaHexDump.cpp
-    )
-    target_include_directories(ioctl_validator PRIVATE third_party/sedutil)
-
-    add_executable(protocol_trace
-        tools/protocol_trace.cpp
-        third_party/sedutil/DtaCommand.cpp
-        third_party/sedutil/DtaHexDump.cpp
-    )
-    target_include_directories(protocol_trace PRIVATE third_party/sedutil)
 
     target_link_libraries(sed_discover    PRIVATE libsed)
     target_link_libraries(sed_manage      PRIVATE libsed)
     target_link_libraries(token_dump      PRIVATE libsed)
-    target_link_libraries(props_diff      PRIVATE libsed)
-    target_link_libraries(props_diag     PRIVATE libsed)
-    target_link_libraries(ioctl_validator PRIVATE libsed)
-    target_link_libraries(protocol_trace  PRIVATE libsed)
 endif()
 
-# ── ioctl_validator as CTest (offline, no hardware) ──
-if(LIBSED_BUILD_TOOLS AND LIBSED_BUILD_TESTS)
+# ── Integration tests (offline, no hardware) ──
+if(LIBSED_BUILD_TESTS)
+    add_executable(ioctl_validator
+        tests/integration/ioctl_validator.cpp
+        third_party/sedutil/DtaCommand.cpp
+        third_party/sedutil/DtaHexDump.cpp
+    )
+    target_include_directories(ioctl_validator PRIVATE third_party/sedutil)
+    target_link_libraries(ioctl_validator PRIVATE libsed)
+    set_target_properties(ioctl_validator PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
     add_test(NAME ioctl_validator COMMAND ioctl_validator)
 endif()
 

@@ -28,6 +28,7 @@
 #include <atomic>
 #include <sstream>
 #include <chrono>
+#include <iostream>
 
 namespace libsed {
 
@@ -35,11 +36,25 @@ class TokenDecoder;
 
 namespace debug {
 
+/// Configuration for CommandLogger output modes.
+struct LoggerConfig {
+    bool toFile = true;              ///< Write to auto-named log file
+    bool toStream = false;           ///< Write to an ostream (e.g., stderr)
+    std::ostream* stream = nullptr;  ///< Target stream when toStream=true
+    bool alwaysHex = false;          ///< Show raw hex on every command (not just errors)
+    std::string logDir = ".";        ///< Directory for log file (when toFile=true)
+};
+
 class CommandLogger {
 public:
     explicit CommandLogger(const std::string& logDir = ".");
     CommandLogger(const std::string& filePath, bool explicit_path);
+    explicit CommandLogger(const LoggerConfig& config);
     ~CommandLogger();
+
+    /// Create a dumper that writes full hex to a stream (default: stderr)
+    static std::shared_ptr<CommandLogger> createDumper(
+        std::ostream& os = std::cerr);
 
     CommandLogger(const CommandLogger&) = delete;
     CommandLogger& operator=(const CommandLogger&) = delete;
@@ -78,6 +93,8 @@ private:
 
     mutable std::mutex    mutex_;
     std::ofstream         file_;
+    std::ostream*         stream_ = nullptr;   ///< Optional external stream (--dump)
+    bool                  alwaysHex_ = false;   ///< Hex dump on every command
     std::string           filePath_;
     std::atomic<uint32_t> cmdCount_{0};
 

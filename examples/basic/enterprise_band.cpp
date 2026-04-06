@@ -2,6 +2,8 @@
 /// Example: Enterprise SSC band management
 
 #include <libsed/sed_library.h>
+#include <libsed/transport/transport_factory.h>
+#include <libsed/cli/cli_common.h>
 #include <iostream>
 
 /// @scenario Enterprise SSC 드라이브의 Band 관리 (잠금/해제/정보 조회)
@@ -18,9 +20,12 @@
 ///   - info: Band 시작 LBA, 길이, 현재 잠금 상태 정상 출력
 int main(int argc, char* argv[]) {
     if (argc < 4) {
-        std::cerr << "Usage: " << argv[0] << " <device> <band_id> <password> [lock|unlock|info]\n";
+        std::cerr << "Usage: " << argv[0] << " <device> <band_id> <password> [lock|unlock|info] [--dump] [--log]\n";
         return 1;
     }
+
+    libsed::cli::CliOptions cliOpts;
+    libsed::cli::scanFlags(argc, argv, cliOpts);
 
     const std::string device   = argv[1];
     uint32_t bandId            = std::stoul(argv[2]);
@@ -29,9 +34,15 @@ int main(int argc, char* argv[]) {
 
     libsed::initialize();
 
-    auto sed = libsed::SedDevice::open(device);
+    auto rawTransport = libsed::TransportFactory::createNvme(device);
+    if (!rawTransport || !rawTransport->isOpen()) {
+        std::cerr << "Failed to open device: " << device << "\n";
+        return 1;
+    }
+    auto transport = libsed::cli::applyLogging(rawTransport, cliOpts);
+    auto sed = libsed::SedDevice::open(transport);
     if (!sed) {
-        std::cerr << "Failed to open device\n";
+        std::cerr << "Not a TCG SED device: " << device << "\n";
         return 1;
     }
 

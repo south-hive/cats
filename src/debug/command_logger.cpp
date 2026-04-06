@@ -249,6 +249,27 @@ CommandLogger::CommandLogger(const std::string& filePath, bool /*explicit_path*/
     file_.open(filePath_, std::ios::out | std::ios::trunc);
 }
 
+CommandLogger::CommandLogger(const LoggerConfig& config)
+    : stream_(config.toStream ? config.stream : nullptr),
+      alwaysHex_(config.alwaysHex) {
+    if (config.toFile) {
+        std::string dir = config.logDir;
+        if (dir.empty()) dir = ".";
+        if (dir.back() != '/') dir += '/';
+        filePath_ = dir + getExecutableName() + "_" + getTimestamp() + ".sed.log";
+        file_.open(filePath_, std::ios::out | std::ios::trunc);
+    }
+}
+
+std::shared_ptr<CommandLogger> CommandLogger::createDumper(std::ostream& os) {
+    LoggerConfig config;
+    config.toFile = false;
+    config.toStream = true;
+    config.stream = &os;
+    config.alwaysHex = true;
+    return std::make_shared<CommandLogger>(config);
+}
+
 CommandLogger::~CommandLogger() {
     if (file_.is_open()) { file_.flush(); file_.close(); }
 }
@@ -661,9 +682,14 @@ void CommandLogger::logCommand(const char* direction,
         if (!isSend)
             os << std::setw(8) << std::right << elapsedMs << "ms";
         os << "\n";
+        if (alwaysHex_) writeRawHex(os, data, len);
 
-        std::lock_guard<std::mutex> lk(mutex_);
-        if (file_.is_open()) { file_ << os.str(); file_.flush(); }
+        {
+            std::lock_guard<std::mutex> lk(mutex_);
+            std::string text = os.str();
+            if (file_.is_open()) { file_ << text; file_.flush(); }
+            if (stream_) { *stream_ << text; stream_->flush(); }
+        }
         return;
     }
 
@@ -677,9 +703,14 @@ void CommandLogger::logCommand(const char* direction,
         if (!isSend)
             os << std::setw(8) << std::right << elapsedMs << "ms";
         os << "\n";
+        if (alwaysHex_) writeRawHex(os, data, len);
 
-        std::lock_guard<std::mutex> lk(mutex_);
-        if (file_.is_open()) { file_ << os.str(); file_.flush(); }
+        {
+            std::lock_guard<std::mutex> lk(mutex_);
+            std::string text = os.str();
+            if (file_.is_open()) { file_ << text; file_.flush(); }
+            if (stream_) { *stream_ << text; stream_->flush(); }
+        }
         return;
     }
 
@@ -744,14 +775,18 @@ void CommandLogger::logCommand(const char* direction,
             os << "    " << result << "\n";
     }
 
-    // ── Raw hex only on error ──
+    // ── Raw hex: on error always, on success if alwaysHex_ ──
     if (isError) {
         os << "    --- RAW (error response) ---\n";
+        writeRawHex(os, data, len);
+    } else if (alwaysHex_) {
         writeRawHex(os, data, len);
     }
 
     std::lock_guard<std::mutex> lk(mutex_);
-    if (file_.is_open()) { file_ << os.str(); file_.flush(); }
+    std::string text = os.str();
+    if (file_.is_open()) { file_ << text; file_.flush(); }
+    if (stream_) { *stream_ << text; stream_->flush(); }
 }
 
 } // namespace debug

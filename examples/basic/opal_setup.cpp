@@ -2,6 +2,8 @@
 /// Example: Full initial Opal setup (take ownership + activate + configure)
 
 #include <libsed/sed_library.h>
+#include <libsed/transport/transport_factory.h>
+#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <string>
 
@@ -20,18 +22,27 @@
 ///   - 모든 단계 완료 후 드라이브가 잠금 가능 상태로 전환됨
 int main(int argc, char* argv[]) {
     if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <device> <new_sid_password>\n";
+        std::cerr << "Usage: " << argv[0] << " <device> <new_sid_password> [--dump] [--log]\n";
         return 1;
     }
+
+    libsed::cli::CliOptions cliOpts;
+    libsed::cli::scanFlags(argc, argv, cliOpts);
 
     const std::string device = argv[1];
     const std::string sidPassword = argv[2];
 
     libsed::initialize();
 
-    auto sed = libsed::SedDevice::open(device);
+    auto rawTransport = libsed::TransportFactory::createNvme(device);
+    if (!rawTransport || !rawTransport->isOpen()) {
+        std::cerr << "Failed to open device: " << device << "\n";
+        return 1;
+    }
+    auto transport = libsed::cli::applyLogging(rawTransport, cliOpts);
+    auto sed = libsed::SedDevice::open(transport);
     if (!sed) {
-        std::cerr << "Failed to open device\n";
+        std::cerr << "Not a TCG SED device: " << device << "\n";
         return 1;
     }
 

@@ -2,6 +2,8 @@
 /// Example: Perform Level 0 Discovery and display drive information
 
 #include <libsed/sed_library.h>
+#include <libsed/transport/transport_factory.h>
+#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <iomanip>
 
@@ -20,16 +22,25 @@
 ///   - baseComId, numComIds 유효한 값 반환
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <device>\n"
+        std::cerr << "Usage: " << argv[0] << " <device> [--dump] [--log]\n"
                   << "Example: " << argv[0] << " /dev/sda\n";
         return 1;
     }
 
+    libsed::cli::CliOptions cliOpts;
+    libsed::cli::scanFlags(argc, argv, cliOpts);
+
     libsed::initialize();
 
-    auto device = libsed::SedDevice::open(argv[1]);
-    if (!device) {
+    auto rawTransport = libsed::TransportFactory::createNvme(argv[1]);
+    if (!rawTransport || !rawTransport->isOpen()) {
         std::cerr << "Failed to open device: " << argv[1] << "\n";
+        return 1;
+    }
+    auto transport = libsed::cli::applyLogging(rawTransport, cliOpts);
+    auto device = libsed::SedDevice::open(transport);
+    if (!device) {
+        std::cerr << "Not a TCG SED device: " << argv[1] << "\n";
         return 1;
     }
 

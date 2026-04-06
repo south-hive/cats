@@ -21,6 +21,14 @@ std::shared_ptr<ITransport> LoggingTransport::wrap(
     return std::make_shared<LoggingTransport>(std::move(inner), std::move(logger));
 }
 
+std::shared_ptr<ITransport> LoggingTransport::wrapDump(
+    std::shared_ptr<ITransport> inner,
+    std::ostream& os)
+{
+    auto logger = CommandLogger::createDumper(os);
+    return std::make_shared<LoggingTransport>(std::move(inner), std::move(logger));
+}
+
 Result LoggingTransport::ifSend(uint8_t protocolId, uint16_t comId,
                                 ByteSpan payload)
 {
