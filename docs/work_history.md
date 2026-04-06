@@ -1,5 +1,65 @@
 # Work History
 
+## Session 2026-04-06 (2) — SimTransport 완성 + 91 Tests
+
+### What was done
+
+**이전 세션(2026-04-06) 미구현 항목 전부 처리:**
+
+1. **StackReset → LockOnReset 자동 잠금** — StackReset 시 LockOnReset Range를 자동 ReadLocked/WriteLocked + MBRDone=false 리셋
+2. **ACE 권한 정밀 검사** — `aceRangeAccess_` 맵 추가. `assignUserToRange`의 ACE Set 요청에서 Authority UID 추출 → Range 매핑. User가 할당되지 않은 Range Set 시 NotAuthorized(0x01)
+3. **PSID Revert** — `psid_` 별도 관리. StartSession에서 AUTH_PSID 인증 시 psid_ 값으로 비교
+4. **Multi-table DataStore** — `dataStores_` map (tableNumber → Bytes). `tcgWriteDataStoreN`/`tcgReadDataStoreN`의 테이블 번호별 독립 데이터
+5. **RevertSP 권한 검사** — write + authenticated 필수
+
+**테스트 추가 (89 → 91):**
+- SIM5.PsidRevert — 커스텀 PSID로 공장 초기화, SID 비밀번호 분실 복구
+- SIM5.MultiTableDataStore — 테이블 0/1 격리 검증
+- SIM3.MultiUserRangeIsolation — User1→Range2 교차 접근 NotAuthorized 검증 추가
+
+### Current state
+
+- `scenario_tests` — **91/91 PASS**
+- `ioctl_validator` — 17/17 PASS
+- `device_runner` — 빌드 OK
+- 커밋: `525c370`
+
+### 다음 세션에서 이어서 할 수 있는 작업
+
+| 항목 | 난이도 | 설명 |
+|------|--------|------|
+| **Enterprise Band 시나리오 코드** | 중 | SimTransport에 Enterprise SSC(BandMaster/EraseMaster) 인증/Band 관리 추가. `test_scenarios.md` L6의 TS-6A-001~003 구현. 현재 SimTransport는 Opal만 지원. |
+| **Device Runner 추가 테스트** | 중 | MBR R/W, DataStore R/W, CryptoErase, Multi-User 등 하드웨어 테스트 추가. 현재 Level 1(읽기) + Level 2(Ownership~Revert) |
+| **SED 소프트웨어 시뮬레이터** | 상 | CLAUDE.md "다음 작업"에 기록된 전체 SimTransport → 독립 SED Simulator. 현재 SimTransport는 테스트 목적이지만, 독립 실행형 시뮬레이터로 확장 가능 |
+| **Fault injection + SimTransport** | 중 | L5의 Fault injection 테스트를 SimTransport와 결합. 현재 MockTransport에서만 fault 테스트 |
+| **102개 시나리오 전부 코드화** | 하 | 문서의 102개 중 91개 구현. 나머지: Enterprise L6(5개), 일부 L3/L4/L5 복합 시나리오 |
+
+### 핵심 아키텍처 참조 (빠른 이해용)
+
+```
+SimTransport 내부 상태:
+  cpins_          : Authority → PIN (C_PIN 테이블)
+  ranges_         : rangeId → RangeState (start, length, RLE/WLE, RL/WL, LockOnReset, activeKey)
+  authorities_    : Authority UID → enabled
+  aceRangeAccess_ : Authority UID → {허용된 rangeId 집합}
+  dataStores_     : tableNumber → Bytes
+  sessions_       : TSN → SessionState (hsn, spUid, write, authUid, authenticated)
+  mbrEnabled_, mbrDone_, mbrData_
+  psid_, msid_
+  adminSpLifecycle_, lockingSpLifecycle_
+
+Method status 전파 방식:
+  Session::sendMethod() → 항상 Success 반환
+  에러는 RawResult.methodResult에만 저장
+  테스트에서: CHECK(!raw.methodResult.isSuccess()) 사용
+
+Session 소멸자:
+  ~Session()이 활성 세션을 auto-close → 테스트에서 반드시 close 응답 큐잉 필요 (MockTransport)
+  SimTransport에서는 자동 처리됨
+```
+
+---
+
 ## Session 2026-04-06 — Test Scenarios (102개 문서) + SimTransport + 89 Tests + Device Runner
 
 ### What was done
