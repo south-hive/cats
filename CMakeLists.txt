@@ -98,8 +98,14 @@ set(LIBSED_SOURCES
     src/debug/command_logger.cpp
     src/debug/logging_transport.cpp
 
-    # Eval API (flat step-by-step)
+    # Eval API (flat step-by-step) — split by category
     src/eval/eval_api.cpp
+    src/eval/eval_api_table.cpp
+    src/eval/eval_api_locking.cpp
+    src/eval/eval_api_user.cpp
+    src/eval/eval_api_enterprise.cpp
+    src/eval/eval_api_tclib.cpp
+    src/eval/eval_api_nvme.cpp
     src/eval/eval_composite.cpp
 )
 
