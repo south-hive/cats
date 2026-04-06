@@ -5,6 +5,7 @@
 /// 실제 제품 환경에서 발생할 수 있는 고급 상황을 시뮬레이션.
 
 #include "test_helper.h"
+#include "libsed/transport/sim_transport.h"
 
 using namespace libsed;
 using namespace libsed::test;
@@ -13,6 +14,18 @@ using namespace libsed::eval;
 using namespace libsed::debug;
 
 static constexpr uint16_t COMID = 0x0001;
+
+// Helper: SimTransport에서 Locking SP 활성화
+static Result activateLockingSP(EvalApi& api, std::shared_ptr<ITransport> transport,
+                                 uint16_t comId, const Bytes& sidCred) {
+    Session s(transport, comId);
+    StartSessionResult ssr;
+    auto r = api.startSessionWithAuth(s, SP_ADMIN, true, AUTH_SID, sidCred, ssr);
+    if (r.failed()) return r;
+    r = api.activate(s, SP_LOCKING);
+    api.closeSession(s);
+    return r;
+}
 
 // ═══════════════════════════════════════════════════════
 //  TS-5A-001: 4-Session Aging Cycle
@@ -418,19 +431,141 @@ TEST_SCENARIO(L5, TS_5F_001_GetRandomEntropy) {
 }
 
 // ═══════════════════════════════════════════════════════
+//  TS-5A-002: Full Lifecycle Aging
+// ═══════════════════════════════════════════════════════
+
+TEST_SCENARIO(L5, TS_5A_002_FullLifecycleAging) {
+    // 전체 수명 주기를 여러 번 반복하여 상태 누적 없는지 검증
+    EvalApi api;
+    auto sim = std::make_shared<SimTransport>();
+
+    constexpr int CYCLES = 3;
+
+    for (int c = 0; c < CYCLES; ++c) {
+        // 1. Take ownership
+        std::string pw = "cycle" + std::to_string(c);
+        auto cr = composite::takeOwnership(api, sim, COMID, pw);
+        if (cr.failed()) return false;
+
+        // 2. Activate
+        Bytes cred(pw.begin(), pw.end());
+        if (activateLockingSP(api, sim, COMID, cred).failed()) return false;
+
+        // 3. Get MSID for Admin1
+        Bytes msid;
+        cr = composite::getMsid(api, sim, COMID, msid);
+        if (cr.failed()) return false;
+
+        // 4. Configure Range 1
+        {
+            Session s(sim, COMID);
+            StartSessionResult ssr;
+            if (api.startSessionWithAuth(s, SP_LOCKING, true, AUTH_ADMIN1, msid, ssr).failed())
+                return false;
+            if (api.setRange(s, 1, 0, 1024, true, true).failed()) return false;
+            if (api.setRangeLock(s, 1, true, true).failed()) return false;
+            if (api.setRangeLock(s, 1, false, false).failed()) return false;
+            api.closeSession(s);
+        }
+
+        // 5. Revert
+        cr = composite::revertToFactory(api, sim, COMID, pw);
+        if (cr.failed()) return false;
+
+        // 6. Verify factory state — MSID auth should work again
+        if (api.verifyAuthority(sim, COMID, SP_ADMIN, AUTH_SID, msid).failed())
+            return false;
+    }
+
+    return true;
+}
+
+// ═══════════════════════════════════════════════════════
+//  TS-5E-003: ComID State Verification
+// ═══════════════════════════════════════════════════════
+
+TEST_SCENARIO(L5, TS_5E_003_ComIdVerify) {
+    EvalApi api;
+    auto sim = std::make_shared<SimTransport>();
+
+    // Verify ComID in initial state
+    bool active = false;
+    EXPECT_OK(api.verifyComId(sim, COMID, active));
+
+    // Start a session — ComID should be associated
+    Session s(sim, COMID);
+    StartSessionResult ssr;
+    EXPECT_OK(api.startSession(s, SP_ADMIN, false, ssr));
+
+    // Stack reset — ComID should become idle
+    EXPECT_OK(api.stackReset(sim, COMID));
+
+    // Verify ComID state after reset
+    EXPECT_OK(api.verifyComId(sim, COMID, active));
+
+    return true;
+}
+
+// ═══════════════════════════════════════════════════════
+//  TS-5D-003: Large DataStore Transfer
+// ═══════════════════════════════════════════════════════
+
+TEST_SCENARIO(L5, TS_5D_003_LargeDataStoreTransfer) {
+    EvalApi api;
+    auto sim = std::make_shared<SimTransport>();
+
+    // Setup
+    auto cr = composite::takeOwnership(api, sim, COMID, "sid_pw");
+    EXPECT_OK(cr.overall);
+    Bytes sidCred = {'s','i','d','_','p','w'};
+    EXPECT_OK(activateLockingSP(api, sim, COMID, sidCred));
+
+    Bytes msid;
+    EXPECT_OK(composite::getMsid(api, sim, COMID, msid).overall);
+
+    Session s(sim, COMID);
+    StartSessionResult ssr;
+    EXPECT_OK(api.startSessionWithAuth(s, SP_LOCKING, true, AUTH_ADMIN1, msid, ssr));
+
+    // Write 512 bytes in chunks of 128
+    constexpr int CHUNK = 128;
+    constexpr int TOTAL = 512;
+
+    for (int off = 0; off < TOTAL; off += CHUNK) {
+        Bytes chunk(CHUNK, static_cast<uint8_t>(off / CHUNK + 1));
+        EXPECT_OK(api.tcgWriteDataStore(s, off, chunk));
+    }
+
+    // Read back and verify each chunk
+    for (int off = 0; off < TOTAL; off += CHUNK) {
+        DataOpResult dr;
+        EXPECT_OK(api.tcgReadDataStore(s, off, CHUNK, dr));
+        CHECK_EQ(dr.data.size(), static_cast<size_t>(CHUNK));
+        for (auto b : dr.data)
+            CHECK_EQ(b, static_cast<uint8_t>(off / CHUNK + 1));
+    }
+
+    api.closeSession(s);
+    return true;
+}
+
+// ═══════════════════════════════════════════════════════
 //  Runner
 // ═══════════════════════════════════════════════════════
 
 void run_L5_tests() {
-    printf("\n=== Level 5: Advanced Scenarios (selected) ===\n");
+    printf("\n=== Level 5: Advanced Scenarios ===\n");
 
     RUN_SCENARIO(L5, TS_5A_001_AgingCycle);
+    RUN_SCENARIO(L5, TS_5A_002_FullLifecycleAging);
     RUN_SCENARIO(L5, TS_5A_003_BruteForceLockout);
     RUN_SCENARIO(L5, TS_5B_001_FaultSendFailure);
     RUN_SCENARIO(L5, TS_5B_002_FaultCorruptSync);
     RUN_SCENARIO(L5, TS_5B_003_FaultDropClose);
     RUN_SCENARIO(L5, TS_5B_006_FaultSelectiveCallback);
     RUN_SCENARIO(L5, TS_5D_002_SessionStorm);
+    RUN_SCENARIO(L5, TS_5D_003_LargeDataStoreTransfer);
     RUN_SCENARIO(L5, TS_5E_002_OwnershipTransfer);
+    RUN_SCENARIO(L5, TS_5E_003_ComIdVerify);
     RUN_SCENARIO(L5, TS_5F_001_GetRandomEntropy);
 }

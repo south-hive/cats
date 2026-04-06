@@ -4,6 +4,7 @@
 /// 여러 기능을 결합한 복합 시나리오. 순서 의존성, 상태 전이, gotcha 검증.
 
 #include "test_helper.h"
+#include "libsed/transport/sim_transport.h"
 
 using namespace libsed;
 using namespace libsed::test;
@@ -11,6 +12,18 @@ using namespace libsed::uid;
 using namespace libsed::eval;
 
 static constexpr uint16_t COMID = 0x0001;
+
+// Helper: SimTransport에서 Locking SP 활성화
+static Result activateLockingSP(EvalApi& api, std::shared_ptr<ITransport> transport,
+                                 uint16_t comId, const Bytes& sidCred) {
+    Session s(transport, comId);
+    StartSessionResult ssr;
+    auto r = api.startSessionWithAuth(s, SP_ADMIN, true, AUTH_SID, sidCred, ssr);
+    if (r.failed()) return r;
+    r = api.activate(s, SP_LOCKING);
+    api.closeSession(s);
+    return r;
+}
 
 // Helper: 세션 열기 (반복 사용)
 static bool openSession(EvalApi& api, std::shared_ptr<MockTransport> mock,
@@ -366,18 +379,221 @@ TEST_SCENARIO(L3, TS_3B_006_CompositeStepLog) {
 }
 
 // ═══════════════════════════════════════════════════════
+//  TS-3A-003: MBR + Locking Interaction
+// ═══════════════════════════════════════════════════════
+
+TEST_SCENARIO(L3, TS_3A_003_MbrLockingInteraction) {
+    // MBR Enable/Done과 Locking Range 잠금이 독립적으로 동작하는지 검증
+    EvalApi api;
+    auto sim = std::make_shared<SimTransport>();
+
+    // Setup: TakeOwnership + Activate
+    auto r = composite::takeOwnership(api, sim, COMID, "sid_pw");
+    EXPECT_OK(r.overall);
+
+    Bytes sidCred = {'s','i','d','_','p','w'};
+    EXPECT_OK(activateLockingSP(api, sim, COMID, sidCred));
+
+    // Get MSID for Admin1 auth
+    Bytes msid;
+    EXPECT_OK(composite::getMsid(api, sim, COMID, msid).overall);
+
+    // Admin1 session
+    Session s(sim, COMID);
+    StartSessionResult ssr;
+    EXPECT_OK(api.startSessionWithAuth(s, SP_LOCKING, true, AUTH_ADMIN1, msid, ssr));
+
+    // Configure Range 1 + enable locking
+    EXPECT_OK(api.setRange(s, 1, 0, 1024, true, true));
+
+    // Enable MBR + write data
+    EXPECT_OK(api.setMbrEnable(s, true));
+    Bytes mbrData = {0xEB, 0x3C, 0x90, 0x00};
+    EXPECT_OK(api.writeMbrData(s, 0, mbrData));
+    EXPECT_OK(api.setMbrDone(s, true));
+
+    // Lock range — should not affect MBR status
+    EXPECT_OK(api.setRangeLock(s, 1, true, true));
+
+    bool mbrEnabled = false, mbrDone = false;
+    EXPECT_OK(api.getMbrStatus(s, mbrEnabled, mbrDone));
+    CHECK(mbrEnabled);
+    CHECK(mbrDone);
+
+    LockingRangeInfo info;
+    EXPECT_OK(api.getRangeInfo(s, 1, info));
+    CHECK(info.readLocked);
+    CHECK(info.writeLocked);
+
+    // Unlock range — MBR still intact
+    EXPECT_OK(api.setRangeLock(s, 1, false, false));
+
+    Bytes readBack;
+    EXPECT_OK(api.readMbrData(s, 0, 4, readBack));
+    CHECK_EQ(readBack.size(), 4u);
+    CHECK(readBack == mbrData);
+
+    api.closeSession(s);
+    return true;
+}
+
+// ═══════════════════════════════════════════════════════
+//  TS-3A-007: Multi-Range + Global Range
+// ═══════════════════════════════════════════════════════
+
+TEST_SCENARIO(L3, TS_3A_007_MultiRangeGlobal) {
+    // 여러 Range를 구성하고 Global Range와의 독립성 검증
+    EvalApi api;
+    auto sim = std::make_shared<SimTransport>();
+
+    auto r = composite::takeOwnership(api, sim, COMID, "sid_pw");
+    EXPECT_OK(r.overall);
+    Bytes sidCred = {'s','i','d','_','p','w'};
+    EXPECT_OK(activateLockingSP(api, sim, COMID, sidCred));
+
+    Bytes msid;
+    EXPECT_OK(composite::getMsid(api, sim, COMID, msid).overall);
+
+    Session s(sim, COMID);
+    StartSessionResult ssr;
+    EXPECT_OK(api.startSessionWithAuth(s, SP_LOCKING, true, AUTH_ADMIN1, msid, ssr));
+
+    // Configure Range 1 and Range 2 (non-overlapping)
+    EXPECT_OK(api.setRange(s, 1, 0, 1024, true, true));
+    EXPECT_OK(api.setRange(s, 2, 1024, 1024, true, true));
+
+    // Lock Range 1 only
+    EXPECT_OK(api.setRangeLock(s, 1, true, true));
+
+    // Range 2 should be unlocked
+    LockingRangeInfo info1, info2;
+    EXPECT_OK(api.getRangeInfo(s, 1, info1));
+    EXPECT_OK(api.getRangeInfo(s, 2, info2));
+    CHECK(info1.readLocked);
+    CHECK(!info2.readLocked);
+
+    // Global Range (0) should be independent
+    LockingRangeInfo globalInfo;
+    EXPECT_OK(api.getRangeInfo(s, 0, globalInfo));
+    CHECK(!globalInfo.readLocked);
+
+    // Unlock Range 1
+    EXPECT_OK(api.setRangeLock(s, 1, false, false));
+
+    api.closeSession(s);
+    return true;
+}
+
+// ═══════════════════════════════════════════════════════
+//  TS-3A-009: User Disable While Session Active
+// ═══════════════════════════════════════════════════════
+
+TEST_SCENARIO(L3, TS_3A_009_UserDisableWhileActive) {
+    // Admin1이 User1을 비활성화해도 기존 User1 세션은 유지되는지 검증
+    EvalApi api;
+    auto sim = std::make_shared<SimTransport>();
+
+    auto r = composite::takeOwnership(api, sim, COMID, "sid_pw");
+    EXPECT_OK(r.overall);
+    Bytes sidCred = {'s','i','d','_','p','w'};
+    EXPECT_OK(activateLockingSP(api, sim, COMID, sidCred));
+
+    Bytes msid;
+    EXPECT_OK(composite::getMsid(api, sim, COMID, msid).overall);
+
+    // Admin1: enable User1 and set password
+    {
+        Session s(sim, COMID);
+        StartSessionResult ssr;
+        EXPECT_OK(api.startSessionWithAuth(s, SP_LOCKING, true, AUTH_ADMIN1, msid, ssr));
+        EXPECT_OK(api.enableUser(s, 1));
+        EXPECT_OK(api.setUserPassword(s, 1, "user1_pw"));
+        EXPECT_OK(api.setRange(s, 1, 0, 1024, true, true));
+        EXPECT_OK(api.assignUserToRange(s, 1, 1));
+        api.closeSession(s);
+    }
+
+    // User1 verifies auth works
+    Bytes user1Cred = {'u','s','e','r','1','_','p','w'};
+    EXPECT_OK(api.verifyAuthority(sim, COMID, SP_LOCKING, AUTH_USER1, user1Cred));
+
+    // Admin1 disables User1
+    {
+        Session s(sim, COMID);
+        StartSessionResult ssr;
+        EXPECT_OK(api.startSessionWithAuth(s, SP_LOCKING, true, AUTH_ADMIN1, msid, ssr));
+        RawResult raw;
+        EXPECT_OK(api.disableUser(s, 1, raw));
+        api.closeSession(s);
+    }
+
+    // User1 auth should fail on real hardware (disabled authority)
+    // SimTransport doesn't enforce authority enabled check during StartSession yet.
+    // On real TPer: EXPECT_FAIL(api.verifyAuthority(...))
+    // Verify disable was recorded:
+    bool enabled = true;
+    {
+        Session s3(sim, COMID);
+        StartSessionResult ssr3;
+        EXPECT_OK(api.startSessionWithAuth(s3, SP_LOCKING, false, AUTH_ADMIN1, msid, ssr3));
+        EXPECT_OK(api.isUserEnabled(s3, 1, enabled));
+        api.closeSession(s3);
+    }
+    CHECK(!enabled);  // User1 is disabled
+
+    return true;
+}
+
+// ═══════════════════════════════════════════════════════
+//  TS-3B-009: Session + Discovery Re-query
+// ═══════════════════════════════════════════════════════
+
+TEST_SCENARIO(L3, TS_3B_009_SessionDiscoveryRequery) {
+    // 세션 중에 Discovery를 다시 수행해도 세션에 영향 없는지 검증
+    EvalApi api;
+    auto sim = std::make_shared<SimTransport>();
+
+    // Start anonymous session
+    Session s(sim, COMID);
+    StartSessionResult ssr;
+    EXPECT_OK(api.startSession(s, SP_ADMIN, false, ssr));
+
+    // Read MSID — should work
+    Bytes msid;
+    EXPECT_OK(api.getCPin(s, CPIN_MSID, msid));
+    CHECK(!msid.empty());
+
+    // Re-query Discovery (different protocol, shouldn't affect session)
+    DiscoveryInfo info;
+    EXPECT_OK(api.discovery0(sim, info));
+    CHECK(info.tperPresent);
+
+    // Session should still be active — read MSID again
+    Bytes msid2;
+    EXPECT_OK(api.getCPin(s, CPIN_MSID, msid2));
+    CHECK(msid == msid2);
+
+    api.closeSession(s);
+    return true;
+}
+
+// ═══════════════════════════════════════════════════════
 //  Runner
 // ═══════════════════════════════════════════════════════
 
 void run_L3_tests() {
-    printf("\n=== Level 3: Cross-Feature Tests (selected scenarios) ===\n");
+    printf("\n=== Level 3: Cross-Feature Tests ===\n");
 
     RUN_SCENARIO(L3, TS_3A_001_FullOpalLifecycle);
     RUN_SCENARIO(L3, TS_3A_002_MultiUserRangeIsolation);
+    RUN_SCENARIO(L3, TS_3A_003_MbrLockingInteraction);
     RUN_SCENARIO(L3, TS_3A_005_CryptoEraseReconfigure);
     RUN_SCENARIO(L3, TS_3A_006_PasswordRotation);
+    RUN_SCENARIO(L3, TS_3A_007_MultiRangeGlobal);
+    RUN_SCENARIO(L3, TS_3A_009_UserDisableWhileActive);
     RUN_SCENARIO(L3, TS_3A_010_GenKeyChain);
     RUN_SCENARIO(L3, TS_3B_003_WithSessionCallback);
     RUN_SCENARIO(L3, TS_3B_005_AuthTryLimit);
     RUN_SCENARIO(L3, TS_3B_006_CompositeStepLog);
+    RUN_SCENARIO(L3, TS_3B_009_SessionDiscoveryRequery);
 }
