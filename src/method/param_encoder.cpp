@@ -86,28 +86,30 @@ Bytes ParamEncoder::encodeProperties(const HostProperties& props) {
 }
 
 void ParamEncoder::encodeCellBlock(TokenEncoder& enc, const CellBlock& cb) {
-    if (cb.startColumn) {
-        enc.startName();
-        enc.encodeUint(0); // startColumn
-        enc.encodeUint(*cb.startColumn);
-        enc.endName();
-    }
-    if (cb.endColumn) {
-        enc.startName();
-        enc.encodeUint(1); // endColumn
-        enc.encodeUint(*cb.endColumn);
-        enc.endName();
-    }
+    // TCG Core Spec CellBlock named parameters (sedutil DtaLexicon.h):
+    //   startRow=1, endRow=2, startColumn=3, endColumn=4
     if (cb.startRow) {
         enc.startName();
-        enc.encodeUint(2); // startRow
+        enc.encodeUint(1); // startRow
         enc.encodeUint(*cb.startRow);
         enc.endName();
     }
     if (cb.endRow) {
         enc.startName();
-        enc.encodeUint(3); // endRow
+        enc.encodeUint(2); // endRow
         enc.encodeUint(*cb.endRow);
+        enc.endName();
+    }
+    if (cb.startColumn) {
+        enc.startName();
+        enc.encodeUint(3); // startColumn
+        enc.encodeUint(*cb.startColumn);
+        enc.endName();
+    }
+    if (cb.endColumn) {
+        enc.startName();
+        enc.encodeUint(4); // endColumn
+        enc.encodeUint(*cb.endColumn);
         enc.endName();
     }
 }

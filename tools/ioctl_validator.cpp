@@ -114,9 +114,23 @@ static const char PSID_CRED_STR[]   = "PSID_CREDENTIAL_0123456789ABCDEF";  // 32
 
 static Packet extractPacket(DtaCommand& cmd) {
     uint8_t* buf = static_cast<uint8_t*>(cmd.getCmdBuffer());
-    // Always return MIN_BUFFER_LENGTH (2048) bytes to match libsed output size.
-    // DtaCommand buffer is zeroed on reset(), so trailing bytes are 0x00.
-    return Packet(buf, buf + MIN_BUFFER_LENGTH);
+    Packet pkt(buf, buf + MIN_BUFFER_LENGTH);
+
+    // Fix TSN/HSN byte order: DtaCommand::setTSN/setHSN store in host byte order
+    // (LE on x86) without SWAP32. TCG Core Spec requires big-endian for Packet
+    // header fields. Fix by swapping to BE for comparison with libsed.
+    // Packet header starts at offset 20 (after 20-byte ComPacket header):
+    //   offset 20-23: TSN (4 bytes)
+    //   offset 24-27: HSN (4 bytes)
+    auto swapBe32 = [](uint8_t* p) {
+        uint8_t t;
+        t = p[0]; p[0] = p[3]; p[3] = t;
+        t = p[1]; p[1] = p[2]; p[2] = t;
+    };
+    swapBe32(&pkt[20]);  // TSN
+    swapBe32(&pkt[24]);  // HSN
+
+    return pkt;
 }
 
 /// Build a Locking Range N UID vector (with 0xA8 atom header) for DtaCommand::reset(vector, vector)
