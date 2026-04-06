@@ -1,9 +1,7 @@
 /// @file enterprise_band.cpp
 /// Example: Enterprise SSC band management
 
-#include <libsed/sed_library.h>
-#include <libsed/transport/transport_factory.h>
-#include <libsed/cli/cli_common.h>
+#include <cats.h>
 #include <iostream>
 
 /// @scenario Enterprise SSC 드라이브의 Band 관리 (잠금/해제/정보 조회)

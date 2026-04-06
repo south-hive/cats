@@ -18,7 +18,7 @@
 ///  11. 중간 실패 (다단계 설정 부분 실패)
 ///  12. MBR 리셋 시나리오
 
-#include <libsed/sed_library.h>
+#include <cats.h>
 #include <libsed/debug/test_context.h>
 #include <libsed/debug/fault_builder.h>
 #include <libsed/debug/test_session.h>

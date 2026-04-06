@@ -10,8 +10,7 @@
 ///   2. Revert 후 상태 확인
 ///   3. Revert 후 MSID 확인 (SID == MSID 초기화)
 
-#include <libsed/sed_library.h>
-#include <libsed/cli/cli_common.h>
+#include <cats.h>
 #include <iostream>
 #include <iomanip>
 

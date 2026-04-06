@@ -39,10 +39,8 @@
 ///   Phase 2: 교차 검증 — 다른 스레드의 결과를 읽기 세션으로 확인
 ///   Phase 3: 정리 — Revert Locking SP, Revert TPer
 
-#include <libsed/sed_library.h>
+#include <cats.h>
 #include <libsed/transport/nvme_transport.h>
-#include <libsed/debug/logging_transport.h>
-#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <iomanip>
 #include <thread>

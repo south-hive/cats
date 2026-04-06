@@ -10,8 +10,7 @@
 ///
 /// Usage: ./eval_query_flow <device> [--dump] [--log]
 
-#include <libsed/sed_library.h>
-#include <libsed/cli/cli_common.h>
+#include <cats.h>
 #include <iostream>
 #include <iomanip>
 

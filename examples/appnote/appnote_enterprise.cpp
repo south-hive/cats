@@ -15,8 +15,7 @@
 ///   7. 전체 Band 소거 (Erase All Bands)
 ///   8. Band LockOnReset 설정
 
-#include <libsed/sed_library.h>
-#include <libsed/cli/cli_common.h>
+#include <cats.h>
 #include <iostream>
 #include <iomanip>
 #include <vector>

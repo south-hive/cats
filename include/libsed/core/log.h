@@ -1,10 +1,25 @@
 #pragma once
 
+/// @file log.h
+/// @brief Pluggable logging interface for libsed.
+///
+/// Default: stderr output. Plug in external logging via ILogSink:
+/// @code
+///   class MyPlatformLog : public libsed::ILogSink {
+///       void log(LogLevel lv, const char* file, int line,
+///                const std::string& msg) override {
+///           platform_log_write(lv, file, line, msg);
+///       }
+///   };
+///   libsed::Logger::setSink(std::make_shared<MyPlatformLog>());
+/// @endcode
+
 #include <cstdint>
 #include <string>
-#include <functional>
 #include <cstdio>
 #include <cstdarg>
+#include <memory>
+#include <mutex>
 
 namespace libsed {
 
@@ -17,8 +32,48 @@ enum class LogLevel : uint8_t {
     None  = 5,
 };
 
-/// Global log callback type
-using LogCallback = std::function<void(LogLevel level, const char* file, int line, const std::string& msg)>;
+/// Convert LogLevel to short string ("TRC", "DBG", "INF", "WRN", "ERR")
+inline const char* logLevelName(LogLevel level) {
+    switch (level) {
+        case LogLevel::Trace: return "TRC";
+        case LogLevel::Debug: return "DBG";
+        case LogLevel::Info:  return "INF";
+        case LogLevel::Warn:  return "WRN";
+        case LogLevel::Error: return "ERR";
+        default:              return "???";
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+//  ILogSink — implement this to plug in external logging
+// ═══════════════════════════════════════════════════════
+
+class ILogSink {
+public:
+    virtual ~ILogSink() = default;
+
+    /// Called for each log message that passes the level filter.
+    /// Implementations must be thread-safe.
+    virtual void log(LogLevel level, const char* file, int line,
+                     const std::string& msg) = 0;
+};
+
+// ═══════════════════════════════════════════════════════
+//  Built-in sinks
+// ═══════════════════════════════════════════════════════
+
+/// Default sink: writes to stderr with [LVL] file:line: msg format
+class StderrSink : public ILogSink {
+public:
+    void log(LogLevel level, const char* file, int line,
+             const std::string& msg) override {
+        fprintf(stderr, "[%s] %s:%d: %s\n", logLevelName(level), file, line, msg.c_str());
+    }
+};
+
+// ═══════════════════════════════════════════════════════
+//  Logger singleton
+// ═══════════════════════════════════════════════════════
 
 class Logger {
 public:
@@ -27,10 +82,27 @@ public:
         return log;
     }
 
+    // ── Level control ──
+
     void setLevel(LogLevel level) { level_ = level; }
     LogLevel level() const { return level_; }
 
-    void setCallback(LogCallback cb) { callback_ = std::move(cb); }
+    // ── Sink management ──
+
+    /// Set external log sink. Pass nullptr to revert to default stderr.
+    static void setSink(std::shared_ptr<ILogSink> sink) {
+        std::lock_guard<std::mutex> lk(instance().mutex_);
+        instance().sink_ = std::move(sink);
+    }
+
+    /// Get current sink (never null — returns StderrSink if none set)
+    static std::shared_ptr<ILogSink> sink() {
+        std::lock_guard<std::mutex> lk(instance().mutex_);
+        auto& s = instance().sink_;
+        return s ? s : defaultSink();
+    }
+
+    // ── Log entry point (called by macros) ──
 
     void log(LogLevel level, const char* file, int line, const char* fmt, ...) {
         if (level < level_) return;
@@ -41,44 +113,39 @@ public:
         vsnprintf(buf, sizeof(buf), fmt, args);
         va_end(args);
 
-        if (callback_) {
-            callback_(level, file, line, std::string(buf));
-        } else {
-            const char* levelStr = "???";
-            switch (level) {
-                case LogLevel::Trace: levelStr = "TRC"; break;
-                case LogLevel::Debug: levelStr = "DBG"; break;
-                case LogLevel::Info:  levelStr = "INF"; break;
-                case LogLevel::Warn:  levelStr = "WRN"; break;
-                case LogLevel::Error: levelStr = "ERR"; break;
-                default: break;
-            }
-            fprintf(stderr, "[%s] %s:%d: %s\n", levelStr, file, line, buf);
+        std::shared_ptr<ILogSink> s;
+        {
+            std::lock_guard<std::mutex> lk(mutex_);
+            s = sink_ ? sink_ : defaultSink();
         }
+        s->log(level, file, line, std::string(buf));
     }
 
 private:
     Logger() = default;
+
+    static std::shared_ptr<ILogSink> defaultSink() {
+        static auto s = std::shared_ptr<ILogSink>(std::make_shared<StderrSink>());
+        return s;
+    }
+
     LogLevel level_ = LogLevel::Info;
-    LogCallback callback_;
+    std::shared_ptr<ILogSink> sink_;
+    std::mutex mutex_;
 };
 
-// ── C++17 compliant variadic log macros ─────────────────────
-//
-// The standard C++17 way to handle zero variadic args:
-// Use a template inline function that forwards to printf-style log.
-// The macro captures __FILE__ and __LINE__, then delegates.
+// ═══════════════════════════════════════════════════════
+//  Log macros
+// ═══════════════════════════════════════════════════════
 
 namespace detail {
 
-/// Log with format args
 template <typename... Args>
 inline void logFwd(LogLevel level, const char* file, int line,
                    const char* fmt, Args&&... args) {
     Logger::instance().log(level, file, line, fmt, std::forward<Args>(args)...);
 }
 
-/// Log with no format args (just a plain string)
 inline void logFwd(LogLevel level, const char* file, int line,
                    const char* msg) {
     Logger::instance().log(level, file, line, "%s", msg);

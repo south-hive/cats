@@ -1,9 +1,7 @@
 /// @file opal_setup.cpp
 /// Example: Full initial Opal setup (take ownership + activate + configure)
 
-#include <libsed/sed_library.h>
-#include <libsed/transport/transport_factory.h>
-#include <libsed/cli/cli_common.h>
+#include <cats.h>
 #include <iostream>
 #include <string>
 

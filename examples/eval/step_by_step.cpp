@@ -4,9 +4,8 @@
 /// Shows how each protocol step can be executed independently
 /// with fault injection between steps, raw payload inspection, etc.
 
-#include <libsed/sed_library.h>
+#include <cats.h>
 #include <libsed/debug/debug.h>
-#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <iomanip>
 

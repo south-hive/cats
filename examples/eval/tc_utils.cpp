@@ -15,9 +15,8 @@
 ///
 /// Also shows split StartSession_REQ/OPT + SyncSession_REQ/OPT usage.
 
-#include <libsed/sed_library.h>
+#include <cats.h>
 #include <libsed/debug/debug.h>
-#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <iomanip>
 #include <cstring>

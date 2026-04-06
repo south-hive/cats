@@ -1,9 +1,7 @@
 /// @file discovery.cpp
 /// Example: Perform Level 0 Discovery and display drive information
 
-#include <libsed/sed_library.h>
-#include <libsed/transport/transport_factory.h>
-#include <libsed/cli/cli_common.h>
+#include <cats.h>
 #include <iostream>
 #include <iomanip>
 

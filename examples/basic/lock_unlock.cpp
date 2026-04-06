@@ -1,9 +1,7 @@
 /// @file lock_unlock.cpp
 /// Example: Lock and unlock an Opal drive
 
-#include <libsed/sed_library.h>
-#include <libsed/transport/transport_factory.h>
-#include <libsed/cli/cli_common.h>
+#include <cats.h>
 #include <iostream>
 #include <string>
 

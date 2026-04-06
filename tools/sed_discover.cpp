@@ -1,9 +1,7 @@
 /// @file sed_discover.cpp
 /// CLI tool: Discover and list SED-capable drives
 
-#include <libsed/sed_library.h>
-#include <libsed/transport/transport_factory.h>
-#include <libsed/cli/cli_common.h>
+#include <cats.h>
 #include <iostream>
 #include <iomanip>
 

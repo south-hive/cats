@@ -18,8 +18,7 @@
 ///   AppNote 12: Revert Locking SP (Locking SP 복원)
 ///   AppNote 13: Revert TPer / PSID Revert (TPer 복원)
 
-#include <libsed/sed_library.h>
-#include <libsed/cli/cli_common.h>
+#include <cats.h>
 #include <iostream>
 #include <iomanip>
 #include <cstring>

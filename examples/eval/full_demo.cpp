@@ -5,9 +5,8 @@
 /// ComID management, DataStore I/O, MBR, locking range, ACE, raw transport,
 /// session state, password hashing, table enumeration, and more.
 
-#include <libsed/sed_library.h>
+#include <cats.h>
 #include <libsed/debug/debug.h>
-#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <iomanip>
 

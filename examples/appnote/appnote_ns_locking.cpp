@@ -14,8 +14,7 @@
 ///   2. Discovery 및 전체 Range 열거
 ///   3. 다중 Namespace-Range 매핑 및 NVMe Identify
 
-#include <libsed/sed_library.h>
-#include <libsed/cli/cli_common.h>
+#include <cats.h>
 #include <iostream>
 #include <iomanip>
 #include <vector>

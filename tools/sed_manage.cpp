@@ -1,8 +1,7 @@
 /// @file sed_manage.cpp
 /// CLI tool: Manage SED drives (ownership, locking, user management, revert)
 
-#include <libsed/sed_library.h>
-#include <libsed/cli/cli_common.h>
+#include <cats.h>
 #include <iostream>
 #include <string>
 #include <cstring>

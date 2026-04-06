@@ -17,7 +17,7 @@
 /// Key: Worker never creates its own transport or device.
 ///      Everything flows down from NVMeThread via DI.
 
-#include <libsed/sed_library.h>
+#include <cats.h>
 #include <libsed/transport/nvme_transport.h>
 #include <iostream>
 #include <vector>

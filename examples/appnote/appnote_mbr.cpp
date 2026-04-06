@@ -18,8 +18,7 @@
 ///   5. 다중 사용자 MBR 접근 (Admin1 vs User1 권한)
 ///   6. MBR 섀도잉 비활성화
 
-#include <libsed/sed_library.h>
-#include <libsed/cli/cli_common.h>
+#include <cats.h>
 #include <iostream>
 #include <iomanip>
 #include <cstring>

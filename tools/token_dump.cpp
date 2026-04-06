@@ -1,7 +1,7 @@
 /// @file token_dump.cpp
 /// CLI tool: Parse and display TCG token streams from hex input or files
 
-#include <libsed/sed_library.h>
+#include <cats.h>
 #include <libsed/codec/token_encoder.h>
 #include <libsed/codec/token_decoder.h>
 #include <iostream>

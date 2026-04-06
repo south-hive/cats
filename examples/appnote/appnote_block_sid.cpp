@@ -11,8 +11,7 @@
 ///   2. SID 차단 확인 (인증 시도)
 ///   3. Block SID 상태 확인 및 전원 사이클 안내
 
-#include <libsed/sed_library.h>
-#include <libsed/cli/cli_common.h>
+#include <cats.h>
 #include <iostream>
 #include <iomanip>
 

@@ -11,8 +11,7 @@
 ///   3. 다중 DataStore 테이블 (테이블 번호별 접근)
 ///   4. 대용량 데이터 처리 (청크 단위 쓰기/읽기)
 
-#include <libsed/sed_library.h>
-#include <libsed/cli/cli_common.h>
+#include <cats.h>
 #include <iostream>
 #include <iomanip>
 #include <vector>
