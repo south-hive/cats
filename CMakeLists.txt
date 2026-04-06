@@ -233,6 +233,7 @@ if(LIBSED_BUILD_TOOLS)
     add_executable(sed_manage    tools/sed_manage.cpp)
     add_executable(token_dump    tools/token_dump.cpp)
     add_executable(props_diff    tools/props_diff.cpp)
+    add_executable(props_diag    tools/props_diag.cpp)
 
     add_executable(ioctl_validator
         tools/ioctl_validator.cpp
@@ -252,6 +253,7 @@ if(LIBSED_BUILD_TOOLS)
     target_link_libraries(sed_manage      PRIVATE libsed)
     target_link_libraries(token_dump      PRIVATE libsed)
     target_link_libraries(props_diff      PRIVATE libsed)
+    target_link_libraries(props_diag     PRIVATE libsed)
     target_link_libraries(ioctl_validator PRIVATE libsed)
     target_link_libraries(protocol_trace  PRIVATE libsed)
 endif()
