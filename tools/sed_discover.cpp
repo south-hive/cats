@@ -3,13 +3,26 @@
 
 #include <libsed/sed_library.h>
 #include <libsed/transport/transport_factory.h>
+#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <iomanip>
 
 int main(int argc, char* argv[]) {
+    libsed::cli::CliOptions cliOpts;
+    libsed::cli::scanFlags(argc, argv, cliOpts);
+
+    // Find device positional arg (skip flags)
+    std::string deviceArg;
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg[0] == '-') { if (arg == "--logdir") i++; continue; }
+        deviceArg = arg;
+        break;
+    }
+
     libsed::initialize();
 
-    if (argc < 2) {
+    if (deviceArg.empty()) {
         // Enumerate all devices
         std::cout << "Scanning for SED-capable drives...\n\n";
         auto devices = libsed::TransportFactory::enumerateDevices();
@@ -34,15 +47,22 @@ int main(int argc, char* argv[]) {
         }
     } else {
         // Discover specific device
-        auto device = libsed::SedDevice::open(argv[1]);
+        auto transport = libsed::TransportFactory::createNvme(deviceArg);
+        if (!transport || !transport->isOpen()) {
+            std::cerr << "Failed to open " << deviceArg << "\n";
+            return 1;
+        }
+        transport = libsed::cli::applyLogging(transport, cliOpts);
+
+        auto device = libsed::SedDevice::open(transport);
         if (!device) {
-            std::cerr << "Failed to discover " << argv[1] << "\n";
+            std::cerr << "Failed to discover " << deviceArg << "\n";
             return 1;
         }
 
         const auto& info = device->discovery();
 
-        std::cout << "Device: " << argv[1] << "\n";
+        std::cout << "Device: " << deviceArg << "\n";
         std::cout << "SSC:    ";
         switch (info.primarySsc) {
             case libsed::SscType::Opal20:     std::cout << "Opal 2.0"; break;

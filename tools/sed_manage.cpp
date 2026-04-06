@@ -2,6 +2,7 @@
 /// CLI tool: Manage SED drives (ownership, locking, user management, revert)
 
 #include <libsed/sed_library.h>
+#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <string>
 #include <cstring>
@@ -22,20 +23,34 @@ static void printUsage(const char* prog) {
         << "  set-password <auth_pw> <user_id> <new_pw>  Set user password\n"
         << "  crypto-erase <admin1_pw> [range]       Crypto-erase a range\n"
         << "  revert <sid_password>                  Revert TPer (factory reset)\n"
-        << "  psid-revert <psid>                     Emergency PSID revert\n";
+        << "  psid-revert <psid>                     Emergency PSID revert\n\n"
+        << "Flags:\n"
+        << "  --dump      Show IF-SEND/IF-RECV packets on stderr\n"
+        << "  --log       Write command log to file\n"
+        << "  --logdir D  Log file directory (default: .)\n";
 }
 
 int main(int argc, char* argv[]) {
     if (argc < 3) { printUsage(argv[0]); return 1; }
+
+    libsed::cli::CliOptions cliOpts;
+    libsed::cli::scanFlags(argc, argv, cliOpts);
 
     const std::string device = argv[1];
     const std::string command = argv[2];
 
     libsed::initialize();
 
-    auto sed = libsed::SedDevice::open(device);
-    if (!sed) {
+    auto transport = libsed::TransportFactory::createNvme(device);
+    if (!transport || !transport->isOpen()) {
         std::cerr << "Failed to open: " << device << "\n";
+        return 1;
+    }
+    transport = libsed::cli::applyLogging(transport, cliOpts);
+
+    auto sed = libsed::SedDevice::open(transport);
+    if (!sed) {
+        std::cerr << "Failed to discover: " << device << "\n";
         return 1;
     }
 

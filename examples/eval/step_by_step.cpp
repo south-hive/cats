@@ -6,6 +6,7 @@
 
 #include <libsed/sed_library.h>
 #include <libsed/debug/debug.h>
+#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <iomanip>
 
@@ -37,7 +38,7 @@ void dumpHex(const Bytes& data, size_t maxBytes = 64) {
 ///   - 각 단계 성공하며 원시 페이로드(rawSendPayload/rawRecvPayload) 검증 가능
 ///   - MSID PIN이 정상적으로 읽힘
 ///   - 잘못된 Protocol ID는 에러 반환 또는 빈 응답
-void manualStepByStep(const std::string& device) {
+void manualStepByStep(const std::string& device, const cli::CliOptions& cliOpts) {
     std::cout << "\n=== Manual Step-by-Step Eval ===\n";
 
     auto transport = TransportFactory::createNvme(device);
@@ -45,6 +46,7 @@ void manualStepByStep(const std::string& device) {
         std::cerr << "Cannot open " << device << "\n";
         return;
     }
+    transport = cli::applyLogging(transport, cliOpts);
 
     EvalApi api;
     uint16_t comId = 0;
@@ -125,7 +127,7 @@ void manualStepByStep(const std::string& device) {
 ///   - Fault 주입으로 SyncSession 응답 파싱 실패
 ///   - StartSession 결과가 에러 코드 반환
 ///   - 트레이스에 Fault 발동 기록 남음
-void faultInjectedEval(const std::string& device) {
+void faultInjectedEval(const std::string& device, const cli::CliOptions& cliOpts) {
     std::cout << "\n=== Fault-Injected Step-by-Step Eval ===\n";
 
     auto& tc = TestContext::instance();
@@ -143,6 +145,7 @@ void faultInjectedEval(const std::string& device) {
 
     auto transport = TransportFactory::createNvme(device);
     if (!transport || !transport->isOpen()) return;
+    transport = cli::applyLogging(transport, cliOpts);
 
     EvalApi api;
 
@@ -175,11 +178,12 @@ void faultInjectedEval(const std::string& device) {
 ///   - 각 단계마다 observer 콜백이 호출되어 진행 상황 추적 가능
 ///   - 소유권 확보 시퀀스가 정상 완료
 ///   - observer가 false를 반환하면 중단 가능 (본 예제에서는 항상 true 반환)
-void observedOwnership(const std::string& device) {
+void observedOwnership(const std::string& device, const cli::CliOptions& cliOpts) {
     std::cout << "\n=== Observed Ownership Sequence ===\n";
 
     auto transport = TransportFactory::createNvme(device);
     if (!transport || !transport->isOpen()) return;
+    transport = cli::applyLogging(transport, cliOpts);
 
     DiscoveryInfo info;
     EvalApi api;
@@ -198,15 +202,23 @@ void observedOwnership(const std::string& device) {
 }
 
 int main(int argc, char* argv[]) {
-    std::string device = (argc > 1) ? argv[1] : "/dev/nvme0";
+    cli::CliOptions cliOpts;
+    cli::scanFlags(argc, argv, cliOpts);
+
+    std::string device;
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg[0] != '-') { device = arg; break; }
+    }
+    if (device.empty()) device = "/dev/nvme0";
 
     libsed::initialize();
 
-    manualStepByStep(device);
+    manualStepByStep(device, cliOpts);
 
-    if (argc > 1) {
-        faultInjectedEval(device);
-        observedOwnership(device);
+    if (!device.empty() && device != "/dev/nvme0") {
+        faultInjectedEval(device, cliOpts);
+        observedOwnership(device, cliOpts);
     }
 
     libsed::shutdown();

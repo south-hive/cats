@@ -7,6 +7,7 @@
 
 #include <libsed/sed_library.h>
 #include <libsed/debug/debug.h>
+#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <iomanip>
 
@@ -481,9 +482,21 @@ static void phase4_enterprise(EvalApi& api, Session& session) {
 // ════════════════════════════════════════════════════════
 
 int main(int argc, char* argv[]) {
-    std::string device = (argc > 1) ? argv[1] : "/dev/nvme0";
-    std::string password = (argc > 2) ? argv[2] : "";
-    bool isEnterprise = (argc > 3 && std::string(argv[3]) == "enterprise");
+    cli::CliOptions cliOpts;
+    cli::scanFlags(argc, argv, cliOpts);
+
+    std::string device, password;
+    bool isEnterprise = false;
+    int posIdx = 0;
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg[0] == '-') { if (arg == "--logdir") i++; continue; }
+        if (posIdx == 0) device = arg;
+        else if (posIdx == 1) password = arg;
+        else if (posIdx == 2 && arg == "enterprise") isEnterprise = true;
+        posIdx++;
+    }
+    if (device.empty()) device = "/dev/nvme0";
 
     libsed::initialize();
 
@@ -492,6 +505,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "Cannot open " << device << "\n";
         return 1;
     }
+    tr = cli::applyLogging(tr, cliOpts);
 
     EvalApi api;
 
@@ -528,7 +542,7 @@ int main(int argc, char* argv[]) {
         }
     } else {
         std::cout << "\n  Pass password as 2nd arg for session-based demos.\n";
-        std::cout << "  Usage: " << argv[0] << " <device> [password] [enterprise]\n";
+        std::cout << "  Usage: " << argv[0] << " <device> [password] [enterprise] [--dump] [--log]\n";
     }
 
     libsed::shutdown();

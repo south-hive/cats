@@ -5,6 +5,8 @@
 /// TCG 동작 카테고리를 수행합니다. 스레드 간 동기화 배리어를 사용하여
 /// 교차 실행 타이밍을 제어합니다.
 ///
+/// Usage: <prog> <device> <sid_pw> <admin1_pw> <user1_pw> [--dump] [--log]
+///
 /// ┌─────────────────────────────────────────────────────────────────┐
 /// │                    Transport (shared)                            │
 /// ├─────────────┬──────────────┬──────────────┬─────────────────────┤
@@ -40,6 +42,7 @@
 #include <libsed/sed_library.h>
 #include <libsed/transport/nvme_transport.h>
 #include <libsed/debug/logging_transport.h>
+#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <iomanip>
 #include <thread>
@@ -1059,7 +1062,7 @@ static void phase3_cleanup(SharedState& ss) {
 int main(int argc, char* argv[]) {
     if (argc < 5) {
         std::cerr << "Usage: " << argv[0]
-                  << " <device> <sid_pw> <admin1_pw> <user1_pw>\n\n";
+                  << " <device> <sid_pw> <admin1_pw> <user1_pw> [--dump] [--log]\n\n";
         std::cerr << "Comprehensive multi-threaded TCG SED evaluation TC.\n";
         std::cerr << "4 parallel sessions × diverse operations × 2 phases.\n\n";
         std::cerr << "WARNING: This will modify drive state! Revert is performed at cleanup.\n\n";
@@ -1067,6 +1070,11 @@ int main(int argc, char* argv[]) {
         std::cerr << "  " << argv[0] << " /dev/nvme0 mySID admin123 user123\n";
         return 1;
     }
+
+    cli::CliOptions cliOpts;
+    cli::scanFlags(argc, argv, cliOpts);
+    // Default to --log if neither flag is set (preserve original behavior)
+    if (!cliOpts.dump && !cliOpts.log) cliOpts.log = true;
 
     SharedState ss;
     ss.sidPw    = argv[2];
@@ -1081,10 +1089,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // 명령 이력 로깅: 모든 IF-SEND/IF-RECV를 파일에 기록
-    ss.transport = debug::LoggingTransport::wrap(rawTransport, ".");
-    auto* lt = dynamic_cast<debug::LoggingTransport*>(ss.transport.get());
-    std::cout << "Command log: " << lt->logger()->filePath() << "\n";
+    // 명령 이력 로깅: CLI 플래그에 따라 dump/log 적용
+    ss.transport = cli::applyLogging(rawTransport, cliOpts);
 
     EvalApi api;
     TcgOption opt;

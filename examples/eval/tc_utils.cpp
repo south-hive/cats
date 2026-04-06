@@ -17,6 +17,7 @@
 
 #include <libsed/sed_library.h>
 #include <libsed/debug/debug.h>
+#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <iomanip>
 #include <cstring>
@@ -524,8 +525,19 @@ static void demo_faultBetweenSteps(EvalApi& api,
 // ════════════════════════════════════════════════════════
 
 int main(int argc, char* argv[]) {
-    std::string device = (argc > 1) ? argv[1] : "/dev/nvme0";
-    std::string sidPw  = (argc > 2) ? argv[2] : "";
+    cli::CliOptions cliOpts;
+    cli::scanFlags(argc, argv, cliOpts);
+
+    std::string device, sidPw;
+    int posIdx = 0;
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg[0] == '-') { if (arg == "--logdir") i++; continue; }
+        if (posIdx == 0) device = arg;
+        else if (posIdx == 1) sidPw = arg;
+        posIdx++;
+    }
+    if (device.empty()) device = "/dev/nvme0";
 
     libsed::initialize();
 
@@ -534,6 +546,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "Cannot open " << device << "\n";
         return 1;
     }
+    transport = cli::applyLogging(transport, cliOpts);
 
     EvalApi api;
 
