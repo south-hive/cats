@@ -194,6 +194,17 @@ TEST_SCENARIO(SIM3, MultiUserRangeIsolation) {
         api.closeSession(s);
     }
 
+    // User1: Range2 lock → NotAuthorized (ACE 격리)
+    {
+        Session s(sim, comId);
+        StartSessionResult ssr;
+        api.startSessionWithAuth(s, SP_LOCKING, true, AUTH_USER1, user1Pw, ssr);
+        RawResult raw;
+        api.setRangeLock(s, 2, true, true, raw);
+        CHECK(!raw.methodResult.isSuccess());  // NotAuthorized
+        api.closeSession(s);
+    }
+
     // User2: Range2 lock OK
     {
         Session s(sim, comId);
@@ -201,6 +212,17 @@ TEST_SCENARIO(SIM3, MultiUserRangeIsolation) {
         api.startSessionWithAuth(s, SP_LOCKING, true, AUTH_USER2, user2Pw, ssr);
         EXPECT_OK(api.setRangeLock(s, 2, true, true));
         EXPECT_OK(api.setRangeLock(s, 2, false, false));
+        api.closeSession(s);
+    }
+
+    // User2: Range1 lock → NotAuthorized
+    {
+        Session s(sim, comId);
+        StartSessionResult ssr;
+        api.startSessionWithAuth(s, SP_LOCKING, true, AUTH_USER2, user2Pw, ssr);
+        RawResult raw;
+        api.setRangeLock(s, 1, true, true, raw);
+        CHECK(!raw.methodResult.isSuccess());  // NotAuthorized
         api.closeSession(s);
     }
     return true;
@@ -280,10 +302,19 @@ TEST_SCENARIO(SIM3, LockOnResetSimulation) {
     PropertiesResult props;
     api.exchangeProperties(sim, comId, props);
 
-    // Check: Range should be re-locked due to LockOnReset
-    // Note: SimTransport에서 StackReset 시 LockOnReset이 설정된 range를
-    // 자동으로 lock하는 로직이 필요합니다. 현재는 미구현이므로 skip.
-    // TODO: SimTransport에 StackReset → LockOnReset 자동 잠금 구현
+    // Range가 LockOnReset에 의해 자동 잠금되었는지 확인
+    {
+        Session s(sim, comId);
+        StartSessionResult ssr;
+        api.startSessionWithAuth(s, SP_LOCKING, true, AUTH_ADMIN1, msid, ssr);
+
+        LockingRangeInfo info;
+        api.getRangeInfo(s, 1, info);
+        CHECK(info.readLocked);   // LockOnReset으로 자동 잠금됨
+        CHECK(info.writeLocked);
+
+        api.closeSession(s);
+    }
     return true;
 }
 
@@ -608,6 +639,98 @@ TEST_SCENARIO(SIM5, OwnershipTransfer) {
     return true;
 }
 
+TEST_SCENARIO(SIM5, PsidRevert) {
+    // PSID로 공장 초기화 (SID 비밀번호 분실 시나리오)
+    EvalApi api;
+    SimConfig config;
+    config.psid = {'P', 'S', 'I', 'D', '1', '2', '3', '4'};
+    auto sim = std::make_shared<SimTransport>(config);
+    uint16_t comId = simSetup(api, sim);
+    Bytes msid = sim->msid();
+
+    // SID 비밀번호 변경 (소유권 획득)
+    Bytes sidPw = {'m', 'y', '_', 's', 'i', 'd'};
+    {
+        Session s(sim, comId);
+        StartSessionResult ssr;
+        api.startSessionWithAuth(s, SP_ADMIN, true, AUTH_SID, msid, ssr);
+        api.setCPin(s, CPIN_SID, sidPw);
+        api.closeSession(s);
+    }
+
+    // MSID로 SID 인증 실패 (비밀번호 변경됨)
+    {
+        Session s(sim, comId);
+        StartSessionResult ssr;
+        auto r = api.startSessionWithAuth(s, SP_ADMIN, true, AUTH_SID, msid, ssr);
+        EXPECT_FAIL(r);
+    }
+
+    // PSID Revert로 공장 초기화
+    {
+        Session s(sim, comId);
+        StartSessionResult ssr;
+        EXPECT_OK(api.startSessionWithAuth(s, SP_ADMIN, true, AUTH_PSID, config.psid, ssr));
+        EXPECT_OK(api.revertSP(s, SP_ADMIN));
+    }
+
+    // 공장 상태 복원: MSID로 SID 인증 성공
+    Bytes newMsid = sim->msid();
+    {
+        Session s(sim, comId);
+        StartSessionResult ssr;
+        EXPECT_OK(api.startSessionWithAuth(s, SP_ADMIN, true, AUTH_SID, newMsid, ssr));
+        api.closeSession(s);
+    }
+    return true;
+}
+
+TEST_SCENARIO(SIM5, MultiTableDataStore) {
+    // DataStore 테이블 0과 1에 독립적으로 쓰고 읽기
+    EvalApi api;
+    auto sim = std::make_shared<SimTransport>();
+    uint16_t comId = simSetup(api, sim);
+    Bytes msid = sim->msid();
+
+    // Activate
+    {
+        Session s(sim, comId);
+        StartSessionResult ssr;
+        api.startSessionWithAuth(s, SP_ADMIN, true, AUTH_SID, msid, ssr);
+        api.activate(s, SP_LOCKING);
+        api.closeSession(s);
+    }
+
+    // Write to table 0 and table 1
+    Bytes dataA = {0xAA, 0xBB, 0xCC, 0xDD};
+    Bytes dataB = {0x11, 0x22, 0x33, 0x44};
+    {
+        Session s(sim, comId);
+        StartSessionResult ssr;
+        api.startSessionWithAuth(s, SP_LOCKING, true, AUTH_ADMIN1, msid, ssr);
+
+        RawResult raw;
+        EXPECT_OK(api.tcgWriteDataStoreN(s, 0, 0, dataA, raw));
+        EXPECT_OK(api.tcgWriteDataStoreN(s, 1, 0, dataB, raw));
+
+        // Read back table 0
+        DataOpResult readA;
+        EXPECT_OK(api.tcgReadDataStoreN(s, 0, 0, 4, readA));
+        CHECK(readA.data == dataA);
+
+        // Read back table 1
+        DataOpResult readB;
+        EXPECT_OK(api.tcgReadDataStoreN(s, 1, 0, 4, readB));
+        CHECK(readB.data == dataB);
+
+        // 테이블 격리 확인: table 0 != table 1
+        CHECK(readA.data != readB.data);
+
+        api.closeSession(s);
+    }
+    return true;
+}
+
 // ═══════════════════════════════════════════════════════
 //  SedDrive Facade 통합
 // ═══════════════════════════════════════════════════════
@@ -659,6 +782,8 @@ void run_sim_comprehensive_tests() {
     RUN_SCENARIO(SIM5, RevertAndResetState);
     RUN_SCENARIO(SIM5, SessionStorm);
     RUN_SCENARIO(SIM5, OwnershipTransfer);
+    RUN_SCENARIO(SIM5, PsidRevert);
+    RUN_SCENARIO(SIM5, MultiTableDataStore);
 
     // Facade
     RUN_SCENARIO(SIM_FACADE, FullLifecycle);

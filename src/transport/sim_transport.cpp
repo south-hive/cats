@@ -51,6 +51,12 @@ void SimTransport::factoryReset() {
         cpins_[makeCpinUserUid(i).toUint64()] = {false, {}, config_.pinTryLimit};
     }
 
+    // ACE 초기화 — Admin1은 모든 Range 접근 가능
+    aceRangeAccess_.clear();
+    aceRangeAccess_[AUTH_ADMIN1] = {};
+    for (uint32_t r = 0; r <= config_.maxRanges; ++r)
+        aceRangeAccess_[AUTH_ADMIN1].insert(r);
+
     // Authority 초기화
     authorities_.clear();
     authorities_[AUTH_SID] = true;
@@ -72,8 +78,19 @@ void SimTransport::factoryReset() {
     mbrDone_ = false;
     mbrData_.assign(config_.mbrSize, 0);
 
-    // DataStore
-    dataStore_.assign(config_.dataStoreSize, 0);
+    // PSID 생성
+    if (config_.psid.empty()) {
+        psid_.resize(32);
+        std::mt19937 rng2(123);
+        for (auto& b : psid_) b = static_cast<uint8_t>(rng2() & 0xFF);
+    } else {
+        psid_ = config_.psid;
+    }
+
+    // DataStore (멀티 테이블)
+    dataStores_.clear();
+    for (uint32_t t = 0; t < config_.numDataStoreTables; ++t)
+        dataStores_[t].assign(config_.dataStoreSize, 0);
 
     // ComID
     comIdState_ = ComIdState::Idle;
@@ -170,10 +187,20 @@ void SimTransport::handleComIdManagement(uint16_t comId, ByteSpan payload) {
     uint32_t requestCode = Endian::readBe32(payload.data() + 4);
 
     if (requestCode == 0x00000002) {
-        // STACK_RESET
-        // 모든 세션 종료
+        // STACK_RESET — 세션 종료 + LockOnReset 처리
         sessions_.clear();
         comIdState_ = ComIdState::Idle;
+
+        // LockOnReset: 설정된 Range를 자동 잠금 (power cycle 시뮬레이션)
+        for (auto& [id, r] : ranges_) {
+            if (r.lockOnReset) {
+                if (r.readLockEnabled)  r.readLocked = true;
+                if (r.writeLockEnabled) r.writeLocked = true;
+            }
+        }
+
+        // MBRDone 리셋 (power cycle 시 MBRDone=false로 복원)
+        mbrDone_ = false;
     }
 
     // 응답: ComID + requestCode + available + state
@@ -391,19 +418,25 @@ Bytes SimTransport::handleStartSession(const std::vector<Token>& tokens) {
         // C_PIN에서 해당 Authority의 PIN을 찾아 비교
         uint64_t cpinUid = 0;
         if (authUid == AUTH_SID)    cpinUid = CPIN_SID;
-        else if (authUid == AUTH_PSID)   cpinUid = CPIN_MSID;  // PSID는 라벨 값
+        else if (authUid == AUTH_PSID)   cpinUid = 0;  // PSID는 별도 처리
         else if (authUid == AUTH_ADMIN1) cpinUid = CPIN_ADMIN1;
         else if (authUid >= AUTH_USER1 && authUid <= AUTH_USER1 + 8) {
             cpinUid = makeCpinUserUid(static_cast<uint32_t>(authUid - AUTH_USER1 + 1)).toUint64();
         }
 
-        if (cpinUid != 0) {
+        if (authUid == AUTH_PSID) {
+            // PSID는 별도 값 (드라이브 라벨에 인쇄됨)
+            if (hostChallenge == psid_) {
+                authenticated = true;
+            } else {
+                return buildSmSyncError(0x01);
+            }
+        } else if (cpinUid != 0) {
             auto it = cpins_.find(cpinUid);
             if (it != cpins_.end()) {
                 if (it->second.pin == hostChallenge) {
                     authenticated = true;
                 } else {
-                    // PIN 시도 차감
                     if (it->second.triesRemaining > 0) {
                         it->second.triesRemaining--;
                     }
@@ -649,8 +682,8 @@ Bytes SimTransport::handleGet(uint64_t objectUid, const std::vector<Token>& para
 
     // ByteTable (DataStore) 읽기 — Get with CellBlock(startRow=offset, endRow=end)
     if (isDataStoreUid(objectUid)) {
-        // DataStore Get은 startCol/endCol 대신 startRow/endRow를 사용 (바이트 오프셋)
-        uint32_t rowStart = 0, rowEnd = static_cast<uint32_t>(dataStore_.size() - 1);
+        auto& ds = getDataStoreRef(objectUid);
+        uint32_t rowStart = 0, rowEnd = static_cast<uint32_t>(ds.size() - 1);
         bool hasRow = false;
         for (size_t i = 0; i < params.size(); ++i) {
             if (params[i].type == TokenType::StartName && i + 2 < params.size()) {
@@ -661,7 +694,7 @@ Bytes SimTransport::handleGet(uint64_t objectUid, const std::vector<Token>& para
                 if (name == 3 || name == 4) {
                     // Column-based Get → ByteTableInfo
                     return buildGetUintResponse({
-                        {col::MAX_SIZE, static_cast<uint64_t>(config_.dataStoreSize)},
+                        {col::MAX_SIZE, static_cast<uint64_t>(ds.size())},
                         {col::USED_SIZE, 0u}
                     });
                 }
@@ -669,10 +702,10 @@ Bytes SimTransport::handleGet(uint64_t objectUid, const std::vector<Token>& para
         }
         uint32_t offset = rowStart;
         uint32_t length = (rowEnd >= rowStart) ? (rowEnd - rowStart + 1) : 0;
-        if (offset + length > dataStore_.size()) {
+        if (offset + length > ds.size()) {
             return buildErrorResponse(0x0C);  // InvalidParameter
         }
-        Bytes data(dataStore_.begin() + offset, dataStore_.begin() + offset + length);
+        Bytes data(ds.begin() + offset, ds.begin() + offset + length);
         // ByteTable Read 응답: bare byte sequence (StartName 없이)
         TokenEncoder enc;
         enc.startList();
@@ -763,9 +796,41 @@ Bytes SimTransport::handleSet(uint64_t objectUid, const std::vector<Token>& para
         return buildErrorResponse(0x01);
     }
 
+    // ACE 설정 (assignUserToRange가 호출)
+    if (isAceUid(objectUid)) {
+        // ACE Set: BooleanExpr에서 Authority UID 추출 → aceRangeAccess_ 업데이트
+        uint32_t rangeId = aceRangeIndex(objectUid);
+        for (auto& [c, val] : columnValues) {
+            if (c == col::ACE_BOOLEAN_EXPR) {
+                // BooleanExpr 바이트에서 Authority UID들 추출
+                auto& exprBytes = val.getBytes();
+                TokenDecoder dec;
+                if (dec.decode(exprBytes.data(), exprBytes.size()).ok()) {
+                    for (auto& t : dec.tokens()) {
+                        if (t.isAtom() && t.isByteSequence && t.getBytes().size() == 8) {
+                            uint64_t authUid = 0;
+                            for (auto b : t.getBytes()) authUid = (authUid << 8) | b;
+                            aceRangeAccess_[authUid].insert(rangeId);
+                        }
+                    }
+                }
+            }
+        }
+        return buildSuccessResponse();
+    }
+
     // Locking Range 설정
     if (isLockingRangeUid(objectUid)) {
         uint32_t rangeId = lockingRangeIndex(objectUid);
+
+        // ACE 권한 검사: User Authority는 할당된 Range만 Set 가능
+        if (session.authUid != 0 && session.authUid != AUTH_ADMIN1 && session.authUid != AUTH_SID) {
+            auto aceIt = aceRangeAccess_.find(session.authUid);
+            if (aceIt == aceRangeAccess_.end() || aceIt->second.find(rangeId) == aceIt->second.end()) {
+                return buildErrorResponse(0x01);  // NotAuthorized
+            }
+        }
+
         auto it = ranges_.find(rangeId);
         if (it != ranges_.end()) {
             for (auto& [c, val] : columnValues) {
@@ -804,6 +869,7 @@ Bytes SimTransport::handleSet(uint64_t objectUid, const std::vector<Token>& para
 
     // DataStore 쓰기 — Set with Where=offset(name=0), Values=data(name=1)
     if (isDataStoreUid(objectUid)) {
+        auto& ds = getDataStoreRef(objectUid);
         uint32_t offset = 0;
         Bytes data;
         for (size_t i = 0; i < params.size(); ++i) {
@@ -813,10 +879,10 @@ Bytes SimTransport::handleSet(uint64_t objectUid, const std::vector<Token>& para
                 if (name == 1) data = params[i + 2].getBytes();
             }
         }
-        if (offset + data.size() > dataStore_.size()) {
+        if (offset + data.size() > ds.size()) {
             return buildErrorResponse(0x0C);
         }
-        std::copy(data.begin(), data.end(), dataStore_.begin() + offset);
+        std::copy(data.begin(), data.end(), ds.begin() + offset);
         return buildSuccessResponse();
     }
 
@@ -1096,8 +1162,31 @@ bool SimTransport::isAuthorityUid(uint64_t uid) const {
     return (uid & 0xFFFFFFFF00000000ULL) == 0x0000000900000000ULL;
 }
 
+bool SimTransport::isAceUid(uint64_t uid) const {
+    // ACE_Locking_Range_Set_RdLocked: 0x000000080003E0XX
+    // ACE_Locking_Range_Set_WrLocked: 0x000000080003E8XX
+    uint64_t base = uid & 0xFFFFFFFFFFFFFF00ULL;
+    return base == 0x000000080003E000ULL || base == 0x000000080003E800ULL;
+}
+
+uint32_t SimTransport::aceRangeIndex(uint64_t aceUid) const {
+    return static_cast<uint32_t>(aceUid & 0xFF);
+}
+
 bool SimTransport::isDataStoreUid(uint64_t uid) const {
     return (uid & 0xFFFFFFFF00000000ULL) == TABLE_DATASTORE;
+}
+
+uint32_t SimTransport::dataStoreTableNum(uint64_t uid) const {
+    uint32_t low = static_cast<uint32_t>(uid & 0xFFFFFFFF);
+    return (low > 0) ? low - 1 : 0;
+}
+
+Bytes& SimTransport::getDataStoreRef(uint64_t uid) {
+    uint32_t tbl = dataStoreTableNum(uid);
+    if (dataStores_.find(tbl) == dataStores_.end())
+        dataStores_[tbl].assign(config_.dataStoreSize, 0);
+    return dataStores_[tbl];
 }
 
 bool SimTransport::isAuthorizedForGet(const SessionState& session, uint64_t objectUid) {

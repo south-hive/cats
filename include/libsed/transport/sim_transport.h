@@ -30,6 +30,7 @@
 #include "../method/method_uids.h"
 
 #include <map>
+#include <set>
 #include <unordered_map>
 #include <string>
 #include <vector>
@@ -52,7 +53,10 @@ struct SimConfig {
     uint32_t dataStoreSize  = 65536;  // 64KB
     uint32_t mbrSize        = 131072; // 128KB
     Bytes    msid;                    // 공장 MSID (비어있으면 자동 생성)
+    Bytes    psid;                    // PSID (비어있으면 자동 생성)
     uint32_t pinTryLimit    = 5;
+    uint32_t maxBands       = 4;     // Enterprise: 최대 Band 수
+    uint32_t numDataStoreTables = 2; // DataStore 테이블 수
 };
 
 /// @brief 소프트웨어 SED 시뮬레이터 Transport
@@ -199,6 +203,10 @@ private:
     uint32_t lockingRangeIndex(uint64_t uid) const;
     bool isAuthorityUid(uint64_t uid) const;
     bool isDataStoreUid(uint64_t uid) const;
+    bool isAceUid(uint64_t uid) const;
+    uint32_t aceRangeIndex(uint64_t aceUid) const;
+    uint32_t dataStoreTableNum(uint64_t uid) const;
+    Bytes& getDataStoreRef(uint64_t uid);
 
     // ── 상태 ──
     SimConfig config_;
@@ -223,13 +231,20 @@ private:
     // Authority 활성 상태 (UID → enabled)
     std::unordered_map<uint64_t, bool> authorities_;
 
+    // ACE: Authority → 허용된 Range 목록 (User별 Range 격리)
+    // key = Authority UID, value = 허용된 rangeId 집합
+    std::unordered_map<uint64_t, std::set<uint32_t>> aceRangeAccess_;
+
     // MBR 상태
     bool mbrEnabled_ = false;
     bool mbrDone_ = false;
     Bytes mbrData_;
 
-    // DataStore
-    Bytes dataStore_;
+    // PSID (물리적 보안 ID)
+    Bytes psid_;
+
+    // DataStore (멀티 테이블): tableNumber(0-based) → data
+    std::map<uint32_t, Bytes> dataStores_;
 
     // ComID 상태
     enum class ComIdState { Idle, Associated };
