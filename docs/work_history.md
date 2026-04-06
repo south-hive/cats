@@ -1,5 +1,41 @@
 # Work History
 
+## Session 2026-04-06 (3) — Device Runner L3/L4 + 104 Tests
+
+### What was done
+
+**Device Runner 확장 (L1~L4):**
+- **Level 3** (MBR/DataStore/CryptoErase/Multi-User): `dev_mbr_write_read`, `dev_datastore_write_read`, `dev_crypto_erase`, `dev_multi_user`, `dev_password_change`, `dev_byte_table_info`, `dev_get_random` — 7개 테스트 추가
+- **Level 4** (Enterprise SSC): `dev_enterprise_band` (BandMaster0 Configure/Lock/Unlock), `dev_enterprise_erase` (EraseMaster Band Erase) — Enterprise 드라이브 자동 감지
+- 공유 MSID 읽기 (람다), `--dump` (LoggingTransport hex dump), `--user` 옵션 추가
+- 파괴적 테스트 확인 프롬프트 1회로 통합
+- Level 3 독립 실행 시 자동 TakeOwnership + Activate + 테스트 후 Revert
+
+**시나리오 테스트 91 → 104:**
+- **L3** (+4): MBR+Locking 상호작용, Multi-Range+Global 독립성, User Disable 상태 검증, Session+Discovery Re-query
+- **L4** (+6): 미존재 Authority/SP, 비활성 User 인증, 빈/최대길이 비밀번호, 비활성 SP에서 Range 설정
+- **L5** (+3): Full Lifecycle Aging (3회 반복), ComID State 검증, Large DataStore Transfer (512B chunked)
+
+### Current state
+
+- `scenario_tests` — **104/104 PASS**
+- `ioctl_validator` — 17/17 PASS
+- `libsed_tests` — PASS
+- `golden_validator` — PASS
+- `device_runner` — 빌드 OK (Level 1~4, 하드웨어 필요)
+- 커밋: `918f32a`
+
+### 다음 세션에서 이어서 할 수 있는 작업
+
+| 항목 | 난이도 | 설명 |
+|------|--------|------|
+| **SimTransport 엄격한 인증** | 중 | Authority enabled 체크, 미존재 SP 거부 등 — 현재 permissive. L4 negative 테스트를 EXPECT_FAIL로 복원 가능 |
+| **Enterprise L6 시나리오** | 중 | TS-6A-001~005 구현 — SSC별 비교, Enterprise BandMaster 독립성, Pyrite 제한 기능 |
+| **Device Runner L5** | 중 | 에이징 테스트 (N cycle), PSID Revert, DataStore multi-table, LockOnReset 검증 |
+| **Fault Injection** | 중 | L5B 시나리오 (사용자가 현재 불필요로 판단) |
+
+---
+
 ## Session 2026-04-06 (2) — SimTransport 완성 + 91 Tests
 
 ### What was done
