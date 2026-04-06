@@ -237,6 +237,7 @@ if(LIBSED_BUILD_EXAMPLES)
 
     add_executable(facade_aging          examples/facade/08_aging_4session.cpp)
     add_executable(facade_custom_transport examples/facade/09_custom_transport.cpp)
+    add_executable(facade_interactive      examples/facade/10_interactive.cpp)
 
     target_link_libraries(facade_query          PRIVATE libsed)
     target_link_libraries(facade_take_ownership PRIVATE libsed)
@@ -247,6 +248,7 @@ if(LIBSED_BUILD_EXAMPLES)
     target_link_libraries(facade_revert         PRIVATE libsed)
     target_link_libraries(facade_aging          PRIVATE libsed)
     target_link_libraries(facade_custom_transport PRIVATE libsed)
+    target_link_libraries(facade_interactive      PRIVATE libsed)
 endif()
 
 # ══════════════════════════════════════════════════════
