@@ -135,6 +135,7 @@ endif()
 #  Tests
 # ══════════════════════════════════════════════════════
 if(LIBSED_BUILD_TESTS)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
     enable_testing()
 
     # Try to find Google Test
@@ -179,6 +180,8 @@ endif()
 #  Examples
 # ══════════════════════════════════════════════════════
 if(LIBSED_BUILD_EXAMPLES)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/examples)
+
     # ── basic/ — 고수준 API 입문 예제 ──
     add_executable(example_discovery     examples/basic/discovery.cpp)
     add_executable(example_opal_setup    examples/basic/opal_setup.cpp)
@@ -229,6 +232,8 @@ endif()
 #  Tools
 # ══════════════════════════════════════════════════════
 if(LIBSED_BUILD_TOOLS)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tools)
+
     add_executable(sed_discover  tools/sed_discover.cpp)
     add_executable(sed_manage    tools/sed_manage.cpp)
     add_executable(token_dump    tools/token_dump.cpp)
