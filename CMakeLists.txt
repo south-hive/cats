@@ -241,11 +241,19 @@ if(LIBSED_BUILD_TOOLS)
     )
     target_include_directories(ioctl_validator PRIVATE third_party/sedutil)
 
+    add_executable(protocol_trace
+        tools/protocol_trace.cpp
+        third_party/sedutil/DtaCommand.cpp
+        third_party/sedutil/DtaHexDump.cpp
+    )
+    target_include_directories(protocol_trace PRIVATE third_party/sedutil)
+
     target_link_libraries(sed_discover    PRIVATE libsed)
     target_link_libraries(sed_manage      PRIVATE libsed)
     target_link_libraries(token_dump      PRIVATE libsed)
     target_link_libraries(props_diff      PRIVATE libsed)
     target_link_libraries(ioctl_validator PRIVATE libsed)
+    target_link_libraries(protocol_trace  PRIVATE libsed)
 endif()
 
 # ── ioctl_validator as CTest (offline, no hardware) ──
