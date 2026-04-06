@@ -229,6 +229,23 @@ if(LIBSED_BUILD_EXAMPLES)
     target_link_libraries(eval_worker         PRIVATE libsed Threads::Threads)
     target_link_libraries(eval_multithread    PRIVATE libsed Threads::Threads)
     target_link_libraries(eval_reset          PRIVATE libsed Threads::Threads)
+
+    # ── facade/ — SedDrive facade 예제 (TC 개발자 추천) ──
+    add_executable(facade_query          examples/facade/01_query.cpp)
+    add_executable(facade_take_ownership examples/facade/02_take_ownership.cpp)
+    add_executable(facade_opal_setup     examples/facade/03_opal_full_setup.cpp)
+    add_executable(facade_multi_session  examples/facade/04_multi_session.cpp)
+    add_executable(facade_multi_pf       examples/facade/05_multi_pf.cpp)
+    add_executable(facade_enterprise     examples/facade/06_enterprise_band.cpp)
+    add_executable(facade_revert         examples/facade/07_revert.cpp)
+
+    target_link_libraries(facade_query          PRIVATE libsed)
+    target_link_libraries(facade_take_ownership PRIVATE libsed)
+    target_link_libraries(facade_opal_setup     PRIVATE libsed)
+    target_link_libraries(facade_multi_session  PRIVATE libsed)
+    target_link_libraries(facade_multi_pf       PRIVATE libsed)
+    target_link_libraries(facade_enterprise     PRIVATE libsed)
+    target_link_libraries(facade_revert         PRIVATE libsed)
 endif()
 
 # ══════════════════════════════════════════════════════
