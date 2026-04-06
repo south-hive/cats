@@ -234,7 +234,12 @@ if(LIBSED_BUILD_TOOLS)
     add_executable(token_dump    tools/token_dump.cpp)
     add_executable(props_diff    tools/props_diff.cpp)
 
-    add_executable(ioctl_validator tools/ioctl_validator.cpp)
+    add_executable(ioctl_validator
+        tools/ioctl_validator.cpp
+        third_party/sedutil/DtaCommand.cpp
+        third_party/sedutil/DtaHexDump.cpp
+    )
+    target_include_directories(ioctl_validator PRIVATE third_party/sedutil)
 
     target_link_libraries(sed_discover    PRIVATE libsed)
     target_link_libraries(sed_manage      PRIVATE libsed)

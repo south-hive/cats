@@ -42,3 +42,5 @@ build/
 
 # debug information files
 *.dwo
+packet
+tests/test_props_encoding.cpp
