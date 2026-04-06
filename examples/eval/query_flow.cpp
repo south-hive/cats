@@ -16,9 +16,15 @@
 
 #include <libsed/sed_library.h>
 #include <libsed/debug/logging_transport.h>
+#include <libsed/method/method_call.h>
+#include <libsed/method/method_uids.h>
+#include <libsed/method/param_encoder.h>
+#include <libsed/packet/packet_builder.h>
+#include <libsed/core/endian.h>
 #include <iostream>
 #include <iomanip>
 #include <cstdlib>
+#include <cstring>
 
 using namespace libsed;
 using namespace libsed::eval;
@@ -128,24 +134,148 @@ int main(int argc, char* argv[]) {
     // ═══════════════════════════════════════════════
     std::cout << "[" << ++step << "] Properties Exchange\n";
 
+    // ── Hex dump helper ──
+    auto hexDump = [](const char* label, const uint8_t* data, size_t len) {
+        printf("  %s (%zu bytes):\n", label, len);
+        for (size_t i = 0; i < len; i += 16) {
+            printf("    %04zX: ", i);
+            for (size_t j = 0; j < 16; j++) {
+                if (i+j < len) printf("%02X ", data[i+j]);
+                else printf("   ");
+                if (j == 7) printf(" ");
+            }
+            printf(" |");
+            for (size_t j = 0; j < 16 && (i+j) < len; j++) {
+                uint8_t c = data[i+j];
+                printf("%c", (c >= 0x20 && c <= 0x7E) ? c : '.');
+            }
+            printf("|\n");
+        }
+    };
+
+    // ── Build sedutil-style Properties packet for comparison ──
+    auto buildSedutilProps = [&comId]() -> Bytes {
+        Bytes buf(2048, 0);
+        size_t pos = 56;
+
+        buf[pos++] = 0xF8;  // CALL
+        // SMUID (00..00FF)
+        buf[pos++] = 0xA8;
+        buf[pos++]=0; buf[pos++]=0; buf[pos++]=0; buf[pos++]=0;
+        buf[pos++]=0; buf[pos++]=0; buf[pos++]=0; buf[pos++]=0xFF;
+        // SM_PROPERTIES (00..FF01)
+        buf[pos++] = 0xA8;
+        buf[pos++]=0; buf[pos++]=0; buf[pos++]=0; buf[pos++]=0;
+        buf[pos++]=0; buf[pos++]=0; buf[pos++]=0xFF; buf[pos++]=0x01;
+
+        buf[pos++] = 0xF0;  // STARTLIST
+        buf[pos++] = 0xF2;  // STARTNAME
+
+        auto addStr = [&](const char* s) {
+            size_t len = strlen(s);
+            if (len <= 15) {
+                buf[pos++] = 0xA0 | (uint8_t)(len & 0x0F);
+            } else {
+                buf[pos++] = 0xD0 | (uint8_t)((len >> 8) & 0x07);
+                buf[pos++] = (uint8_t)(len & 0xFF);
+            }
+            memcpy(&buf[pos], s, len); pos += len;
+        };
+        auto addProp = [&](const char* name, uint32_t value) {
+            buf[pos++] = 0xF2;
+            addStr(name);
+            if (value < 64) {
+                buf[pos++] = (uint8_t)(value & 0x3F);
+            } else if (value < 0x100) {
+                buf[pos++] = 0x81; buf[pos++] = (uint8_t)value;
+            } else if (value < 0x10000) {
+                buf[pos++] = 0x82; buf[pos++] = (uint8_t)(value>>8); buf[pos++] = (uint8_t)value;
+            } else {
+                buf[pos++] = 0x84;
+                buf[pos++]=(uint8_t)(value>>24); buf[pos++]=(uint8_t)(value>>16);
+                buf[pos++]=(uint8_t)(value>>8);  buf[pos++]=(uint8_t)value;
+            }
+            buf[pos++] = 0xF3;
+        };
+
+        addStr("HostProperties");
+        buf[pos++] = 0xF0;  // STARTLIST
+        addProp("MaxComPacketSize", 2048);
+        addProp("MaxPacketSize",    2028);
+        addProp("MaxIndTokenSize",  1992);
+        addProp("MaxPackets",       1);
+        addProp("MaxSubpackets",    1);
+        addProp("MaxMethods",       1);
+        buf[pos++] = 0xF1;  // ENDLIST
+        buf[pos++] = 0xF3;  // ENDNAME
+        buf[pos++] = 0xF1;  // ENDLIST
+
+        buf[pos++] = 0xF9;  // EOD
+        buf[pos++] = 0xF0; buf[pos++] = 0x00; buf[pos++] = 0x00;
+        buf[pos++] = 0x00; buf[pos++] = 0xF1;
+
+        size_t tokenLen = pos - 56;
+        Endian::writeBe32(&buf[52], (uint32_t)tokenLen);
+        while (pos % 4 != 0) pos++;
+        Endian::writeBe32(&buf[40], (uint32_t)(pos - 44));
+        Endian::writeBe16(&buf[4], comId);
+        Endian::writeBe32(&buf[16], (uint32_t)(pos - 20));
+
+        return buf;
+    };
+
     PropertiesResult props;
     r = api.exchangeProperties(transport, comId, props);
 
-    // ── Raw Packet Hex Dump ──
-    auto hexDump = [](const std::string& label, const Bytes& data) {
-        std::cout << "  " << label << " (" << data.size() << " bytes):\n";
-        for (size_t i = 0; i < data.size(); i++) {
-            if (i % 16 == 0) std::cout << "    " << std::hex << std::setfill('0') << std::setw(4) << i << ": ";
-            std::cout << std::hex << std::setfill('0') << std::setw(2) << (unsigned)data[i] << " ";
-            if (i % 16 == 15 || i == data.size() - 1) std::cout << "\n";
-        }
-        std::cout << std::dec;
-    };
+    // ── NVMe ioctl parameters (both sides identical) ──
+    {
+        size_t transferLen = 2048;  // both use 2048
+        uint32_t cdw10_send = (uint32_t(0x01) << 24) | (uint32_t(comId) << 8);
+        uint32_t cdw10_recv = (uint32_t(0x01) << 24) | (uint32_t(comId) << 8);
+        printf("\n  ── NVMe ioctl parameters ──\n");
+        printf("  IF-SEND: opcode=0x81  nsid=0  cdw10=0x%08X  cdw11=0x%08X  data_len=%zu\n",
+               cdw10_send, (uint32_t)transferLen, transferLen);
+        printf("  IF-RECV: opcode=0x82  nsid=0  cdw10=0x%08X  cdw11=0x%08X  data_len=%zu\n",
+               cdw10_recv, (uint32_t)transferLen, transferLen);
+        printf("  (cdw10 = protocolId=0x01 << 24 | comId=0x%04X << 8)\n\n", comId);
+    }
+
+    // ── libsed raw packet ──
     if (!props.raw.rawSendPayload.empty()) {
-        hexDump("IF-SEND (Properties Request)", props.raw.rawSendPayload);
+        hexDump("libsed IF-SEND (Properties)", props.raw.rawSendPayload.data(),
+                props.raw.rawSendPayload.size());
     }
     if (!props.raw.rawRecvPayload.empty()) {
-        hexDump("IF-RECV (Properties Response)", props.raw.rawRecvPayload);
+        hexDump("libsed IF-RECV (Properties)", props.raw.rawRecvPayload.data(),
+                props.raw.rawRecvPayload.size());
+    }
+
+    // ── sedutil reference packet (built in memory) ──
+    Bytes sedutilPkt = buildSedutilProps();
+    printf("\n");
+    hexDump("sedutil IF-SEND (Properties) [reference]", sedutilPkt.data(), sedutilPkt.size());
+
+    // ── Byte diff ──
+    if (!props.raw.rawSendPayload.empty()) {
+        const auto& a = props.raw.rawSendPayload;
+        const auto& b = sedutilPkt;
+        size_t maxLen = std::max(a.size(), b.size());
+        int diffs = 0;
+        printf("\n  ── SEND Packet Diff (libsed vs sedutil) ──\n");
+        for (size_t i = 0; i < maxLen; i++) {
+            uint8_t av = (i < a.size()) ? a[i] : 0;
+            uint8_t bv = (i < b.size()) ? b[i] : 0;
+            if (av != bv) {
+                printf("    offset 0x%04zX: libsed=0x%02X  sedutil=0x%02X", i, av, bv);
+                if (av >= 0x20 && av <= 0x7E && bv >= 0x20 && bv <= 0x7E)
+                    printf("  ('%c' vs '%c')", av, bv);
+                printf("\n");
+                if (++diffs >= 50) { printf("    ... (truncated)\n"); break; }
+            }
+        }
+        if (diffs == 0) printf("    *** IDENTICAL ***\n");
+        else printf("    Total diffs: %d\n", diffs);
+        printf("\n");
     }
 
     uint32_t maxCPS = 2048;
