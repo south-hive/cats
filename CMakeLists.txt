@@ -70,6 +70,7 @@ set(LIBSED_SOURCES
     # Security
     src/security/hash_password.cpp
     src/security/range_key.cpp
+    src/security/secure_erase.cpp
 
     # SSC: Opal
     src/ssc/opal/opal_session.cpp
