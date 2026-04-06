@@ -11,6 +11,7 @@
 ///   3. Revert 후 MSID 확인 (SID == MSID 초기화)
 
 #include <libsed/sed_library.h>
+#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <iomanip>
 
@@ -212,7 +213,7 @@ static bool psid_checkMsidAfterRevert(EvalApi& api,
 
 int main(int argc, char* argv[]) {
     if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <device> <psid_password>\n\n";
+        std::cerr << "Usage: " << argv[0] << " <device> <psid_password> [--dump] [--log]\n\n";
         std::cerr << "TCG PSID Revert Application Note.\n";
         std::cerr << "PSID is printed on the drive label (32-character hex string).\n\n";
         std::cerr << "WARNING: PSID Revert will erase ALL data and reset the drive!\n\n";
@@ -224,6 +225,9 @@ int main(int argc, char* argv[]) {
     std::string device = argv[1];
     std::string psidPw = argv[2];
 
+    cli::CliOptions cliOpts;
+    cli::scanFlags(argc, argv, cliOpts);
+
     libsed::initialize();
 
     auto transport = TransportFactory::createNvme(device);
@@ -231,6 +235,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "Cannot open " << device << "\n";
         return 1;
     }
+    transport = cli::applyLogging(transport, cliOpts);
 
     EvalApi api;
 

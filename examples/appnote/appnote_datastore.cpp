@@ -12,6 +12,7 @@
 ///   4. 대용량 데이터 처리 (청크 단위 쓰기/읽기)
 
 #include <libsed/sed_library.h>
+#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <iomanip>
 #include <vector>
@@ -301,7 +302,7 @@ static bool ds_largeDataHandling(EvalApi& api,
 
 int main(int argc, char* argv[]) {
     if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <device> <admin1_pw>\n\n";
+        std::cerr << "Usage: " << argv[0] << " <device> <admin1_pw> [--dump] [--log]\n\n";
         std::cerr << "TCG DataStore Application Note.\n\n";
         std::cerr << "Example:\n";
         std::cerr << "  " << argv[0] << " /dev/nvme0 admin123\n";
@@ -311,6 +312,9 @@ int main(int argc, char* argv[]) {
     std::string device   = argv[1];
     std::string admin1Pw = argv[2];
 
+    cli::CliOptions cliOpts;
+    cli::scanFlags(argc, argv, cliOpts);
+
     libsed::initialize();
 
     auto transport = TransportFactory::createNvme(device);
@@ -318,6 +322,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "Cannot open " << device << "\n";
         return 1;
     }
+    transport = cli::applyLogging(transport, cliOpts);
 
     EvalApi api;
 

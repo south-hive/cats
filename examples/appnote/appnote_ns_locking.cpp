@@ -15,6 +15,7 @@
 ///   3. 다중 Namespace-Range 매핑 및 NVMe Identify
 
 #include <libsed/sed_library.h>
+#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <iomanip>
 #include <vector>
@@ -276,7 +277,7 @@ int main(int argc, char* argv[]) {
     if (argc < 3) {
         std::cerr << "Usage: " << argv[0]
                   << " <device> <admin1_pw>"
-                  << " [ns1_start] [ns1_len] [ns2_start] [ns2_len]\n\n";
+                  << " [ns1_start] [ns1_len] [ns2_start] [ns2_len] [--dump] [--log]\n\n";
         std::cerr << "TCG Configurable Namespace Locking Application Note.\n\n";
         std::cerr << "Examples:\n";
         std::cerr << "  " << argv[0] << " /dev/nvme0 admin123\n";
@@ -291,6 +292,9 @@ int main(int argc, char* argv[]) {
     uint64_t ns2Start    = (argc > 5) ? std::stoull(argv[5]) : 1048576;
     uint64_t ns2Len      = (argc > 6) ? std::stoull(argv[6]) : 1048576;
 
+    cli::CliOptions cliOpts;
+    cli::scanFlags(argc, argv, cliOpts);
+
     libsed::initialize();
 
     auto transport = TransportFactory::createNvme(device);
@@ -298,6 +302,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "Cannot open " << device << "\n";
         return 1;
     }
+    transport = cli::applyLogging(transport, cliOpts);
 
     EvalApi api;
 

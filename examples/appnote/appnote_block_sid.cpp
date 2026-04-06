@@ -12,6 +12,7 @@
 ///   3. Block SID 상태 확인 및 전원 사이클 안내
 
 #include <libsed/sed_library.h>
+#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <iomanip>
 
@@ -196,7 +197,7 @@ static bool blocksid_clearOnPowerCycle(EvalApi& api,
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <device> [sid_password]\n\n";
+        std::cerr << "Usage: " << argv[0] << " <device> [sid_password] [--dump] [--log]\n\n";
         std::cerr << "TCG Block SID Application Note.\n\n";
         std::cerr << "WARNING: This will block SID authentication on the drive!\n";
         std::cerr << "(Cleared on next power cycle)\n\n";
@@ -209,6 +210,9 @@ int main(int argc, char* argv[]) {
     std::string device = argv[1];
     std::string sidPw  = (argc > 2) ? argv[2] : "";
 
+    cli::CliOptions cliOpts;
+    cli::scanFlags(argc, argv, cliOpts);
+
     libsed::initialize();
 
     auto transport = TransportFactory::createNvme(device);
@@ -216,6 +220,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "Cannot open " << device << "\n";
         return 1;
     }
+    transport = cli::applyLogging(transport, cliOpts);
 
     EvalApi api;
 

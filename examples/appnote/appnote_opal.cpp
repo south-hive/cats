@@ -19,6 +19,7 @@
 ///   AppNote 13: Revert TPer / PSID Revert (TPer 복원)
 
 #include <libsed/sed_library.h>
+#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <iomanip>
 #include <cstring>
@@ -687,7 +688,7 @@ int main(int argc, char* argv[]) {
     if (argc < 5) {
         std::cerr << "Usage: " << argv[0]
                   << " <device> <new_sid_pw> <admin1_pw> <user1_pw>"
-                  << " [psid_pw] [range_start] [range_len]\n\n";
+                  << " [psid_pw] [range_start] [range_len] [--dump] [--log]\n\n";
         std::cerr << "TCG Opal Application Note (AppNote 3-13) complete lifecycle.\n\n";
         std::cerr << "Examples:\n";
         std::cerr << "  " << argv[0] << " /dev/nvme0 mySID admin123 user123\n";
@@ -703,6 +704,9 @@ int main(int argc, char* argv[]) {
     uint64_t rangeStart   = (argc > 6) ? std::stoull(argv[6]) : 0;
     uint64_t rangeLen     = (argc > 7) ? std::stoull(argv[7]) : 1024;
 
+    cli::CliOptions cliOpts;
+    cli::scanFlags(argc, argv, cliOpts);
+
     libsed::initialize();
 
     auto transport = TransportFactory::createNvme(device);
@@ -710,6 +714,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "Cannot open " << device << "\n";
         return 1;
     }
+    transport = cli::applyLogging(transport, cliOpts);
 
     EvalApi api;
 

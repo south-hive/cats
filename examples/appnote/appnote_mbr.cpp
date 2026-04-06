@@ -19,6 +19,7 @@
 ///   6. MBR 섀도잉 비활성화
 
 #include <libsed/sed_library.h>
+#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <iomanip>
 #include <cstring>
@@ -410,7 +411,7 @@ static bool mbr_disable(EvalApi& api,
 int main(int argc, char* argv[]) {
     if (argc < 3) {
         std::cerr << "Usage: " << argv[0]
-                  << " <device> <admin1_pw> [user1_pw]\n\n";
+                  << " <device> <admin1_pw> [user1_pw] [--dump] [--log]\n\n";
         std::cerr << "TCG Shadow MBR Application Note.\n\n";
         std::cerr << "Examples:\n";
         std::cerr << "  " << argv[0] << " /dev/nvme0 admin123\n";
@@ -422,6 +423,9 @@ int main(int argc, char* argv[]) {
     std::string admin1Pw = argv[2];
     std::string user1Pw  = (argc > 3) ? argv[3] : "";
 
+    cli::CliOptions cliOpts;
+    cli::scanFlags(argc, argv, cliOpts);
+
     libsed::initialize();
 
     auto transport = TransportFactory::createNvme(device);
@@ -429,6 +433,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "Cannot open " << device << "\n";
         return 1;
     }
+    transport = cli::applyLogging(transport, cliOpts);
 
     EvalApi api;
 

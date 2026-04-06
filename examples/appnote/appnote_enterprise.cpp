@@ -16,6 +16,7 @@
 ///   8. Band LockOnReset 설정
 
 #include <libsed/sed_library.h>
+#include <libsed/cli/cli_common.h>
 #include <iostream>
 #include <iomanip>
 #include <vector>
@@ -424,7 +425,7 @@ int main(int argc, char* argv[]) {
     if (argc < 4) {
         std::cerr << "Usage: " << argv[0]
                   << " <device> <bandmaster_pw> <erasemaster_pw>"
-                  << " [band_id] [start] [length] [new_bm_pw] [new_em_pw]\n\n";
+                  << " [band_id] [start] [length] [new_bm_pw] [new_em_pw] [--dump] [--log]\n\n";
         std::cerr << "TCG Enterprise SSC Application Note.\n\n";
         std::cerr << "Examples:\n";
         std::cerr << "  " << argv[0] << " /dev/nvme0 band123 erase123\n";
@@ -441,6 +442,9 @@ int main(int argc, char* argv[]) {
     std::string newBmPw       = (argc > 7) ? argv[7] : "newBand456";
     std::string newEmPw       = (argc > 8) ? argv[8] : "newErase456";
 
+    cli::CliOptions cliOpts;
+    cli::scanFlags(argc, argv, cliOpts);
+
     libsed::initialize();
 
     auto transport = TransportFactory::createNvme(device);
@@ -448,6 +452,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "Cannot open " << device << "\n";
         return 1;
     }
+    transport = cli::applyLogging(transport, cliOpts);
 
     EvalApi api;
 
