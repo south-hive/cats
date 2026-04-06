@@ -8,6 +8,7 @@
 #include <sys/ioctl.h>
 #include <linux/nvme_ioctl.h>
 #include <cstring>
+#include <cstdlib>  // aligned_alloc / free
 #endif
 
 namespace libsed {
@@ -85,20 +86,26 @@ Result NvmeTransport::ifSend(uint8_t protocolId, uint16_t comId, ByteSpan payloa
 #if defined(__linux__) && !defined(__ANDROID__)
     if (fd_ < 0) return ErrorCode::TransportNotAvailable;
 
+    // sedutil aligns DMA buffers to IO_BUFFER_ALIGNMENT (1024).
+    // Some NVMe controllers reject or corrupt unaligned buffers.
+    static constexpr size_t DMA_ALIGN = 1024;
     size_t transferLen = ((payload.size() + 511) / 512) * 512;
-    std::vector<uint8_t> buffer(transferLen, 0);
-    std::memcpy(buffer.data(), payload.data(), payload.size());
+    void* raw = std::aligned_alloc(DMA_ALIGN, transferLen);
+    if (!raw) return ErrorCode::TransportSendFailed;
+    std::memset(raw, 0, transferLen);
+    std::memcpy(raw, payload.data(), payload.size());
 
     struct nvme_admin_cmd cmd = {};
     cmd.opcode = 0x81;  // Security Send
     cmd.nsid = 0;
-    cmd.addr = reinterpret_cast<uint64_t>(buffer.data());
-    cmd.data_len = static_cast<uint32_t>(buffer.size());
+    cmd.addr = reinterpret_cast<uint64_t>(raw);
+    cmd.data_len = static_cast<uint32_t>(transferLen);
     cmd.cdw10 = (static_cast<uint32_t>(protocolId) << 24) |
                 (static_cast<uint32_t>(comId) << 8);
-    cmd.cdw11 = static_cast<uint32_t>(buffer.size());
+    cmd.cdw11 = static_cast<uint32_t>(transferLen);
 
     int ret = ioctl(fd_, NVME_IOCTL_ADMIN_CMD, &cmd);
+    std::free(raw);
     if (ret < 0) {
         LIBSED_ERROR("NVMe Security Send failed: %s", strerror(errno));
         return ErrorCode::TransportSendFailed;
@@ -130,26 +137,31 @@ Result NvmeTransport::ifRecv(uint8_t protocolId, uint16_t comId,
 #if defined(__linux__) && !defined(__ANDROID__)
     if (fd_ < 0) return ErrorCode::TransportNotAvailable;
 
+    static constexpr size_t DMA_ALIGN = 1024;
     size_t transferLen = ((buffer.size() + 511) / 512) * 512;
-    std::vector<uint8_t> recvBuf(transferLen, 0);
+    void* raw = std::aligned_alloc(DMA_ALIGN, transferLen);
+    if (!raw) return ErrorCode::TransportRecvFailed;
+    std::memset(raw, 0, transferLen);
 
     struct nvme_admin_cmd cmd = {};
     cmd.opcode = 0x82;  // Security Receive
     cmd.nsid = 0;
-    cmd.addr = reinterpret_cast<uint64_t>(recvBuf.data());
-    cmd.data_len = static_cast<uint32_t>(recvBuf.size());
+    cmd.addr = reinterpret_cast<uint64_t>(raw);
+    cmd.data_len = static_cast<uint32_t>(transferLen);
     cmd.cdw10 = (static_cast<uint32_t>(protocolId) << 24) |
                 (static_cast<uint32_t>(comId) << 8);
-    cmd.cdw11 = static_cast<uint32_t>(recvBuf.size());
+    cmd.cdw11 = static_cast<uint32_t>(transferLen);
 
     int ret = ioctl(fd_, NVME_IOCTL_ADMIN_CMD, &cmd);
     if (ret < 0) {
+        std::free(raw);
         LIBSED_ERROR("NVMe Security Receive failed: %s", strerror(errno));
         return ErrorCode::TransportRecvFailed;
     }
 
-    size_t copyLen = std::min(recvBuf.size(), buffer.size());
-    std::memcpy(buffer.data(), recvBuf.data(), copyLen);
+    size_t copyLen = std::min(transferLen, buffer.size());
+    std::memcpy(buffer.data(), raw, copyLen);
+    std::free(raw);
 
     // Extract actual payload size from ComPacket header (Rosetta Stone §1).
     // NVMe ioctl doesn't report actual bytes — must parse ComPacket.length
