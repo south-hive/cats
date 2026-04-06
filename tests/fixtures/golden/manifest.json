@@ -1,0 +1,47 @@
+{
+    "version": 1,
+    "description": "Golden packet fixtures captured from real hardware via sedutil-cli",
+    "capture_date": null,
+    "device": null,
+    "sedutil_version": null,
+    "comId": "0x0001",
+    "hostSessionNumber": 105,
+    "packets": {
+        "A1_properties": {
+            "file": "A1_properties.bin",
+            "sequence": "A",
+            "step": 1,
+            "method": "Properties",
+            "description": "SM Properties exchange (TSN=0, HSN=0)",
+            "tsn": 0,
+            "hsn": 0
+        },
+        "A2_start_session": {
+            "file": "A2_start_session.bin",
+            "sequence": "A",
+            "step": 2,
+            "method": "StartSession",
+            "description": "Anonymous StartSession to AdminSP (TSN=0, HSN=0)",
+            "tsn": 0,
+            "hsn": 0
+        },
+        "A3_get_msid": {
+            "file": "A3_get_msid.bin",
+            "sequence": "A",
+            "step": 3,
+            "method": "Get",
+            "description": "Get C_PIN_MSID PIN column (TSN=1, HSN=105)",
+            "tsn": 1,
+            "hsn": 105
+        },
+        "A4_close_session": {
+            "file": "A4_close_session.bin",
+            "sequence": "A",
+            "step": 4,
+            "method": "CloseSession",
+            "description": "EndOfSession token (TSN=1, HSN=105)",
+            "tsn": 1,
+            "hsn": 105
+        }
+    }
+}

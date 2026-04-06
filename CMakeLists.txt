@@ -255,6 +255,16 @@ if(LIBSED_BUILD_TESTS)
     set_target_properties(ioctl_validator PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
     add_test(NAME ioctl_validator COMMAND ioctl_validator)
+
+    add_executable(golden_validator
+        tests/integration/golden_validator.cpp
+    )
+    target_link_libraries(golden_validator PRIVATE libsed)
+    target_compile_definitions(golden_validator PRIVATE
+        GOLDEN_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/golden")
+    set_target_properties(golden_validator PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+    add_test(NAME golden_validator COMMAND golden_validator)
 endif()
 
 # ══════════════════════════════════════════════════════
