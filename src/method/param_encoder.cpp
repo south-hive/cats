@@ -53,10 +53,13 @@ Bytes ParamEncoder::encodeStartSession(uint32_t hostSessionId,
 Bytes ParamEncoder::encodeProperties(const HostProperties& props) {
     TokenEncoder enc;
 
-    // sedutil sends property name-value pairs directly without outer
-    // "HostProperties" STARTNAME wrapper. Each property is:
-    //   STARTNAME string uint ENDNAME
-    // These go directly into the method call's STARTLIST...ENDLIST.
+    // sedutil wraps HostProperties in: STARTNAME uint(0) STARTLIST {pairs} ENDLIST ENDNAME
+    // The key is numeric 0 (tiny atom), NOT string "HostProperties".
+    // Confirmed by sedutil hex dump: F2 00 F0 ... F1 F3
+    enc.startName();
+    enc.encodeUint(0);  // numeric key 0 (NOT string "HostProperties")
+    enc.startList();
+
     enc.startName(); enc.encodeString("MaxComPacketSize");
     enc.encodeUint(props.maxComPacketSize); enc.endName();
 
@@ -74,6 +77,9 @@ Bytes ParamEncoder::encodeProperties(const HostProperties& props) {
 
     enc.startName(); enc.encodeString("MaxMethods");
     enc.encodeUint(props.maxMethods); enc.endName();
+
+    enc.endList();
+    enc.endName();
 
     return enc.data();
 }

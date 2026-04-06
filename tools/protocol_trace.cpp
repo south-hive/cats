@@ -185,7 +185,11 @@ static uint8_t extractMethodStatus(const Buf& recv) {
 static Buf sedutil_Properties(uint16_t comId) {
     DtaCommand cmd;
     cmd.reset(OPAL_SMUID_UID, PROPERTIES);
-    // No "HostProperties" wrapper — matches real sedutil-cli behavior
+    // sedutil wraps with STARTNAME uint(0) STARTLIST ... ENDLIST ENDNAME
+    cmd.addToken(OPAL_TOKEN::STARTLIST);
+
+    cmd.addToken(OPAL_TOKEN::STARTNAME);
+    cmd.addToken(OPAL_TINY_ATOM::UINT_00);
     cmd.addToken(OPAL_TOKEN::STARTLIST);
 
     cmd.addToken(OPAL_TOKEN::STARTNAME); cmd.addToken("MaxComPacketSize");
@@ -200,6 +204,9 @@ static Buf sedutil_Properties(uint16_t comId) {
     cmd.addToken((uint64_t)1); cmd.addToken(OPAL_TOKEN::ENDNAME);
     cmd.addToken(OPAL_TOKEN::STARTNAME); cmd.addToken("MaxMethods");
     cmd.addToken((uint64_t)1); cmd.addToken(OPAL_TOKEN::ENDNAME);
+
+    cmd.addToken(OPAL_TOKEN::ENDLIST);
+    cmd.addToken(OPAL_TOKEN::ENDNAME);
 
     cmd.addToken(OPAL_TOKEN::ENDLIST);
     cmd.complete();

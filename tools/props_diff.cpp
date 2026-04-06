@@ -61,8 +61,9 @@ static Packet buildSedutilProperties(uint16_t comId) {
 
     buf[pos++] = 0xF0;  // STARTLIST
     buf[pos++] = 0xF2;  // STARTNAME
+    buf[pos++] = 0x00;  // uint(0) — numeric key, NOT string "HostProperties"
+    buf[pos++] = 0xF0;  // STARTLIST
 
-    // "HostProperties"
     auto addStr = [&](const char* s) {
         size_t len = strlen(s);
         if (len <= 15) {
@@ -73,9 +74,6 @@ static Packet buildSedutilProperties(uint16_t comId) {
         }
         memcpy(&buf[pos], s, len); pos += len;
     };
-
-    addStr("HostProperties");
-    buf[pos++] = 0xF0;  // STARTLIST
 
     auto addProp = [&](const char* name, uint32_t value) {
         buf[pos++] = 0xF2;
