@@ -131,6 +131,23 @@ int main(int argc, char* argv[]) {
     PropertiesResult props;
     r = api.exchangeProperties(transport, comId, props);
 
+    // ── Raw Packet Hex Dump ──
+    auto hexDump = [](const std::string& label, const Bytes& data) {
+        std::cout << "  " << label << " (" << data.size() << " bytes):\n";
+        for (size_t i = 0; i < data.size(); i++) {
+            if (i % 16 == 0) std::cout << "    " << std::hex << std::setfill('0') << std::setw(4) << i << ": ";
+            std::cout << std::hex << std::setfill('0') << std::setw(2) << (unsigned)data[i] << " ";
+            if (i % 16 == 15 || i == data.size() - 1) std::cout << "\n";
+        }
+        std::cout << std::dec;
+    };
+    if (!props.raw.rawSendPayload.empty()) {
+        hexDump("IF-SEND (Properties Request)", props.raw.rawSendPayload);
+    }
+    if (!props.raw.rawRecvPayload.empty()) {
+        hexDump("IF-RECV (Properties Response)", props.raw.rawRecvPayload);
+    }
+
     uint32_t maxCPS = 2048;
     if (r.ok() && props.tperMaxComPacketSize > 0) {
         maxCPS = props.tperMaxComPacketSize;
