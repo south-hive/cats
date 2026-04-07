@@ -25,6 +25,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <vector>
+#include <chrono>
 #include <iostream>
 
 using namespace libsed;
@@ -32,12 +34,22 @@ using namespace libsed::uid;
 using namespace libsed::eval;
 
 // ═══════════════════════════════════════════════════════
-//  Test result tracking
+//  Test result tracking + logging
 // ═══════════════════════════════════════════════════════
 
 static int g_dev_pass = 0;
 static int g_dev_fail = 0;
 static int g_dev_skip = 0;
+
+struct TestRecord {
+    std::string name;
+    std::string level;
+    std::string status;  // "PASS", "FAIL", "SKIP"
+    double elapsed_ms = 0.0;
+    std::string reason;  // skip reason
+};
+static std::vector<TestRecord> g_records;
+static std::string g_current_level;
 
 #define DEV_CHECK(expr) do { if (!(expr)) { \
     fprintf(stderr, "  FAIL: %s (line %d)\n", #expr, __LINE__); return false; } } while(0)
@@ -47,13 +59,47 @@ static int g_dev_skip = 0;
 
 #define RUN_DEV(name, fn, ...) do { \
     printf("  [DEV] " name " ... "); fflush(stdout); \
-    if (fn(__VA_ARGS__)) { printf("PASS\n"); g_dev_pass++; } \
-    else { printf("FAIL\n"); g_dev_fail++; } \
+    auto t0_ = std::chrono::steady_clock::now(); \
+    bool ok_ = fn(__VA_ARGS__); \
+    auto t1_ = std::chrono::steady_clock::now(); \
+    double ms_ = std::chrono::duration<double, std::milli>(t1_ - t0_).count(); \
+    if (ok_) { printf("PASS (%.0fms)\n", ms_); g_dev_pass++; \
+        g_records.push_back({name, g_current_level, "PASS", ms_, ""}); } \
+    else { printf("FAIL (%.0fms)\n", ms_); g_dev_fail++; \
+        g_records.push_back({name, g_current_level, "FAIL", ms_, ""}); } \
 } while(0)
 
 #define SKIP_DEV(name, reason) do { \
     printf("  [DEV] " name " ... SKIP (%s)\n", reason); g_dev_skip++; \
+    g_records.push_back({name, g_current_level, "SKIP", 0.0, reason}); \
 } while(0)
+
+static void writeJsonResults(const char* path, const std::string& device,
+                              const std::string& sscName, uint16_t comId) {
+    FILE* f = fopen(path, "w");
+    if (!f) { fprintf(stderr, "ERROR: Cannot write to %s\n", path); return; }
+
+    fprintf(f, "{\n");
+    fprintf(f, "  \"device\": \"%s\",\n", device.c_str());
+    fprintf(f, "  \"ssc\": \"%s\",\n", sscName.c_str());
+    fprintf(f, "  \"comId\": \"0x%04X\",\n", comId);
+    fprintf(f, "  \"summary\": { \"pass\": %d, \"fail\": %d, \"skip\": %d },\n",
+            g_dev_pass, g_dev_fail, g_dev_skip);
+    fprintf(f, "  \"tests\": [\n");
+    for (size_t i = 0; i < g_records.size(); i++) {
+        auto& r = g_records[i];
+        fprintf(f, "    { \"name\": \"%s\", \"level\": \"%s\", \"status\": \"%s\"",
+                r.name.c_str(), r.level.c_str(), r.status.c_str());
+        if (r.status != "SKIP")
+            fprintf(f, ", \"elapsed_ms\": %.1f", r.elapsed_ms);
+        if (!r.reason.empty())
+            fprintf(f, ", \"reason\": \"%s\"", r.reason.c_str());
+        fprintf(f, " }%s\n", (i + 1 < g_records.size()) ? "," : "");
+    }
+    fprintf(f, "  ]\n}\n");
+    fclose(f);
+    printf("  Results written to: %s\n", path);
+}
 
 // ═══════════════════════════════════════════════════════
 //  Level 1: 읽기 전용 디바이스 검증
@@ -144,6 +190,41 @@ static bool dev_facade_query(std::shared_ptr<ITransport> transport) {
 
     printf("\n    SSC: %s, MSID: %s, ComID: 0x%04X\n    ",
            drive.sscName(), drive.msidString().c_str(), drive.comId());
+    return true;
+}
+
+static bool dev_locking_info_deep(std::shared_ptr<ITransport> transport, uint16_t comId) {
+    EvalApi api;
+    PropertiesResult props;
+    DEV_EXPECT_OK(api.exchangeProperties(transport, comId, props));
+
+    Session session(transport, comId);
+    StartSessionResult ssr;
+    // Unauthenticated read into Admin SP — read range info from Locking table
+    DEV_EXPECT_OK(api.startSession(session, SP_LOCKING, false, ssr));
+
+    printf("\n");
+    for (uint32_t r = 0; r <= 8; r++) {
+        LockingRangeInfo info;
+        auto result = api.getRangeInfo(session, r, info);
+        if (result.failed()) {
+            if (r == 0) {
+                printf("    Range 0 (Global): read failed — Locking SP may not be activated\n    ");
+                api.closeSession(session);
+                return true;  // Not a failure — just not activated
+            }
+            break;  // No more ranges
+        }
+        const char* name = (r == 0) ? "Global" : "";
+        printf("    Range %u%s%s: Start=%lu Len=%lu RLE=%d WLE=%d RL=%d WL=%d\n",
+               r, name[0] ? " (" : "", name[0] ? name : "",
+               (unsigned long)info.rangeStart, (unsigned long)info.rangeLength,
+               info.readLockEnabled, info.writeLockEnabled,
+               info.readLocked, info.writeLocked);
+    }
+    printf("    ");
+
+    api.closeSession(session);
     return true;
 }
 
@@ -446,6 +527,48 @@ static bool dev_multi_user(std::shared_ptr<ITransport> transport, uint16_t comId
     return true;
 }
 
+static bool dev_datastore_multi_table(std::shared_ptr<ITransport> transport, uint16_t comId,
+                                       const Bytes& admin1Pw) {
+    EvalApi api;
+    PropertiesResult props;
+    DEV_EXPECT_OK(api.exchangeProperties(transport, comId, props));
+
+    Session session(transport, comId);
+    StartSessionResult ssr;
+    DEV_EXPECT_OK(api.startSessionWithAuth(session, SP_LOCKING, true, AUTH_ADMIN1, admin1Pw, ssr));
+
+    // Write different patterns to table 0 and table 1
+    Bytes data0(32, 0xAA);
+    Bytes data1(32, 0xBB);
+    auto r0 = api.tcgWriteDataStoreN(session, 0, 0, data0);
+    if (r0.failed()) {
+        printf("\n    DataStore table 0 write failed — multi-table may not be supported\n    ");
+        api.closeSession(session);
+        return true;  // Not a failure, just unsupported
+    }
+    auto r1 = api.tcgWriteDataStoreN(session, 1, 0, data1);
+    if (r1.failed()) {
+        printf("\n    DataStore table 1 write failed — single table only\n    ");
+        api.closeSession(session);
+        return true;
+    }
+
+    // Read back and verify isolation
+    DataOpResult read0, read1;
+    DEV_EXPECT_OK(api.tcgReadDataStoreN(session, 0, 0, 32, read0));
+    DEV_EXPECT_OK(api.tcgReadDataStoreN(session, 1, 0, 32, read1));
+    DEV_CHECK(read0.data == data0);
+    DEV_CHECK(read1.data == data1);
+
+    // Cross-verify: table 0 should NOT have table 1's data
+    DEV_CHECK(read0.data != read1.data);
+
+    printf("\n    DataStore Multi-Table: Table0=0xAA, Table1=0xBB, isolation OK\n    ");
+
+    api.closeSession(session);
+    return true;
+}
+
 static bool dev_password_change(std::shared_ptr<ITransport> transport, uint16_t comId,
                                  const std::string& sidPw) {
     EvalApi api;
@@ -559,6 +682,7 @@ static void printUsage(const char* prog) {
     printf("  --yes             Skip confirmation prompts\n");
     printf("  --level <N>       Run only level N (1~4)\n");
     printf("  --dump            Enable transport hex dump\n");
+    printf("  --output <file>   Write JSON test results to file\n");
     printf("\nLevels:\n");
     printf("  1  Read-only: Discovery, Properties, MSID, SecurityStatus\n");
     printf("  2  Destructive: TakeOwnership, Activate, Range, Lock/Unlock, Revert\n");
@@ -591,6 +715,7 @@ int main(int argc, char* argv[]) {
     std::string sidPw = "test_sid";
     std::string userPw = "test_user1";
     std::string psidPw;
+    std::string outputPath;
 
     for (int i = 2; i < argc; i++) {
         if (strcmp(argv[i], "--destructive") == 0) destructive = true;
@@ -600,6 +725,7 @@ int main(int argc, char* argv[]) {
         else if (strcmp(argv[i], "--sid") == 0 && i + 1 < argc) sidPw = argv[++i];
         else if (strcmp(argv[i], "--user") == 0 && i + 1 < argc) userPw = argv[++i];
         else if (strcmp(argv[i], "--psid") == 0 && i + 1 < argc) psidPw = argv[++i];
+        else if (strcmp(argv[i], "--output") == 0 && i + 1 < argc) outputPath = argv[++i];
         else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             printUsage(argv[0]); return 0;
         }
@@ -633,6 +759,7 @@ int main(int argc, char* argv[]) {
 
     // ── Level 1: 읽기 전용 ──
     if (level == 0 || level == 1) {
+        g_current_level = "L1";
         printf("=== Level 1: Read-Only Device Tests ===\n");
         RUN_DEV("Discovery", dev_discovery, transport);
         RUN_DEV("Properties", dev_properties, transport, comId);
@@ -641,6 +768,7 @@ int main(int argc, char* argv[]) {
         RUN_DEV("Stack Reset", dev_stack_reset, transport, comId);
         RUN_DEV("Verify ComID", dev_verify_comid, transport, comId);
         RUN_DEV("SedDrive Query", dev_facade_query, transport);
+        RUN_DEV("Locking Range Info", dev_locking_info_deep, transport, comId);
     }
 
     // MSID — shared across levels (read once, used by L2/L3/L4)
@@ -677,6 +805,7 @@ int main(int argc, char* argv[]) {
 
     // ── Level 2: 파괴적 테스트 ──
     if ((level == 0 || level == 2) && destructive) {
+        g_current_level = "L2";
         printf("\n=== Level 2: Destructive Tests ===\n");
 
         if (!readMsid()) {
@@ -691,6 +820,7 @@ int main(int argc, char* argv[]) {
         RUN_DEV("Lock/Unlock Range", dev_lock_unlock, transport, comId, msid);
         RUN_DEV("Revert to Factory", dev_revert, transport, comId, sidPw);
     } else if ((level == 0 || level == 2) && !destructive) {
+        g_current_level = "L2";
         printf("\n=== Level 2: Destructive Tests ===\n");
         SKIP_DEV("Take Ownership", "--destructive flag not set");
         SKIP_DEV("Activate Locking SP", "--destructive flag not set");
@@ -701,6 +831,7 @@ int main(int argc, char* argv[]) {
 
     // ── Level 3: Extended (MBR, DataStore, CryptoErase, Multi-User) ──
     if ((level == 0 || level == 3) && destructive) {
+        g_current_level = "L3";
         printf("\n=== Level 3: Extended Tests (MBR, DataStore, CryptoErase, Multi-User) ===\n");
 
         // Need activated Locking SP — take ownership + activate if level 3 standalone
@@ -741,6 +872,7 @@ int main(int argc, char* argv[]) {
         RUN_DEV("Password Change", dev_password_change, transport, comId, sidPw);
         RUN_DEV("ByteTable Info", dev_byte_table_info, transport, comId, admin1Pw);
         RUN_DEV("Get Random", dev_get_random, transport, comId, admin1Pw);
+        RUN_DEV("DataStore Multi-Table", dev_datastore_multi_table, transport, comId, admin1Pw);
 
         // Revert after Level 3 if running full suite
         if (level == 0 || level == 3) {
@@ -754,6 +886,7 @@ int main(int argc, char* argv[]) {
                 printf("  Revert OK.\n");
         }
     } else if ((level == 0 || level == 3) && !destructive) {
+        g_current_level = "L3";
         printf("\n=== Level 3: Extended Tests ===\n");
         SKIP_DEV("MBR Write/Read", "--destructive flag not set");
         SKIP_DEV("DataStore Write/Read", "--destructive flag not set");
@@ -762,10 +895,12 @@ int main(int argc, char* argv[]) {
         SKIP_DEV("Password Change", "--destructive flag not set");
         SKIP_DEV("ByteTable Info", "--destructive flag not set");
         SKIP_DEV("Get Random", "--destructive flag not set");
+        SKIP_DEV("DataStore Multi-Table", "--destructive flag not set");
     }
 
     // ── Level 4: Enterprise SSC (Enterprise 드라이브 전용) ──
     if ((level == 0 || level == 4) && destructive) {
+        g_current_level = "L4";
         if (info.primarySsc == SscType::Enterprise) {
             printf("\n=== Level 4: Enterprise SSC Tests ===\n");
 
@@ -782,6 +917,7 @@ int main(int argc, char* argv[]) {
             SKIP_DEV("Enterprise Band Erase", "Not Enterprise SSC");
         }
     } else if ((level == 0 || level == 4) && !destructive) {
+        g_current_level = "L4";
         printf("\n=== Level 4: Enterprise SSC Tests ===\n");
         SKIP_DEV("Enterprise Band Config", "--destructive flag not set");
         SKIP_DEV("Enterprise Band Erase", "--destructive flag not set");
@@ -790,6 +926,12 @@ int main(int argc, char* argv[]) {
     printf("\n══════════════════════════════════════════════════\n");
     printf("  Results: %d PASSED, %d FAILED, %d SKIPPED\n", g_dev_pass, g_dev_fail, g_dev_skip);
     printf("══════════════════════════════════════════════════\n");
+
+    if (!outputPath.empty()) {
+        const char* ssc = info.primarySsc == SscType::Opal20 ? "Opal2" :
+                          info.primarySsc == SscType::Enterprise ? "Enterprise" : "Other";
+        writeJsonResults(outputPath.c_str(), device, ssc, comId);
+    }
 
     return g_dev_fail > 0 ? 1 : 0;
 }
