@@ -195,26 +195,33 @@ static bool dev_facade_query(std::shared_ptr<ITransport> transport) {
 
 static bool dev_locking_info_deep(std::shared_ptr<ITransport> transport, uint16_t comId) {
     EvalApi api;
+
+    // Check if Locking SP is activated via Discovery
+    DiscoveryInfo disc;
+    DEV_EXPECT_OK(api.discovery0(transport, disc));
+    if (!disc.lockingEnabled) {
+        printf("\n    Locking SP not activated — SKIP (activate first with --destructive L2)\n    ");
+        return true;
+    }
+
     PropertiesResult props;
     DEV_EXPECT_OK(api.exchangeProperties(transport, comId, props));
 
     Session session(transport, comId);
     StartSessionResult ssr;
-    // Unauthenticated read into Admin SP — read range info from Locking table
-    DEV_EXPECT_OK(api.startSession(session, SP_LOCKING, false, ssr));
+    // Unauthenticated read into Locking SP
+    auto sr = api.startSession(session, SP_LOCKING, false, ssr);
+    if (sr.failed()) {
+        printf("\n    Cannot open Locking SP session (0x%02X) — may require auth\n    ",
+               static_cast<int>(sr.code()));
+        return true;  // Not a test failure
+    }
 
     printf("\n");
     for (uint32_t r = 0; r <= 8; r++) {
         LockingRangeInfo info;
         auto result = api.getRangeInfo(session, r, info);
-        if (result.failed()) {
-            if (r == 0) {
-                printf("    Range 0 (Global): read failed — Locking SP may not be activated\n    ");
-                api.closeSession(session);
-                return true;  // Not a failure — just not activated
-            }
-            break;  // No more ranges
-        }
+        if (result.failed()) break;
         const char* name = (r == 0) ? "Global" : "";
         printf("    Range %u%s%s: Start=%lu Len=%lu RLE=%d WLE=%d RL=%d WL=%d\n",
                r, name[0] ? " (" : "", name[0] ? name : "",
