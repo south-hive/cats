@@ -608,6 +608,147 @@ static bool dev_password_change(std::shared_ptr<ITransport> transport, uint16_t 
 }
 
 // ═══════════════════════════════════════════════════════
+//  Level 5: Core TCG Validation (PSID Revert, LockOnReset, Multi-Range)
+// ═══════════════════════════════════════════════════════
+
+static bool dev_multi_range_independence(std::shared_ptr<ITransport> transport, uint16_t comId,
+                                          const Bytes& admin1Pw) {
+    EvalApi api;
+    PropertiesResult props;
+    DEV_EXPECT_OK(api.exchangeProperties(transport, comId, props));
+
+    Session session(transport, comId);
+    StartSessionResult ssr;
+    DEV_EXPECT_OK(api.startSessionWithAuth(session, SP_LOCKING, true, AUTH_ADMIN1, admin1Pw, ssr));
+
+    // Configure Range 1: 0~512K sectors, RLE+WLE
+    DEV_EXPECT_OK(api.setRange(session, 1, 0, 524288, true, true));
+    // Configure Range 2: 512K~1M sectors, RLE+WLE
+    DEV_EXPECT_OK(api.setRange(session, 2, 524288, 524288, true, true));
+
+    // Lock Range 1 only
+    DEV_EXPECT_OK(api.setRangeLock(session, 1, true, true));
+
+    // Verify Range 1 is locked
+    LockingRangeInfo info1;
+    DEV_EXPECT_OK(api.getRangeInfo(session, 1, info1));
+    DEV_CHECK(info1.readLocked);
+    DEV_CHECK(info1.writeLocked);
+
+    // Verify Range 2 is NOT locked
+    LockingRangeInfo info2;
+    DEV_EXPECT_OK(api.getRangeInfo(session, 2, info2));
+    DEV_CHECK(!info2.readLocked);
+    DEV_CHECK(!info2.writeLocked);
+
+    // Now lock Range 2, unlock Range 1
+    DEV_EXPECT_OK(api.setRangeLock(session, 2, true, true));
+    DEV_EXPECT_OK(api.setRangeLock(session, 1, false, false));
+
+    // Verify swapped states
+    DEV_EXPECT_OK(api.getRangeInfo(session, 1, info1));
+    DEV_EXPECT_OK(api.getRangeInfo(session, 2, info2));
+    DEV_CHECK(!info1.readLocked && !info1.writeLocked);
+    DEV_CHECK(info2.readLocked && info2.writeLocked);
+
+    // Cleanup: unlock all
+    DEV_EXPECT_OK(api.setRangeLock(session, 2, false, false));
+
+    printf("\n    Range1 + Range2: independent lock/unlock verified\n    ");
+
+    api.closeSession(session);
+    return true;
+}
+
+static bool dev_lock_on_reset(std::shared_ptr<ITransport> transport, uint16_t comId,
+                               const Bytes& admin1Pw) {
+    EvalApi api;
+    PropertiesResult props;
+    DEV_EXPECT_OK(api.exchangeProperties(transport, comId, props));
+
+    // Step 1: Set LockOnReset for Range 1, enable RLE+WLE, unlock first
+    {
+        Session session(transport, comId);
+        StartSessionResult ssr;
+        DEV_EXPECT_OK(api.startSessionWithAuth(session, SP_LOCKING, true, AUTH_ADMIN1, admin1Pw, ssr));
+
+        DEV_EXPECT_OK(api.setRange(session, 1, 0, 1048576, true, true));
+        DEV_EXPECT_OK(api.setRangeLock(session, 1, false, false));
+        DEV_EXPECT_OK(api.setLockOnReset(session, 1, true));
+
+        // Verify range is unlocked before reset
+        LockingRangeInfo info;
+        DEV_EXPECT_OK(api.getRangeInfo(session, 1, info));
+        DEV_CHECK(!info.readLocked);
+        DEV_CHECK(!info.writeLocked);
+
+        api.closeSession(session);
+    }
+
+    // Step 2: StackReset — simulates a reset event
+    DEV_EXPECT_OK(api.stackReset(transport, comId));
+
+    // Step 3: Re-open session, check Range 1 is now locked
+    DEV_EXPECT_OK(api.exchangeProperties(transport, comId, props));
+    {
+        Session session(transport, comId);
+        StartSessionResult ssr;
+        DEV_EXPECT_OK(api.startSessionWithAuth(session, SP_LOCKING, true, AUTH_ADMIN1, admin1Pw, ssr));
+
+        LockingRangeInfo info;
+        DEV_EXPECT_OK(api.getRangeInfo(session, 1, info));
+        DEV_CHECK(info.readLocked);
+        DEV_CHECK(info.writeLocked);
+
+        // Cleanup: unlock and disable LockOnReset
+        DEV_EXPECT_OK(api.setRangeLock(session, 1, false, false));
+        DEV_EXPECT_OK(api.setLockOnReset(session, 1, false));
+
+        printf("\n    LockOnReset: Set → StackReset → Range auto-locked → cleanup OK\n    ");
+
+        api.closeSession(session);
+    }
+    return true;
+}
+
+static bool dev_psid_revert(std::shared_ptr<ITransport> transport, uint16_t comId,
+                             const std::string& psidPw) {
+    EvalApi api;
+    PropertiesResult props;
+    DEV_EXPECT_OK(api.exchangeProperties(transport, comId, props));
+
+    // PSID Revert — authenticate as PSID, then revert Admin SP
+    Bytes psidCred(psidPw.begin(), psidPw.end());
+    {
+        Session session(transport, comId);
+        StartSessionResult ssr;
+        DEV_EXPECT_OK(api.startSessionWithAuth(session, SP_ADMIN, true, AUTH_PSID, psidCred, ssr));
+        DEV_EXPECT_OK(api.psidRevert(session));
+        // Session is invalidated by revert — no closeSession needed
+    }
+
+    // Verify factory state: SID authenticates with MSID
+    DEV_EXPECT_OK(api.exchangeProperties(transport, comId, props));
+    {
+        Session session(transport, comId);
+        StartSessionResult ssr;
+        DEV_EXPECT_OK(api.startSession(session, SP_ADMIN, false, ssr));
+
+        Bytes msid;
+        DEV_EXPECT_OK(api.getCPin(session, CPIN_MSID, msid));
+        DEV_CHECK(!msid.empty());
+
+        api.closeSession(session);
+
+        // SID should equal MSID after factory reset
+        DEV_EXPECT_OK(api.verifyAuthority(transport, comId, SP_ADMIN, AUTH_SID, msid));
+    }
+
+    printf("\n    PSID Revert: Factory state restored, SID=MSID verified\n    ");
+    return true;
+}
+
+// ═══════════════════════════════════════════════════════
 //  Level 4: Enterprise SSC 테스트 (Enterprise 드라이브 전용)
 // ═══════════════════════════════════════════════════════
 
@@ -684,10 +825,11 @@ static void printUsage(const char* prog) {
     printf("  --dump            Enable transport hex dump\n");
     printf("  --output <file>   Write JSON test results to file\n");
     printf("\nLevels:\n");
-    printf("  1  Read-only: Discovery, Properties, MSID, SecurityStatus\n");
+    printf("  1  Read-only: Discovery, Properties, MSID, SecurityStatus, Locking Info\n");
     printf("  2  Destructive: TakeOwnership, Activate, Range, Lock/Unlock, Revert\n");
     printf("  3  Extended: MBR, DataStore, CryptoErase, Multi-User, Password Change\n");
     printf("  4  Enterprise: BandMaster config, Lock/Unlock, EraseMaster erase\n");
+    printf("  5  Core TCG: Multi-Range independence, LockOnReset, PSID Revert\n");
     printf("\nExamples:\n");
     printf("  %s /dev/nvme0                          # Read-only tests\n", prog);
     printf("  %s /dev/nvme0 --destructive --yes      # Full test suite\n", prog);
@@ -921,6 +1063,54 @@ int main(int argc, char* argv[]) {
         printf("\n=== Level 4: Enterprise SSC Tests ===\n");
         SKIP_DEV("Enterprise Band Config", "--destructive flag not set");
         SKIP_DEV("Enterprise Band Erase", "--destructive flag not set");
+    }
+
+    // ── Level 5: Core TCG Validation ──
+    if ((level == 0 || level == 5) && destructive) {
+        g_current_level = "L5";
+        printf("\n=== Level 5: Core TCG Validation ===\n");
+
+        // Need activated Locking SP — setup if standalone or after previous revert
+        if (!readMsid()) {
+            fprintf(stderr, "  ERROR: Cannot read MSID\n");
+            return 1;
+        }
+        printf("  Setting up: TakeOwnership + Activate for Level 5...\n");
+        {
+            SedDrive setupDrive(transport, comId);
+            if (setupDrive.query().failed() || setupDrive.takeOwnership(sidPw).failed() ||
+                setupDrive.activateLocking(sidPw).failed()) {
+                fprintf(stderr, "  ERROR: Setup failed for Level 5\n");
+                return 1;
+            }
+        }
+        printf("  Setup complete.\n\n");
+
+        Bytes admin1Pw = msid;  // After activation, Admin1 PIN = MSID
+
+        RUN_DEV("Multi-Range Independence", dev_multi_range_independence, transport, comId, admin1Pw);
+        RUN_DEV("LockOnReset", dev_lock_on_reset, transport, comId, admin1Pw);
+
+        if (!psidPw.empty()) {
+            RUN_DEV("PSID Revert", dev_psid_revert, transport, comId, psidPw);
+        } else {
+            SKIP_DEV("PSID Revert", "--psid not specified");
+            // Revert normally instead
+            printf("  Reverting after Level 5...\n");
+            SedDrive rvt(transport, comId);
+            rvt.query();
+            auto rr = rvt.revert(sidPw);
+            if (rr.failed())
+                fprintf(stderr, "  WARNING: Revert failed: %s\n", rr.message().c_str());
+            else
+                printf("  Revert OK.\n");
+        }
+    } else if ((level == 0 || level == 5) && !destructive) {
+        g_current_level = "L5";
+        printf("\n=== Level 5: Core TCG Validation ===\n");
+        SKIP_DEV("Multi-Range Independence", "--destructive flag not set");
+        SKIP_DEV("LockOnReset", "--destructive flag not set");
+        SKIP_DEV("PSID Revert", "--destructive flag not set");
     }
 
     printf("\n══════════════════════════════════════════════════\n");
