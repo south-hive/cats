@@ -163,10 +163,9 @@ Result NvmeTransport::ifRecv(uint8_t protocolId, uint16_t comId,
     std::memcpy(buffer.data(), raw, copyLen);
     std::free(raw);
 
-    // Extract actual payload size from ComPacket header (Rosetta Stone §1).
-    // NVMe ioctl doesn't report actual bytes — must parse ComPacket.length
-    // at offset 16-19 to determine real payload size.
-    if (copyLen >= 20) {
+    // Protocol 0x01 (Discovery) and 0x02 (StackReset) responses are NOT ComPackets —
+    // they have their own header format. Only parse ComPacket.length for protocol 0x00.
+    if (protocolId == 0x00 && copyLen >= 20) {
         uint32_t comPacketLen = Endian::readBe32(buffer.data() + 16);
         bytesReceived = std::min(static_cast<size_t>(comPacketLen + 20), copyLen);
     } else {

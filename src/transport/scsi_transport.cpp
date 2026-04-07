@@ -147,8 +147,9 @@ Result ScsiTransport::ifRecv(uint8_t protocolId, uint16_t comId,
     size_t copyLen = std::min(recvBuf.size(), buffer.size());
     std::memcpy(buffer.data(), recvBuf.data(), copyLen);
 
-    // Extract actual payload size from ComPacket header (Rosetta Stone §1)
-    if (copyLen >= 20) {
+    // Protocol 0x01 (Discovery) and 0x02 (StackReset) responses are NOT ComPackets —
+    // they have their own header format. Only parse ComPacket.length for protocol 0x00.
+    if (protocolId == 0x00 && copyLen >= 20) {
         uint32_t comPacketLen = Endian::readBe32(buffer.data() + 16);
         bytesReceived = std::min(static_cast<size_t>(comPacketLen + 20), copyLen);
     } else {
