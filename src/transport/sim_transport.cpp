@@ -117,7 +117,7 @@ Result SimTransport::ifSend(uint8_t protocolId, uint16_t comId, ByteSpan payload
     return ErrorCode::Success;
 }
 
-Result SimTransport::ifRecv(uint8_t protocolId, uint16_t comId,
+Result SimTransport::ifRecv(uint8_t protocolId, uint16_t /*comId*/,
                              MutableByteSpan buffer, size_t& bytesReceived) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
 
@@ -573,7 +573,7 @@ Bytes SimTransport::handleSessionMethod(uint16_t comId, uint32_t tsn, uint32_t h
     return wrapSessionPacket(comId, tsn, hsn, responseTokens);
 }
 
-Bytes SimTransport::handleCloseSession(uint32_t tsn, uint32_t hsn) {
+Bytes SimTransport::handleCloseSession(uint32_t tsn, uint32_t /*hsn*/) {
     sessions_.erase(tsn);
     if (sessions_.empty()) {
         comIdState_ = ComIdState::Idle;
@@ -684,12 +684,11 @@ Bytes SimTransport::handleGet(uint64_t objectUid, const std::vector<Token>& para
     if (isDataStoreUid(objectUid)) {
         auto& ds = getDataStoreRef(objectUid);
         uint32_t rowStart = 0, rowEnd = static_cast<uint32_t>(ds.size() - 1);
-        bool hasRow = false;
         for (size_t i = 0; i < params.size(); ++i) {
             if (params[i].type == TokenType::StartName && i + 2 < params.size()) {
                 uint32_t name = static_cast<uint32_t>(params[i + 1].getUint());
-                if (name == 1) { rowStart = static_cast<uint32_t>(params[i + 2].getUint()); hasRow = true; }
-                if (name == 2) { rowEnd = static_cast<uint32_t>(params[i + 2].getUint()); hasRow = true; }
+                if (name == 1) { rowStart = static_cast<uint32_t>(params[i + 2].getUint()); }
+                if (name == 2) { rowEnd = static_cast<uint32_t>(params[i + 2].getUint()); }
                 // startCol/endCol(3,4)은 column 기반 → ByteTableInfo 조회
                 if (name == 3 || name == 4) {
                     // Column-based Get → ByteTableInfo
@@ -953,7 +952,7 @@ Bytes SimTransport::handleAuthenticate(const std::vector<Token>& params,
 //  Activate / Revert / GenKey
 // ═══════════════════════════════════════════════════════
 
-Bytes SimTransport::handleActivate(uint64_t objectUid, const SessionState& session) {
+Bytes SimTransport::handleActivate(uint64_t objectUid, const SessionState& /*session*/) {
     if (objectUid == SP_LOCKING) {
         if (lockingSpLifecycle_ == SpLifecycle::Manufactured) {
             return buildErrorResponse(0x3F);  // 이미 활성
@@ -1189,11 +1188,11 @@ Bytes& SimTransport::getDataStoreRef(uint64_t uid) {
     return dataStores_[tbl];
 }
 
-bool SimTransport::isAuthorizedForGet(const SessionState& session, uint64_t objectUid) {
+bool SimTransport::isAuthorizedForGet(const SessionState& /*session*/, uint64_t /*objectUid*/) {
     return true;  // 간소화: Get은 항상 허용
 }
 
-bool SimTransport::isAuthorizedForSet(const SessionState& session, uint64_t objectUid) {
+bool SimTransport::isAuthorizedForSet(const SessionState& session, uint64_t /*objectUid*/) {
     return session.write && session.authenticated;
 }
 
