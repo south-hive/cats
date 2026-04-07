@@ -163,9 +163,12 @@ Result NvmeTransport::ifRecv(uint8_t protocolId, uint16_t comId,
     std::memcpy(buffer.data(), raw, copyLen);
     std::free(raw);
 
-    // Protocol 0x01 (Discovery) and 0x02 (StackReset) responses are NOT ComPackets —
-    // they have their own header format. Only parse ComPacket.length for protocol 0x00.
-    if (protocolId == 0x00 && copyLen >= 20) {
+    // Discovery (protocol 0x01, comId 0x0001) and StackReset (protocol 0x02)
+    // responses are NOT ComPackets — return full buffer for those.
+    // All other protocol 0x01 traffic (Properties, session methods) IS ComPacket format.
+    bool isDiscovery = (protocolId == 0x01 && comId == 0x0001);
+    bool isStackReset = (protocolId == 0x02);
+    if (!isDiscovery && !isStackReset && copyLen >= 20) {
         uint32_t comPacketLen = Endian::readBe32(buffer.data() + 16);
         bytesReceived = std::min(static_cast<size_t>(comPacketLen + 20), copyLen);
     } else {
