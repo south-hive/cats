@@ -24,8 +24,6 @@ option(LIBSED_BUILD_SHARED   "Build shared library"   OFF)
 set(LIBSED_SOURCES
     # Core
     src/sed_library.cpp
-    src/sed_device.cpp
-
     # Facade
     src/facade/sed_drive.cpp
 

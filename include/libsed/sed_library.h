@@ -43,9 +43,6 @@
 // ── Security ──
 #include "security/hash_password.h"
 
-// ── High-level device ──
-#include "sed_device.h"
-
 // ── Facade (TC developer API) ──
 #include "facade/sed_drive.h"
 
