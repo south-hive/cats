@@ -33,14 +33,17 @@ Result EvalApi::discovery0(std::shared_ptr<ITransport> transport,
 
 Result EvalApi::discovery0Raw(std::shared_ptr<ITransport> transport,
                                Bytes& rawResponse) {
-    // LAW 14: use polling — TPer may not have response ready immediately
-    return pollRecv(transport, 0x01, 0x0001, rawResponse, 2048);
+    // Discovery response is NOT a ComPacket — bytes 16-19 are reserved zeros,
+    // not a ComPacket.length field. Cannot use pollRecv() here because it
+    // checks ComPacket.length > 0 and would poll forever.
+    return transport->ifRecv(0x01, 0x0001, rawResponse, 2048);
 }
 
 Result EvalApi::discovery0Custom(std::shared_ptr<ITransport> transport,
                                   uint8_t protocolId, uint16_t comId,
                                   Bytes& rawResponse) {
-    return pollRecv(transport, protocolId, comId, rawResponse, 2048);
+    // Discovery responses are not ComPackets — use direct ifRecv, not pollRecv.
+    return transport->ifRecv(protocolId, comId, rawResponse, 2048);
 }
 
 // ══════════��═════════════════════════════════════════════
