@@ -105,19 +105,38 @@ The recommended pattern injects an `INvmeDevice` implementation into `NvmeTransp
 
 8 unit test files in `tests/unit/` covering: token codec, packet building, discovery parsing, password hashing, endian conversion, session management, method calls, and debug/fault injection. Mock transport in `tests/mock/mock_transport.cpp` enables testing without hardware.
 
-## Application Note Examples
+## Examples (Beginner-to-Expert Learning Path)
 
-TCG Storage Application Note documents mapped to EvalApi calls in `examples/`:
+20 numbered examples in `examples/` teaching TCG SED spec + API from scratch. All target real NVMe hardware.
 
-| File | Content |
-|------|---------|
-| `appnote_opal.cpp` | Opal SSC full lifecycle (AppNote 3-13): Take Ownership → Activate → Configure Range → User/ACE → Lock/Unlock → MBR → Crypto Erase → Revert |
-| `appnote_enterprise.cpp` | Enterprise SSC: Band config, lock/unlock, BandMaster/EraseMaster passwords, erase, LockOnReset |
-| `appnote_mbr.cpp` | Shadow MBR deep dive: PBA write, boot cycle simulation, multi-user access, enable/disable |
-| `appnote_psid.cpp` | PSID Revert: locked-out recovery, post-revert state verification, MSID check |
-| `appnote_datastore.cpp` | DataStore (ByteTable): info query, write-read-compare, multi-table, chunked large data |
-| `appnote_block_sid.cpp` | NVMe Block SID Feature: set/verify/clear, power cycle behavior |
-| `appnote_ns_locking.cpp` | Configurable Namespace Locking: per-NS range config, NVMe Identify mapping |
+| # | File | TCG Concept | API Layer |
+|---|------|-------------|-----------|
+| 01 | `hello_discovery` | Level 0 Discovery — what the drive supports | SedDrive + EvalApi |
+| 02 | `properties` | Properties Exchange — host/TPer negotiation | EvalApi |
+| 03 | `sessions` | Session lifecycle — TSN/HSN, anonymous vs auth | EvalApi + SedDrive |
+| 04 | `read_msid` | Admin SP, C_PIN table, MSID factory credential | EvalApi |
+| 05 | `take_ownership` | Change SID password from MSID | EvalApi + SedDrive |
+| 06 | `activate_locking` | Locking SP lifecycle activation | EvalApi + Composite |
+| 07 | `locking_ranges` | Configure range, RLE/WLE, lock/unlock | EvalApi |
+| 08 | `user_management` | Enable User1, password, ACE assignment | EvalApi + SedDrive |
+| 09 | `mbr_shadow` | Shadow MBR, PBA image, MBRDone flag | EvalApi |
+| 10 | `datastore` | ByteTable persistent storage | EvalApi |
+| 11 | `crypto_erase` | GenKey — key rotation, instant data destruction | EvalApi + SedDrive |
+| 12 | `factory_reset` | RevertSP (SID) and PSID Revert (emergency) | EvalApi + Composite |
+| 13 | `enterprise_bands` | Enterprise SSC — Band, BandMaster, EraseMaster | EvalApi |
+| 14 | `error_handling` | Method status codes, auth failures, error layers | EvalApi |
+| 15 | `wire_inspection` | ComPacket/Packet/SubPacket, token encoding | EvalApi + Debug |
+| 16 | `eval_step_by_step` | Full EvalApi manual protocol control | EvalApi |
+| 17 | `composite_patterns` | EvalComposite multi-step + step logging | EvalComposite |
+| 18 | `fault_injection` | FaultBuilder, TestContext — breaking things | Debug |
+| 19 | `multi_session` | Concurrent sessions, ComID, threading | SedDrive + SedContext |
+| 20 | `custom_transport` | ITransport implementation, DI pattern | ITransport |
+
+**Learning Tracks:**
+- Beginner (01-06): Discovery → Properties → Sessions → MSID → Ownership → Activation
+- Core Opal (07-12): Ranges → Users → MBR → DataStore → CryptoErase → Reset
+- Enterprise (13): Branches from 05, independent of Opal 06-08
+- Expert (14-20): Errors → Wire format → EvalApi → Composite → Faults → Threading → Transport
 
 ## Developer Guide
 
