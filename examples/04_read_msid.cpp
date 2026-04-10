@@ -96,9 +96,15 @@ static bool scenario2_facadeMsid(const char* device, cli::CliOptions& opts) {
     SedDrive drive(device);
     if (opts.dump) drive.enableDump();
 
+    // query() must be called first — it runs Discovery to learn the ComID,
+    // then Properties Exchange. Without it, comId==0 and readMsid fails.
+    auto r = drive.query();
+    step(1, "SedDrive::query()", r);
+    if (r.failed()) return false;
+
     Bytes msid;
-    auto r = drive.readMsid(msid);
-    step(1, "SedDrive::readMsid()", r);
+    r = drive.readMsid(msid);
+    step(2, "SedDrive::readMsid()", r);
     if (r.ok()) {
         printString("MSID", msid);
     }
