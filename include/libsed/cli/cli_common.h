@@ -27,6 +27,8 @@ struct CliOptions {
     bool dump = false;               ///< --dump: hex dump all packets to stderr
     bool log = false;                ///< --log: write command log to file
     bool help = false;               ///< --help: show usage
+    bool force = false;              ///< --force: skip confirmation for destructive operations
+    std::string password;            ///< --password: override default test password
     std::string logDir = ".";        ///< --logdir: log file directory
     std::vector<std::string> extra;  ///< Unrecognized args (for example-specific parsing)
 };
@@ -39,8 +41,10 @@ inline bool parseCommon(int argc, char* argv[], CliOptions& opts,
         std::string arg = argv[i];
         if (arg == "--dump")       opts.dump = true;
         else if (arg == "--log")   opts.log = true;
+        else if (arg == "--force") opts.force = true;
         else if (arg == "--help" || arg == "-h") opts.help = true;
         else if (arg == "--logdir" && i + 1 < argc) opts.logDir = argv[++i];
+        else if (arg == "--password" && i + 1 < argc) opts.password = argv[++i];
         else if (arg[0] != '-' && opts.device.empty()) opts.device = arg;
         else opts.extra.push_back(arg);
     }
@@ -53,10 +57,12 @@ inline bool parseCommon(int argc, char* argv[], CliOptions& opts,
         std::cerr << "Usage: " << name << " <device> [options]\n";
         if (description) std::cerr << "\n  " << description << "\n";
         std::cerr << "\nOptions:\n"
-                  << "  --dump      Show IF-SEND/IF-RECV packets on stderr\n"
-                  << "  --log       Write command log to file\n"
-                  << "  --logdir D  Log file directory (default: .)\n"
-                  << "  --help      Show this help\n";
+                  << "  --dump        Show IF-SEND/IF-RECV packets on stderr\n"
+                  << "  --log         Write command log to file\n"
+                  << "  --logdir D    Log file directory (default: .)\n"
+                  << "  --force       Skip confirmation for destructive operations\n"
+                  << "  --password PW Override default test password\n"
+                  << "  --help        Show this help\n";
         return false;
     }
     return true;

@@ -32,9 +32,10 @@
 
 #include "example_common.h"
 
-static const std::string SID_PW = "TestSid13";
-static const std::string BM1_PW = "TestBandMaster1_13";
-static const std::string EM_PW  = "TestEraseMaster_13";
+static const char* DEFAULT_SID_PW = "TestSid13";
+static std::string SID_PW;
+static std::string BM1_PW;
+static std::string EM_PW;
 
 // ── Scenario 1: Check for Enterprise SSC ──
 
@@ -185,6 +186,10 @@ int main(int argc, char* argv[]) {
     auto transport = initTransport(argc, argv, opts,
         "Enterprise SSC — Bands, BandMasters, EraseMaster");
     if (!transport) return 1;
+
+    SID_PW = getPassword(opts, DEFAULT_SID_PW);
+    BM1_PW = SID_PW + "_BandMaster1";
+    EM_PW  = SID_PW + "_EraseMaster";
 
     banner("13: Enterprise Bands");
 

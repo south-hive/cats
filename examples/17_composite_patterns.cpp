@@ -28,9 +28,10 @@
 
 using composite::CompositeResult;
 
-static const std::string SID_PW    = "TestSid17";
-static const std::string ADMIN1_PW = "TestAdmin1_17";
-static const std::string USER1_PW  = "TestUser1_17";
+static const char* DEFAULT_SID_PW = "TestSid17";
+static std::string SID_PW;
+static std::string ADMIN1_PW;
+static std::string USER1_PW;
 
 // Helper: print CompositeResult details
 static void printCompositeResult(const CompositeResult& cr) {
@@ -168,6 +169,10 @@ int main(int argc, char* argv[]) {
     auto transport = initTransport(argc, argv, opts,
         "EvalComposite — multi-step operations with step logging");
     if (!transport) return 1;
+
+    SID_PW = getPassword(opts, DEFAULT_SID_PW);
+    ADMIN1_PW = SID_PW + "_Admin1";
+    USER1_PW = SID_PW + "_User1";
 
     banner("17: Composite Patterns");
 

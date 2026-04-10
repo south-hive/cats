@@ -27,8 +27,9 @@
 
 #include "example_common.h"
 
-static const std::string SID_PW    = "TestSid10";
-static const std::string ADMIN1_PW = "TestAdmin1_10";
+static const char* DEFAULT_SID_PW = "TestSid10";
+static std::string SID_PW;
+static std::string ADMIN1_PW;
 
 static bool setupDrive(EvalApi& api, std::shared_ptr<ITransport> transport,
                        uint16_t comId) {
@@ -197,6 +198,9 @@ int main(int argc, char* argv[]) {
     auto transport = initTransport(argc, argv, opts,
         "DataStore — persistent byte storage on the drive");
     if (!transport) return 1;
+
+    SID_PW = getPassword(opts, DEFAULT_SID_PW);
+    ADMIN1_PW = SID_PW + "_Admin1";
 
     banner("10: DataStore");
 

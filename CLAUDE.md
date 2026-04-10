@@ -206,3 +206,15 @@ Comprehensive documentation in `docs/developer_guide.md` (in Korean) covers arch
 | `tests/mock/mock_transport.h` | 현재 단순 mock (큐 기반) |
 | `include/libsed/method/method_uids.h` | SM_PROPERTIES=0xFF01, SM_START_SESSION=0xFF02 등 |
 | `include/libsed/core/uid.h` | SMUID, SP_ADMIN, CPIN_MSID 등 UID 상수 |
+
+## Example Improvements (Senior Engineer Recommendations)
+
+The current example suite (01-20) is of high educational quality, but the following enhancements are recommended to elevate it to a production-grade diagnostic and learning tool:
+
+1.  ~~**Transport Versatility in `example_common.h`**~~: ✅ Done — `initTransport` uses `TransportFactory::create()` for auto-detection (NVMe/ATA/SCSI).
+2.  ~~**Physical Safety Interlocks**~~: ✅ Done — `confirmDestructive()` prompts for confirmation; `--force` flag skips it. Applied to examples 05, 11, 12.
+3.  ~~**Credential Parameterization**~~: ✅ Done — `getPassword()` checks `--password` CLI flag → `SED_PASSWORD` env var → default fallback. All 12 examples with passwords updated.
+4.  **Specification Traceability**: Update "TCG SPEC CONTEXT" headers with specific section numbers from the TCG Core Specification and Opal/Enterprise SSC documents for research-grade reference.
+5.  **Advanced Transport Decorators**: Expand example 20 with `LatencyTransport` (simulating slow devices) or `ChaosTransport` (injecting packet loss) to demonstrate robustness testing patterns.
+6.  **Structured Output**: Add a `--json` output mode to examples to allow them to be integrated into automation pipelines and CI/CD tools.
+7.  **Consistent "Dry Run" Mode**: Implement a `--dry-run` flag that leverages `SimTransport` to print intended TCG methods without issuing physical hardware commands.

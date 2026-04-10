@@ -29,8 +29,9 @@
 #include <thread>
 #include <mutex>
 
-static const std::string SID_PW    = "TestSid19";
-static const std::string ADMIN1_PW = "TestAdmin1_19";
+static const char* DEFAULT_SID_PW = "TestSid19";
+static std::string SID_PW;
+static std::string ADMIN1_PW;
 
 static std::mutex g_printMutex;
 
@@ -185,6 +186,9 @@ int main(int argc, char* argv[]) {
     auto transport = initTransport(argc, argv, opts,
         "Multi-Session — concurrent sessions and threading patterns");
     if (!transport) return 1;
+
+    SID_PW = getPassword(opts, DEFAULT_SID_PW);
+    ADMIN1_PW = SID_PW + "_Admin1";
 
     banner("19: Multi-Session");
 

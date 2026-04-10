@@ -28,8 +28,9 @@
 
 #include "example_common.h"
 
-static const std::string SID_PW    = "TestSid11";
-static const std::string ADMIN1_PW = "TestAdmin1_11";
+static const char* DEFAULT_SID_PW = "TestSid11";
+static std::string SID_PW;
+static std::string ADMIN1_PW;
 
 static bool setupDrive(EvalApi& api, std::shared_ptr<ITransport> transport,
                        uint16_t comId) {
@@ -166,7 +167,12 @@ int main(int argc, char* argv[]) {
         "Crypto Erase — instant data destruction via key rotation");
     if (!transport) return 1;
 
+    SID_PW = getPassword(opts, DEFAULT_SID_PW);
+    ADMIN1_PW = SID_PW + "_Admin1";
+
     banner("11: Crypto Erase");
+
+    if (!confirmDestructive(opts, "crypto-erase locking range keys")) return 0;
 
     EvalApi api;
     DiscoveryInfo info;

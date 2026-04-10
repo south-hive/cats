@@ -32,8 +32,9 @@
 
 #include "example_common.h"
 
-static const std::string SID_PW    = "TestSid12";
-static const std::string ADMIN1_PW = "TestAdmin1_12";
+static const char* DEFAULT_SID_PW = "TestSid12";
+static std::string SID_PW;
+static std::string ADMIN1_PW;
 
 static bool setupDrive(EvalApi& api, std::shared_ptr<ITransport> transport,
                        uint16_t comId) {
@@ -181,8 +182,13 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    SID_PW = getPassword(opts, DEFAULT_SID_PW);
+    ADMIN1_PW = SID_PW + "_Admin1";
+
     banner("12: Factory Reset");
     printf("  WARNING: This example destroys all data on the drive!\n\n");
+
+    if (!confirmDestructive(opts, "factory-reset the drive (ALL data lost)")) return 0;
 
     EvalApi api;
     DiscoveryInfo info;

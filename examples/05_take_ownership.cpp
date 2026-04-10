@@ -29,7 +29,8 @@
 
 #include "example_common.h"
 
-static const std::string TEST_SID_PW = "TestSidPassword123";
+static const char* DEFAULT_SID_PW = "TestSidPassword123";
+static std::string TEST_SID_PW;
 
 // ── Scenario 1: Take Ownership step-by-step (EvalApi) ──
 //
@@ -180,9 +181,13 @@ int main(int argc, char* argv[]) {
         "Take Ownership — change SID password from MSID");
     if (!transport) return 1;
 
+    TEST_SID_PW = getPassword(opts, DEFAULT_SID_PW);
+
     banner("05: Take Ownership");
     printf("  WARNING: This example changes the SID password and reverts.\n");
     printf("  The drive should be in factory state (SID == MSID).\n\n");
+
+    if (!confirmDestructive(opts, "change the SID password")) return 0;
 
     EvalApi api;
     DiscoveryInfo info;

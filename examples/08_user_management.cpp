@@ -25,9 +25,10 @@
 
 #include "example_common.h"
 
-static const std::string SID_PW    = "TestSid08";
-static const std::string ADMIN1_PW = "TestAdmin1_08";
-static const std::string USER1_PW  = "TestUser1_08";
+static const char* DEFAULT_SID_PW = "TestSid08";
+static std::string SID_PW;
+static std::string ADMIN1_PW;
+static std::string USER1_PW;
 
 static bool setupDrive(EvalApi& api, std::shared_ptr<ITransport> transport,
                        uint16_t comId) {
@@ -178,6 +179,10 @@ int main(int argc, char* argv[]) {
     auto transport = initTransport(argc, argv, opts,
         "User Management — enable users, set passwords, assign ACE");
     if (!transport) return 1;
+
+    SID_PW = getPassword(opts, DEFAULT_SID_PW);
+    ADMIN1_PW = SID_PW + "_Admin1";
+    USER1_PW = SID_PW + "_User1";
 
     banner("08: User Management");
 

@@ -35,8 +35,9 @@
 
 #include "example_common.h"
 
-static const std::string SID_PW    = "TestSid07";
-static const std::string ADMIN1_PW = "TestAdmin1_07";
+static const char* DEFAULT_SID_PW = "TestSid07";
+static std::string SID_PW;
+static std::string ADMIN1_PW;
 
 // Helper: setup drive (own + activate + set Admin1 pw)
 static bool setupDrive(EvalApi& api, std::shared_ptr<ITransport> transport,
@@ -210,6 +211,9 @@ int main(int argc, char* argv[]) {
     auto transport = initTransport(argc, argv, opts,
         "Locking Ranges — configure, lock, and unlock disk regions");
     if (!transport) return 1;
+
+    SID_PW = getPassword(opts, DEFAULT_SID_PW);
+    ADMIN1_PW = SID_PW + "_Admin1";
 
     banner("07: Locking Ranges");
 

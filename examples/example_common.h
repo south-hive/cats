@@ -81,6 +81,29 @@ inline std::shared_ptr<ITransport> initTransport(int argc, char* argv[],
                                                   cli::CliOptions& opts,
                                                   const char* desc) {
     if (!cli::parseCommon(argc, argv, opts, desc)) return nullptr;
-    auto transport = TransportFactory::createNvme(opts.device);
+    auto transport = TransportFactory::create(opts.device);
     return cli::applyLogging(transport, opts);
+}
+
+// ── Safety interlock for destructive operations ────
+
+/// Prompt for confirmation before destructive operations.
+/// Returns true if --force was passed or user types 'y'.
+inline bool confirmDestructive(const cli::CliOptions& opts, const char* action) {
+    if (opts.force) return true;
+    printf("\n  WARNING: This will %s on %s\n", action, opts.device.c_str());
+    printf("  Are you sure? [y/N] ");
+    fflush(stdout);
+    int c = getchar();
+    return (c == 'y' || c == 'Y');
+}
+
+// ── Credential parameterization ────────────────────
+
+/// Get password: CLI --password > env SED_PASSWORD > fallback default.
+inline std::string getPassword(const cli::CliOptions& opts, const char* fallback) {
+    if (!opts.password.empty()) return opts.password;
+    const char* env = std::getenv("SED_PASSWORD");
+    if (env && env[0]) return env;
+    return fallback;
 }

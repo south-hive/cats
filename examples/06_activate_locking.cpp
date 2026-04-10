@@ -30,8 +30,9 @@
 
 #include "example_common.h"
 
-static const std::string SID_PW = "TestSid06";
-static const std::string ADMIN1_PW = "TestAdmin1_06";
+static const char* DEFAULT_SID_PW = "TestSid06";
+static std::string SID_PW;
+static std::string ADMIN1_PW;
 
 // ── Scenario 1: Activate Locking SP step-by-step ──
 
@@ -165,6 +166,9 @@ int main(int argc, char* argv[]) {
     auto transport = initTransport(argc, argv, opts,
         "Activate Locking SP — enable drive encryption features");
     if (!transport) return 1;
+
+    SID_PW = getPassword(opts, DEFAULT_SID_PW);
+    ADMIN1_PW = SID_PW + "_Admin1";
 
     banner("06: Activate Locking SP");
     printf("  Drive must be in factory state.\n");
