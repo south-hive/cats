@@ -13,13 +13,10 @@
 ///   - The MSID is typically the drive serial number or a random value
 ///     printed on the drive label.
 ///
-/// The "Take Ownership" flow (example 05) reads MSID, then uses it
-/// to authenticate as SID and change SID's password. Until you do that,
-/// anyone who can read MSID can control the drive.
-///
-/// The Get method (0x06) is used to read table cells. The CellBlock
-/// parameters specify which columns to return:
-///   startColumn=3, endColumn=3 → just the PIN column of C_PIN.
+/// SESSION REUSE:
+/// A single session can serve multiple Get requests — there's no need to
+/// close and reopen between reads. Close only when switching SP or auth
+/// level. Scenarios 1 and 2 share one anonymous session to demonstrate this.
 ///
 /// API LAYER: EvalApi (to show Get step by step), SedDrive (convenience).
 /// PREREQUISITES: 01 (Discovery), 03 (Sessions)
@@ -28,30 +25,25 @@
 
 #include "example_common.h"
 
-// ── Scenario 1: Read MSID step-by-step with EvalApi ──
+// ── Scenario 1: Read MSID and SID via getCPin (EvalApi) ──
+// ── Scenario 2: Generic tableGet on C_PIN columns ──
 //
-// This walks through the exact protocol steps:
-// 1. Open anonymous session to Admin SP
-// 2. Send Get(C_PIN_MSID, column=PIN)
-// 3. Parse the response to extract the PIN bytes
-// 4. Close session
+// Both use a SINGLE anonymous session — multiple Get calls are fine
+// within the same session. No need to close and reopen.
 
-static bool scenario1_evalMsid(std::shared_ptr<ITransport> transport,
-                                uint16_t comId) {
-    scenario(1, "Read MSID Step-by-Step (EvalApi)");
-
+static bool scenario1_and_2(std::shared_ptr<ITransport> transport,
+                             uint16_t comId) {
     EvalApi api;
     Session session(transport, comId);
     StartSessionResult ssr;
 
-    // Step 1: Anonymous session — no auth needed for MSID
     auto r = api.startSession(session, uid::SP_ADMIN, false, ssr);
     step(1, "Anonymous session to Admin SP", r);
     if (r.failed()) return false;
 
-    // Step 2: Get C_PIN_MSID → PIN column
-    // getCPin() wraps a Get method call with CellBlock targeting column 3 (PIN).
-    // Under the hood: Get(C_PIN_MSID, startColumn=3, endColumn=3)
+    // ── Scenario 1: getCPin for MSID and SID ──
+    scenario(1, "Read MSID and SID (getCPin)");
+
     Bytes msidPin;
     r = api.getCPin(session, uid::CPIN_MSID, msidPin);
     step(2, "getCPin(C_PIN_MSID)", r);
@@ -61,8 +53,7 @@ static bool scenario1_evalMsid(std::shared_ptr<ITransport> transport,
         printf("    Length: %zu bytes\n", msidPin.size());
     }
 
-    // Step 3: Also read the SID PIN for comparison
-    // On a factory drive, C_PIN_SID.PIN should be empty or equal MSID
+    // SID PIN — on a factory drive, should be empty or equal MSID
     Bytes sidPin;
     r = api.getCPin(session, uid::CPIN_SID, sidPin);
     step(3, "getCPin(C_PIN_SID)", r);
@@ -75,63 +66,17 @@ static bool scenario1_evalMsid(std::shared_ptr<ITransport> transport,
             printf("    SID == MSID: %s\n", same ? "yes (factory state)" : "no (owned)");
         }
     } else {
-        // Not Authorized = SID password has been changed (drive is owned)
         printf("    SID PIN: cannot read (drive may be owned)\n");
     }
 
-    api.closeSession(session);
-    step(4, "Close session", Result(ErrorCode::Success));
+    // ── Scenario 2: Generic tableGet (same session!) ──
+    scenario(2, "Generic Table Get on C_PIN (same session)");
 
-    return true;
-}
-
-// ── Scenario 2: Read MSID via SedDrive facade ──
-//
-// SedDrive::readMsid() or query() handles all the session management
-// internally. One-liner approach.
-
-static bool scenario2_facadeMsid(const char* device, cli::CliOptions& opts) {
-    scenario(2, "Read MSID via SedDrive");
-
-    SedDrive drive(device);
-    if (opts.dump) drive.enableDump();
-
-    // query() must be called first — it runs Discovery to learn the ComID,
-    // then Properties Exchange. Without it, comId==0 and readMsid fails.
-    auto r = drive.query();
-    step(1, "SedDrive::query()", r);
-    if (r.failed()) return false;
-
-    Bytes msid;
-    r = drive.readMsid(msid);
-    step(2, "SedDrive::readMsid()", r);
-    if (r.ok()) {
-        printString("MSID", msid);
-    }
-
-    return r.ok();
-}
-
-// ── Scenario 3: Read C_PIN table columns (generic Get) ──
-//
-// For learning: use tableGet() to read any table row's columns.
-// C_PIN has columns: 0=UID, 1=Name, 2=CommonName, 3=PIN,
-//                    4=CharSet, 5=TryLimit, 6=Tries, 7=Persistence
-
-static bool scenario3_genericGet(std::shared_ptr<ITransport> transport,
-                                  uint16_t comId) {
-    scenario(3, "Generic Table Get on C_PIN");
-
-    EvalApi api;
-    Session session(transport, comId);
-    StartSessionResult ssr;
-    auto r = api.startSession(session, uid::SP_ADMIN, false, ssr);
-    if (r.failed()) return false;
-
-    // Read multiple columns of C_PIN_MSID: columns 3-4 (PIN and CharSet)
+    // C_PIN columns: 0=UID, 1=Name, 2=CommonName, 3=PIN,
+    //                4=CharSet, 5=TryLimit, 6=Tries, 7=Persistence
     TableResult result;
     r = api.tableGet(session, uid::CPIN_MSID, 3, 4, result);
-    step(1, "tableGet(C_PIN_MSID, cols 3-4)", r);
+    step(4, "tableGet(C_PIN_MSID, cols 3-4)", r);
     if (r.ok()) {
         printf("    Returned %zu column(s)\n", result.columns.size());
         for (auto& [col, token] : result.columns) {
@@ -151,8 +96,39 @@ static bool scenario3_genericGet(std::shared_ptr<ITransport> transport,
         }
     }
 
+    // One close for all reads
     api.closeSession(session);
+    step(5, "Close session (one session for all reads)", Result(ErrorCode::Success));
+
     return true;
+}
+
+// ── Scenario 3: Read MSID via SedDrive facade ──
+//
+// SedDrive manages sessions internally — query() opens and closes its own.
+// This is the convenience trade-off: simpler API, but you can't control
+// session reuse.
+
+static bool scenario3_facadeMsid(const char* device, cli::CliOptions& opts) {
+    scenario(3, "Read MSID via SedDrive");
+
+    SedDrive drive(device);
+    if (opts.dump) drive.enableDump();
+
+    // query() runs Discovery + Properties + readMsid (opens/closes session internally)
+    auto r = drive.query();
+    step(1, "SedDrive::query()", r);
+    if (r.failed()) return false;
+
+    // MSID was already cached by query() — readMsid() opens another session.
+    // For efficiency, use drive.msid() which returns the cached value.
+    const Bytes& msid = drive.msid();
+    step(2, "drive.msid() (cached, no extra session)", !msid.empty());
+    if (!msid.empty()) {
+        printString("MSID", msid);
+    }
+
+    return !msid.empty();
 }
 
 int main(int argc, char* argv[]) {
@@ -169,9 +145,8 @@ int main(int argc, char* argv[]) {
     if (r.failed()) { printf("Discovery failed\n"); return 1; }
 
     bool ok = true;
-    ok &= scenario1_evalMsid(transport, info.baseComId);
-    ok &= scenario2_facadeMsid(opts.device.c_str(), opts);
-    ok &= scenario3_genericGet(transport, info.baseComId);
+    ok &= scenario1_and_2(transport, info.baseComId);
+    ok &= scenario3_facadeMsid(opts.device.c_str(), opts);
 
     printf("\n%s\n", ok ? "All scenarios passed." : "Some scenarios failed.");
     return ok ? 0 : 1;
