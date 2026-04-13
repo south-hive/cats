@@ -100,8 +100,15 @@ inline bool confirmDestructive(const cli::CliOptions& opts, const char* action) 
 
 // ── Credential parameterization ────────────────────
 
+/// Shared default passwords — same across ALL examples.
+/// Override with --password or SED_PASSWORD env var.
+static constexpr const char* DEFAULT_SID_PW    = "TestSid";
+static constexpr const char* DEFAULT_ADMIN1_PW = "TestSid_Admin1";
+static constexpr const char* DEFAULT_USER1_PW  = "TestSid_User1";
+
 /// Get password: CLI --password > env SED_PASSWORD > fallback default.
-inline std::string getPassword(const cli::CliOptions& opts, const char* fallback) {
+inline std::string getPassword(const cli::CliOptions& opts,
+                               const char* fallback = DEFAULT_SID_PW) {
     if (!opts.password.empty()) return opts.password;
     const char* env = std::getenv("SED_PASSWORD");
     if (env && env[0]) return env;
