@@ -102,9 +102,9 @@ inline bool confirmDestructive(const cli::CliOptions& opts, const char* action) 
 
 /// Shared default passwords — same across ALL examples.
 /// Override with --password or SED_PASSWORD env var.
-static constexpr const char* DEFAULT_SID_PW    = "TestSid";
-static constexpr const char* DEFAULT_ADMIN1_PW = "TestSid_Admin1";
-static constexpr const char* DEFAULT_USER1_PW  = "TestSid_User1";
+static constexpr const char* DEFAULT_SID_PW    = "TestSid1";        // 8 bytes (≥8 required by most Opal drives)
+static constexpr const char* DEFAULT_ADMIN1_PW = "TestSid1_Admin1";
+static constexpr const char* DEFAULT_USER1_PW  = "TestSid1_User1";
 
 /// Get password: CLI --password > env SED_PASSWORD > fallback default.
 inline std::string getPassword(const cli::CliOptions& opts,
