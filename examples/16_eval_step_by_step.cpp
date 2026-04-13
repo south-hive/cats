@@ -23,7 +23,6 @@
 
 #include "example_common.h"
 
-static const char* DEFAULT_SID_PW = "TestSid16";
 static std::string SID_PW;
 
 // ── Scenario 1: Complete query flow with raw payloads ──
@@ -213,7 +212,7 @@ int main(int argc, char* argv[]) {
         "EvalApi Step-by-Step — full manual protocol control");
     if (!transport) return 1;
 
-    SID_PW = getPassword(opts, DEFAULT_SID_PW);
+    SID_PW = getPassword(opts);
 
     banner("16: EvalApi Step-by-Step");
 

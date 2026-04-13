@@ -32,7 +32,6 @@
 
 #include "example_common.h"
 
-static const char* DEFAULT_SID_PW = "TestSid13";
 static std::string SID_PW;
 static std::string BM1_PW;
 static std::string EM_PW;
@@ -187,7 +186,7 @@ int main(int argc, char* argv[]) {
         "Enterprise SSC — Bands, BandMasters, EraseMaster");
     if (!transport) return 1;
 
-    SID_PW = getPassword(opts, DEFAULT_SID_PW);
+    SID_PW = getPassword(opts);
     BM1_PW = SID_PW + "_BandMaster1";
     EM_PW  = SID_PW + "_EraseMaster";
 

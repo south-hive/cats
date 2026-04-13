@@ -32,7 +32,6 @@
 
 #include "example_common.h"
 
-static const char* DEFAULT_SID_PW = "TestSid12";
 static std::string SID_PW;
 static std::string ADMIN1_PW;
 
@@ -182,7 +181,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    SID_PW = getPassword(opts, DEFAULT_SID_PW);
+    SID_PW = getPassword(opts);
     ADMIN1_PW = SID_PW + "_Admin1";
 
     banner("12: Factory Reset");

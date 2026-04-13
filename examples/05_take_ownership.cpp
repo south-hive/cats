@@ -29,7 +29,6 @@
 
 #include "example_common.h"
 
-static const char* DEFAULT_SID_PW = "TestSidPassword123";
 static std::string TEST_SID_PW;
 
 // ── Scenario 1: Take Ownership step-by-step (EvalApi) ──
@@ -181,7 +180,7 @@ int main(int argc, char* argv[]) {
         "Take Ownership — change SID password from MSID");
     if (!transport) return 1;
 
-    TEST_SID_PW = getPassword(opts, DEFAULT_SID_PW);
+    TEST_SID_PW = getPassword(opts);
 
     banner("05: Take Ownership");
     printf("  WARNING: This example changes the SID password and reverts.\n");

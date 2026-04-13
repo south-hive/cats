@@ -25,7 +25,6 @@
 
 #include "example_common.h"
 
-static const char* DEFAULT_SID_PW = "TestSid08";
 static std::string SID_PW;
 static std::string ADMIN1_PW;
 static std::string USER1_PW;
@@ -180,7 +179,7 @@ int main(int argc, char* argv[]) {
         "User Management — enable users, set passwords, assign ACE");
     if (!transport) return 1;
 
-    SID_PW = getPassword(opts, DEFAULT_SID_PW);
+    SID_PW = getPassword(opts);
     ADMIN1_PW = SID_PW + "_Admin1";
     USER1_PW = SID_PW + "_User1";
 

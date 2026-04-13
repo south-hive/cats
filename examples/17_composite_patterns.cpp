@@ -28,7 +28,6 @@
 
 using composite::CompositeResult;
 
-static const char* DEFAULT_SID_PW = "TestSid17";
 static std::string SID_PW;
 static std::string ADMIN1_PW;
 static std::string USER1_PW;
@@ -170,7 +169,7 @@ int main(int argc, char* argv[]) {
         "EvalComposite — multi-step operations with step logging");
     if (!transport) return 1;
 
-    SID_PW = getPassword(opts, DEFAULT_SID_PW);
+    SID_PW = getPassword(opts);
     ADMIN1_PW = SID_PW + "_Admin1";
     USER1_PW = SID_PW + "_User1";
 

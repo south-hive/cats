@@ -28,7 +28,6 @@
 
 #include "example_common.h"
 
-static const char* DEFAULT_SID_PW = "TestSid11";
 static std::string SID_PW;
 static std::string ADMIN1_PW;
 
@@ -167,7 +166,7 @@ int main(int argc, char* argv[]) {
         "Crypto Erase — instant data destruction via key rotation");
     if (!transport) return 1;
 
-    SID_PW = getPassword(opts, DEFAULT_SID_PW);
+    SID_PW = getPassword(opts);
     ADMIN1_PW = SID_PW + "_Admin1";
 
     banner("11: Crypto Erase");

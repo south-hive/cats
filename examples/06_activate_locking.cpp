@@ -30,7 +30,6 @@
 
 #include "example_common.h"
 
-static const char* DEFAULT_SID_PW = "TestSid06";
 static std::string SID_PW;
 static std::string ADMIN1_PW;
 
@@ -167,7 +166,7 @@ int main(int argc, char* argv[]) {
         "Activate Locking SP — enable drive encryption features");
     if (!transport) return 1;
 
-    SID_PW = getPassword(opts, DEFAULT_SID_PW);
+    SID_PW = getPassword(opts);
     ADMIN1_PW = SID_PW + "_Admin1";
 
     banner("06: Activate Locking SP");

@@ -29,7 +29,6 @@
 #include <thread>
 #include <mutex>
 
-static const char* DEFAULT_SID_PW = "TestSid19";
 static std::string SID_PW;
 static std::string ADMIN1_PW;
 
@@ -187,7 +186,7 @@ int main(int argc, char* argv[]) {
         "Multi-Session — concurrent sessions and threading patterns");
     if (!transport) return 1;
 
-    SID_PW = getPassword(opts, DEFAULT_SID_PW);
+    SID_PW = getPassword(opts);
     ADMIN1_PW = SID_PW + "_Admin1";
 
     banner("19: Multi-Session");
