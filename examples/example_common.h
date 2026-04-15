@@ -106,6 +106,13 @@ static constexpr const char* DEFAULT_SID_PW    = "TestSid1";        // 8 bytes (
 static constexpr const char* DEFAULT_ADMIN1_PW = "TestSid1_Admin1";
 static constexpr const char* DEFAULT_USER1_PW  = "TestSid1_User1";
 
+/// Hash a password string to 32-byte SHA-256 PIN bytes.
+/// Use this EVERYWHERE a password is converted to bytes for TCG auth or Set.
+/// DO NOT use Bytes(pw.begin(), pw.end()) — drives require ≥ 20-byte PINs.
+inline Bytes pwBytes(const std::string& pw) {
+    return HashPassword::passwordToBytes(pw);
+}
+
 /// Get password: CLI --password > env SED_PASSWORD > fallback default.
 inline std::string getPassword(const cli::CliOptions& opts,
                                const char* fallback = DEFAULT_SID_PW) {

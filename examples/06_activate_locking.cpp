@@ -62,7 +62,7 @@ static bool scenario1_activateEval(std::shared_ptr<ITransport> transport,
     {
         Session session(transport, comId);
         StartSessionResult ssr;
-        Bytes pw(SID_PW.begin(), SID_PW.end());
+        Bytes pw = pwBytes(SID_PW);
         auto r = api.startSessionWithAuth(session, uid::SP_ADMIN, true,
                                            uid::AUTH_SID, pw, ssr);
         step(3, "SID session to Admin SP", r);
@@ -101,7 +101,7 @@ static bool scenario1_activateEval(std::shared_ptr<ITransport> transport,
     {
         Session lockSession(transport, comId);
         StartSessionResult ssr;
-        Bytes pw(SID_PW.begin(), SID_PW.end());
+        Bytes pw = pwBytes(SID_PW);
         // Admin1 has no password yet after activation, but we can auth
         // to Locking SP as Admin1 with empty credential
         auto r = api.startSessionWithAuth(lockSession, uid::SP_LOCKING, true,

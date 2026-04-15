@@ -183,7 +183,12 @@ Bytes HashPassword::hashForDrive(const std::string& password,
 }
 
 Bytes HashPassword::passwordToBytes(const std::string& password) {
-    return Bytes(password.begin(), password.end());
+    // SHA-256 hash to ensure 32-byte PIN compatible with all Opal drives.
+    // Most drives enforce minimum PIN length (≥ 20 bytes); raw ASCII is too
+    // short for drives that expect MSID-length (32-byte) credentials.
+    // This matches sedutil behavior: sha256(password).
+    return sha256(reinterpret_cast<const uint8_t*>(password.data()),
+                  password.size());
 }
 
 } // namespace libsed

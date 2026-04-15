@@ -76,25 +76,25 @@ static bool scenario2_configureBand(std::shared_ptr<ITransport> transport,
     if (cr.failed()) return false;
 
     // Set BandMaster1 password (auth as SID to Enterprise SP)
-    Bytes sidPw(SID_PW.begin(), SID_PW.end());
+    Bytes sidPw = pwBytes(SID_PW);
     auto r = composite::withSession(api, transport, comId,
         uid::SP_ENTERPRISE, true, uid::AUTH_SID, sidPw,
         [&](Session& session) -> Result {
             // Set BandMaster1 password
             auto r2 = api.setBandMasterPassword(session, 1,
-                Bytes(BM1_PW.begin(), BM1_PW.end()));
+                pwBytes(BM1_PW));
             step(2, "Set BandMaster1 password", r2);
 
             // Set EraseMaster password
             r2 = api.setEraseMasterPassword(session,
-                Bytes(EM_PW.begin(), EM_PW.end()));
+                pwBytes(EM_PW));
             step(3, "Set EraseMaster password", r2);
 
             return ErrorCode::Success;
         });
 
     // Configure Band 1 as BandMaster1
-    Bytes bm1Pw(BM1_PW.begin(), BM1_PW.end());
+    Bytes bm1Pw = pwBytes(BM1_PW);
     r = composite::withSession(api, transport, comId,
         uid::SP_ENTERPRISE, true, uid::AUTH_BANDMASTER0 + 1, bm1Pw,
         [&](Session& session) -> Result {
@@ -125,7 +125,7 @@ static bool scenario3_lockUnlock(std::shared_ptr<ITransport> transport,
     scenario(3, "Band Lock/Unlock");
 
     EvalApi api;
-    Bytes bm1Pw(BM1_PW.begin(), BM1_PW.end());
+    Bytes bm1Pw = pwBytes(BM1_PW);
 
     auto r = composite::withSession(api, transport, comId,
         uid::SP_ENTERPRISE, true, uid::AUTH_BANDMASTER0 + 1, bm1Pw,
@@ -158,7 +158,7 @@ static bool scenario4_eraseMaster(std::shared_ptr<ITransport> transport,
     scenario(4, "EraseMaster Band Erase");
 
     EvalApi api;
-    Bytes emPw(EM_PW.begin(), EM_PW.end());
+    Bytes emPw = pwBytes(EM_PW);
 
     auto r = composite::withSession(api, transport, comId,
         uid::SP_ENTERPRISE, true, uid::AUTH_ERASEMASTER, emPw,

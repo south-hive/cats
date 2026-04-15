@@ -197,7 +197,7 @@ static bool scenario4_ownershipRaw(std::shared_ptr<ITransport> transport,
     api.closeSession(authSession);
 
     // Revert
-    Bytes pw(SID_PW.begin(), SID_PW.end());
+    Bytes pw = pwBytes(SID_PW);
     r = composite::withSession(api, transport, comId,
         uid::SP_ADMIN, true, uid::AUTH_SID, pw,
         [&](Session& s) { return api.revertSP(s, uid::SP_ADMIN); });

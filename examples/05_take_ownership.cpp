@@ -82,9 +82,9 @@ static bool scenario1_evalOwnership(std::shared_ptr<ITransport> transport,
     // ── Step 4: Verify — auth with new password ──
     Session verifySession(transport, comId);
     StartSessionResult ssr3;
-    Bytes pwBytes(TEST_SID_PW.begin(), TEST_SID_PW.end());
+    Bytes sidPin = pwBytes(TEST_SID_PW);
     r = api.startSessionWithAuth(verifySession, uid::SP_ADMIN, true,
-                                  uid::AUTH_SID, pwBytes, ssr3);
+                                  uid::AUTH_SID, sidPin, ssr3);
     step(5, "Verify: SID auth with new password", r);
     api.closeSession(verifySession);
     if (r.failed()) return false;
@@ -115,9 +115,9 @@ static bool scenario2_revert(std::shared_ptr<ITransport> transport,
     // Auth as SID with the new password
     Session session(transport, comId);
     StartSessionResult ssr;
-    Bytes pwBytes(TEST_SID_PW.begin(), TEST_SID_PW.end());
+    Bytes sidPin = pwBytes(TEST_SID_PW);
     auto r = api.startSessionWithAuth(session, uid::SP_ADMIN, true,
-                                       uid::AUTH_SID, pwBytes, ssr);
+                                       uid::AUTH_SID, sidPin, ssr);
     step(1, "SID auth with current password", r);
     if (r.failed()) return false;
 

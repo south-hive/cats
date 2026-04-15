@@ -39,7 +39,7 @@ static bool setupDrive(EvalApi& api, std::shared_ptr<ITransport> transport,
     auto cr = composite::takeOwnership(api, transport, comId, SID_PW);
     if (cr.failed()) return false;
 
-    Bytes sidPw(SID_PW.begin(), SID_PW.end());
+    Bytes sidPw = pwBytes(SID_PW);
     auto r = composite::withSession(api, transport, comId,
         uid::SP_ADMIN, true, uid::AUTH_SID, sidPw,
         [&](Session& s) { return api.activate(s, uid::SP_LOCKING); });
@@ -59,7 +59,7 @@ static bool scenario1_multiLogin(const char* device, cli::CliOptions& opts) {
     if (opts.dump) drive.enableDump();
     drive.query();
 
-    Bytes admin1Pw(ADMIN1_PW.begin(), ADMIN1_PW.end());
+    Bytes admin1Pw = pwBytes(ADMIN1_PW);
 
     // Open two sessions to Locking SP
     auto session1 = drive.login(Uid(uid::SP_LOCKING), ADMIN1_PW, Uid(uid::AUTH_ADMIN1));
@@ -120,7 +120,7 @@ static bool scenario2_sedContext(std::shared_ptr<ITransport> transport,
            ctx.tcgOption().sscType == SscType::Enterprise ? "Enterprise" : "Other");
 
     // Open a session through SedContext
-    Bytes admin1Pw(ADMIN1_PW.begin(), ADMIN1_PW.end());
+    Bytes admin1Pw = pwBytes(ADMIN1_PW);
     r = ctx.openSession(uid::SP_LOCKING, uid::AUTH_ADMIN1, admin1Pw, true);
     step(2, "ctx.openSession(Locking, Admin1)", r);
     if (r.ok()) {

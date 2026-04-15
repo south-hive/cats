@@ -40,7 +40,7 @@ static bool setupDrive(EvalApi& api, std::shared_ptr<ITransport> transport,
     auto cr = composite::takeOwnership(api, transport, comId, SID_PW);
     if (cr.failed()) return false;
 
-    Bytes sidPw(SID_PW.begin(), SID_PW.end());
+    Bytes sidPw = pwBytes(SID_PW);
     auto r = composite::withSession(api, transport, comId,
         uid::SP_ADMIN, true, uid::AUTH_SID, sidPw,
         [&](Session& s) { return api.activate(s, uid::SP_LOCKING); });

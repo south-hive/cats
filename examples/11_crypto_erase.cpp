@@ -36,7 +36,7 @@ static bool setupDrive(EvalApi& api, std::shared_ptr<ITransport> transport,
     auto cr = composite::takeOwnership(api, transport, comId, SID_PW);
     if (cr.failed()) return false;
 
-    Bytes sidPw(SID_PW.begin(), SID_PW.end());
+    Bytes sidPw = pwBytes(SID_PW);
     auto r = composite::withSession(api, transport, comId,
         uid::SP_ADMIN, true, uid::AUTH_SID, sidPw,
         [&](Session& s) { return api.activate(s, uid::SP_LOCKING); });
@@ -61,7 +61,7 @@ static bool scenario1_genKey(std::shared_ptr<ITransport> transport,
     scenario(1, "Crypto Erase via GenKey");
 
     EvalApi api;
-    Bytes admin1Pw(ADMIN1_PW.begin(), ADMIN1_PW.end());
+    Bytes admin1Pw = pwBytes(ADMIN1_PW);
 
     auto r = composite::withSession(api, transport, comId,
         uid::SP_LOCKING, true, uid::AUTH_ADMIN1, admin1Pw,
@@ -118,7 +118,7 @@ static bool scenario2_multipleErases(std::shared_ptr<ITransport> transport,
     scenario(2, "Multiple Crypto Erases");
 
     EvalApi api;
-    Bytes admin1Pw(ADMIN1_PW.begin(), ADMIN1_PW.end());
+    Bytes admin1Pw = pwBytes(ADMIN1_PW);
 
     auto r = composite::withSession(api, transport, comId,
         uid::SP_LOCKING, true, uid::AUTH_ADMIN1, admin1Pw,

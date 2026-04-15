@@ -36,7 +36,7 @@ static bool setupDrive(EvalApi& api, std::shared_ptr<ITransport> transport,
     auto cr = composite::takeOwnership(api, transport, comId, SID_PW);
     if (cr.failed()) return false;
 
-    Bytes sidPw(SID_PW.begin(), SID_PW.end());
+    Bytes sidPw = pwBytes(SID_PW);
     auto r = composite::withSession(api, transport, comId,
         uid::SP_ADMIN, true, uid::AUTH_SID, sidPw,
         [&](Session& s) { return api.activate(s, uid::SP_LOCKING); });
@@ -54,7 +54,7 @@ static bool scenario1_mbrControl(std::shared_ptr<ITransport> transport,
     scenario(1, "MBR Control — Enable and Done Flags");
 
     EvalApi api;
-    Bytes admin1Pw(ADMIN1_PW.begin(), ADMIN1_PW.end());
+    Bytes admin1Pw = pwBytes(ADMIN1_PW);
 
     auto r = composite::withSession(api, transport, comId,
         uid::SP_LOCKING, true, uid::AUTH_ADMIN1, admin1Pw,
@@ -100,7 +100,7 @@ static bool scenario2_mbrData(std::shared_ptr<ITransport> transport,
     scenario(2, "MBR Data Write/Read");
 
     EvalApi api;
-    Bytes admin1Pw(ADMIN1_PW.begin(), ADMIN1_PW.end());
+    Bytes admin1Pw = pwBytes(ADMIN1_PW);
 
     auto r = composite::withSession(api, transport, comId,
         uid::SP_LOCKING, true, uid::AUTH_ADMIN1, admin1Pw,
@@ -154,7 +154,7 @@ static bool scenario3_bootCycle(std::shared_ptr<ITransport> transport,
     scenario(3, "Boot Cycle Simulation");
 
     EvalApi api;
-    Bytes admin1Pw(ADMIN1_PW.begin(), ADMIN1_PW.end());
+    Bytes admin1Pw = pwBytes(ADMIN1_PW);
 
     // Admin enables MBR shadow (one-time setup)
     auto r = composite::withSession(api, transport, comId,
