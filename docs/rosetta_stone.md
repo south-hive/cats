@@ -52,6 +52,8 @@ Byte Range   Type              Example
 0xF8         CALL
 0xF9         ENDOFDATA (EOD)
 0xFA         ENDOFSESSION
+0xFB         STARTTRANSACTION  (sedutil: STARTTRANSACTON — typo in source)
+0xFC         ENDTRANSACTION    (sedutil: ENDTRANSACTON — typo in source)
 0xFF         EMPTY
 ```
 
@@ -107,7 +109,7 @@ A8 [SM_START_SESSION]           method
 F0                              STARTLIST
   82 00 69                      HSN=105
   A8 [SP_ADMIN]                 SP UID
-  00                            Write=false
+  01                            Write=true  (sedutil hardcodes UINT_01 always)
 F1                              ENDLIST
 F9 F0 00 00 00 F1               EOD + status
 ```
@@ -122,7 +124,8 @@ F0                              STARTLIST
   82 00 69                      HSN=105
   A8 [SP_ADMIN]                 SP UID
   01                            Write=true
-  F2 00 D0 20 [32B cred] F3    HostChallenge (index=0, 32-byte credential)
+  F2 00 D0 20 [32B cred] F3    HostChallenge (index=0) — libsed: SHA-256, 32B
+                               — sedutil:  PBKDF2-HMAC-SHA1, 20B → D0 14 [20B]
   F2 03 A8 [AUTH_SID] F3        HostExchangeAuthority (index=3)
 F1                              ENDLIST
 F9 F0 00 00 00 F1               EOD + status
@@ -135,7 +138,7 @@ Named param indices: **0=Challenge, 3=ExchangeAuth, 4=SigningAuth**
 ```
 F8                              CALL
 A8 [object_uid]                 e.g., CPIN_MSID
-A8 [GET method]                 0x0000000600000006
+A8 [GET method]                 0x0000000600000016
 F0                              STARTLIST
   F0                            STARTLIST (CellBlock)
     F2 00 03 F3                 startColumn=3 (PIN)
@@ -225,16 +228,22 @@ Name              Value                   Usage
 SMUID             0x00000000000000FF      Session Manager invocations
 THIS_SP           0x0000000000000001      Authenticate invocation target
 SP_ADMIN          0x0000020500000001      Admin SP
-SP_LOCKING        0x0000020500000002      Locking SP
+SP_LOCKING        0x0000020500000002      Locking SP (Opal)
+SP_ENTERPRISE     0x0000020500010001      Enterprise Locking SP
 AUTH_SID          0x0000000900000006      SID Authority
 AUTH_PSID         0x000000090001FF01      PSID Authority
 AUTH_ADMIN1       0x0000000900010001      Admin1 Authority
 AUTH_USER1        0x0000000900030001      User1 Authority
+AUTH_BANDMASTER0  0x0000000900008001      Enterprise BandMaster0
+AUTH_ERASEMASTER  0x0000000900008401      Enterprise EraseMaster
 CPIN_SID          0x0000000B00000001      SID password row
 CPIN_MSID         0x0000000B00008402      MSID password row
+CPIN_ADMIN1       0x0000000B00010001      Admin1 password row
 LOCKING_GLOBAL    0x0000080200000001      Global Locking Range
 LOCKING_RANGE1    0x0000080200030001      Locking Range 1
 MBRCTRL_SET       0x0000080300000001      MBR Control row
+TABLE_MBR         0x0000080400000000      Shadow MBR table (write target)
+UID_HEXFF         0xFFFFFFFFFFFFFFFF      Null/sentinel — "no authority"
 ```
 
 ---
@@ -247,12 +256,15 @@ Name              Value                   Type
 SM_PROPERTIES     0x000000000000FF01      SM method
 SM_START_SESSION  0x000000000000FF02      SM method
 SM_SYNC_SESSION   0x000000000000FF03      SM method (response only)
-SM_CLOSE_SESSION  0x000000000000FF06      SM method
+SM_CLOSE_SESSION  0x000000000000FF06      SM method (spec only — NOT sent by sedutil;
+                                          CloseSession = bare 0xFA token, no method call)
 GET               0x0000000600000016      Object method  (Opal 2.0)
 SET               0x0000000600000017      Object method  (Opal 2.0)
 EGET              0x0000000600000006      Object method  (Enterprise)
 ESET              0x0000000600000007      Object method  (Enterprise)
-AUTHENTICATE      0x000000060000001C      Object method
+NEXT              0x0000000600000008      Object method
+EAUTHENTICATE     0x000000060000000C      Object method  (Enterprise)
+AUTHENTICATE      0x000000060000001C      Object method  (Opal 2.0)
 GENKEY            0x0000000600000010      Object method
 ACTIVATE          0x0000000600000203      Object method
 REVERTSP          0x0000000600000011      Object method
@@ -281,3 +293,18 @@ Column  Name              Type     Notes
 C_PIN Table: column 3 = PIN (bytes)
 MBR Control: column 1 = MBR_ENABLE, column 2 = MBR_DONE
 Authority: column 5 = AUTH_ENABLED
+
+---
+
+## 10. PASSWORD HASHING
+
+```
+Tool        Algorithm         Salt                      Iter    Output   Wire
+──────────  ────────────────  ────────────────────────  ──────  ───────  ──────────────────
+sedutil     PBKDF2-HMAC-SHA1  20-byte drive serial num  75000   20 B     D0 14 [20 bytes]
+libsed      SHA-256           (none)                    —       32 B     D0 20 [32 bytes]
+```
+
+Both encodings are accepted by Opal 2.0 drives.
+NEVER use raw ASCII password bytes — most drives require ≥ 20-byte PINs.
+Always call `HashPassword::passwordToBytes()` in libsed code.
