@@ -102,9 +102,9 @@ inline bool confirmDestructive(const cli::CliOptions& opts, const char* action) 
 
 /// Shared default passwords — same across ALL examples.
 /// Override with --password or SED_PASSWORD env var.
-static constexpr const char* DEFAULT_SID_PW    = "TestSid1";        // 8 bytes (≥8 required by most Opal drives)
-static constexpr const char* DEFAULT_ADMIN1_PW = "TestSid1_Admin1";
-static constexpr const char* DEFAULT_USER1_PW  = "TestSid1_User1";
+static constexpr const char* DEFAULT_SID_PW    = "TestSIDPassword123";
+static constexpr const char* DEFAULT_ADMIN1_PW = "TestSIDPassword123_Admin1";
+static constexpr const char* DEFAULT_USER1_PW  = "TestSIDPassword123_User1";
 
 /// Hash a password string to 32-byte SHA-256 PIN bytes.
 /// Use this EVERYWHERE a password is converted to bytes for TCG auth or Set.

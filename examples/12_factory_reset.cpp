@@ -61,9 +61,12 @@ static bool scenario1_revertSP(std::shared_ptr<ITransport> transport,
 
     EvalApi api;
 
-    // Setup: own + activate to have something to revert
-    if (!setupDrive(api, transport, comId)) return false;
-    step(1, "Drive setup (own + activate)", true);
+    // Try to set up a fresh owned+activated state.
+    // If this fails, the drive is likely already owned — proceed to revert anyway.
+    bool setupOk = setupDrive(api, transport, comId);
+    step(1, "Drive setup (own + activate)", setupOk);
+    if (!setupOk)
+        printf("    Drive may already be owned — proceeding to revert with known SID password.\n");
 
     // Verify Locking SP is active before revert
     DiscoveryInfo info;
