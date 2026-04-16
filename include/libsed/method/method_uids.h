@@ -28,12 +28,12 @@ inline constexpr uint64_t GENKEY               = 0x0000000600000010;
 inline constexpr uint64_t REVERTSP             = 0x0000000600000011;
 // Note: GetFreeSpace/GetFreeRows are not separate method UIDs in TCG Core Spec.
 // They are performed via GET on Table objects with specific columns.
-inline constexpr uint64_t AUTHENTICATE         = 0x000000060000000C;
+inline constexpr uint64_t AUTHENTICATE         = 0x000000060000001C;  // Opal 2.0
 
 // Enterprise SSC method UIDs (different from Opal)
 inline constexpr uint64_t EGET                 = 0x0000000600000006;
 inline constexpr uint64_t ESET                 = 0x0000000600000007;
-inline constexpr uint64_t EAUTHENTICATE        = 0x000000060000001C;
+inline constexpr uint64_t EAUTHENTICATE        = 0x000000060000000C;  // Enterprise
 inline constexpr uint64_t REVERT               = 0x0000000600000202;
 inline constexpr uint64_t ACTIVATE             = 0x0000000600000203;
 inline constexpr uint64_t ERASE                = 0x0000000600000803;
