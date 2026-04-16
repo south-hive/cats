@@ -73,11 +73,11 @@ Bytes MethodCall::buildSet(const Uid& objectUid, const TokenList& values) {
     TokenEncoder paramEnc;
 
     // Where (empty) — sedutil always includes this even when empty
+    // NOTE: no EndName after Where — sedutil omits it and drives require this format
     paramEnc.startName();
     paramEnc.encodeUint(0); // "Where" keyword
     paramEnc.startList();
     paramEnc.endList();
-    paramEnc.endName();
 
     // Values
     paramEnc.startName();

@@ -150,9 +150,9 @@ F9 F0 00 00 00 F1               EOD + status
 ```
 F8                              CALL
 A8 [object_uid]                 e.g., CPIN_SID
-A8 [SET method]                 0x0000000600000007
+A8 [SET method]                 0x0000000600000017
 F0                              STARTLIST
-  F2 00 F0 F1 F3               Where (EMPTY but REQUIRED)
+  F2 00 F0 F1                  Where (EMPTY, NO EndName — sedutil format)
   F2 01                         Values (index=1)
     F0                          STARTLIST
       F2 03 A8 [pin_bytes] F3  PIN column(3) = bytes
@@ -248,8 +248,10 @@ SM_PROPERTIES     0x000000000000FF01      SM method
 SM_START_SESSION  0x000000000000FF02      SM method
 SM_SYNC_SESSION   0x000000000000FF03      SM method (response only)
 SM_CLOSE_SESSION  0x000000000000FF06      SM method
-GET               0x0000000600000006      Object method
-SET               0x0000000600000007      Object method
+GET               0x0000000600000016      Object method  (Opal 2.0)
+SET               0x0000000600000017      Object method  (Opal 2.0)
+EGET              0x0000000600000006      Object method  (Enterprise)
+ESET              0x0000000600000007      Object method  (Enterprise)
 AUTHENTICATE      0x000000060000001C      Object method
 GENKEY            0x0000000600000010      Object method
 ACTIVATE          0x0000000600000203      Object method
