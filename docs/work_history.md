@@ -1,5 +1,57 @@
 # Work History
 
+## Session 2026-04-18 — sedutil wire compat cleanup + refactor
+
+### What was done
+
+2026-04-07부터 누적된 sedutil 호환성 수정 중 비일관/누락분 정리.
+
+**1. SHA-256 password hashing 정착 (facade layer)**
+- `SedDrive::login(string)` — 평문 대신 `EvalApi::hashPassword()` 적용. 호출자가 해시하지 않고 사람 비밀번호 그대로 전달 가능
+- `SedDrive::takeOwnership()` — MSID는 이미 드라이브 자격증명이므로 raw bytes로 로그인, 새 SID 비밀번호만 `setCPin(string)`이 SHA-256 해시
+- 시나리오 테스트(L3/L4/L5)에 `hashPw()` 헬퍼(`test_helper.h`) 도입. `takeOwnership` 이후의 `verifyAuthority`/`activateLockingSP` 자격증명이 저장된 해시와 일치하도록
+- `test_hash.cpp` — `passwordToBytes("test")` 기대값 4바이트 원문 → 32바이트 SHA-256
+
+**2. Write=false 롤백 (anonymous 세션만)**
+- 커밋 `cc11854`/`fa22b57`가 모든 StartSession을 Write=true로 바꿨는데, 읽기 전용/anonymous 경로는 논리적으로 Write=false여야 함
+- 복원: `getMsid`, `withAnonymousSession`, `loginAnonymous`, `readMsid`, `takeOwnership` MSID 읽기 단계, `05_take_ownership` scenario1 앞부분
+- 인증된 세션(SID/Admin1/User1)은 Write=true 그대로 유지
+
+**3. Rosetta Stone Section 11–13 추가**
+- §11 Discovery Response Format — Discovery는 ComPacket이 아닌 raw 구조(헤더+Feature Descriptor)임을 명시
+- §12 SM Response Format — Properties/SyncSession은 CALL 헤더 포함, 일반 메서드 응답은 없음
+- §13 Enterprise Method UIDs — EGET/ESET/EAUTHENTICATE 목록 (현재 미구현 상태의 참조용)
+- `eval_api_enterprise.cpp`에 "configureBand/erase가 Opal GET/SET UID로 대리 호출 중, 실제 Enterprise 드라이브에서 실패" TODO 주석
+
+**4. Unit test runner 통합**
+- `tests/test_main.cpp` — 자체 `minitest` 프레임워크 제거. 각 unit test의 `run_*_tests()` 함수를 직접 호출하는 형태로 단순화
+- `tests/unit/test_debug_layer.cpp` — `main()` → `run_debug_layer_tests()`
+- `CMakeLists.txt` — GTest/standalone 양쪽 분기에 중복되던 파일 목록을 단일 `UNIT_TEST_SOURCES` 변수로 정리
+
+**5. `sed_sim_compare` 진단 툴 추가**
+- `tools/sed_sim_compare.cpp` (296 lines). libsed와 sedutil 양쪽에서 동일 시퀀스의 패킷을 빌드하고 hex-diff
+- sedutil의 `DtaCommand.cpp`/`DtaHexDump.cpp`를 직접 링크
+- CMake에 `sed_sim_compare` 타겟 등록
+
+### Current state
+
+- `libsed_tests` — PASS (통합된 runner)
+- `ioctl_validator` — 17/17 PASS
+- `scenario_tests` — 104/104 PASS (30초)
+- `golden_validator` — PASS
+- 커밋: `00f32d8`, `534054f`, `a0b4b86`
+
+### 다음 세션에서 이어서 할 수 있는 작업
+
+| 항목 | 난이도 | 설명 |
+|------|--------|------|
+| **Enterprise SSC 실제 구현** | 중 | `eval_api_enterprise.cpp` configureBand/erase가 Opal GET/SET(0x16/0x17) 사용 중. EGET/ESET/EAUTHENTICATE(0x06/0x07/0x1C)로 교체. Rosetta Stone §13 참조 |
+| **sed_sim_compare 시퀀스 확장** | 하 | 현재 일부 TCG 시퀀스만 비교. Properties/StartSession/Get/Set/CloseSession 전체 커버리지 확보 |
+| **Write=false 방향 재확인** | 하 | sedutil은 모든 StartSession에서 Write=true 사용. 이번 롤백이 TCG 스펙상 맞지만, 실제 drive가 거부하는 경우 재검토 필요 |
+| **SimTransport 엄격한 인증** | 중 | L4 negative 테스트의 EXPECT_FAIL 복원 — 이전 세션 TODO 유지 |
+
+---
+
 ## Session 2026-04-06 (3) — Device Runner L3/L4 + 104 Tests
 
 ### What was done
