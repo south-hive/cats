@@ -342,21 +342,58 @@ if(LIBSED_BUILD_TESTS)
 endif()
 
 # ══════════════════════════════════════════════════════
-#  Install
+#  Install — find_package(libsed) consumer support
 # ══════════════════════════════════════════════════════
+# Goal: downstream projects do
+#     find_package(libsed 0.1.0 REQUIRED)
+#     target_link_libraries(app PRIVATE libsed::libsed)
+# and it works in closed networks (no FetchContent, no network deps).
+
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
 install(TARGETS libsed
     EXPORT libsed-targets
-    ARCHIVE DESTINATION lib
-    LIBRARY DESTINATION lib
-    RUNTIME DESTINATION bin
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
+# Public headers: both the libsed/ directory and the top-level cats.h
+# umbrella include. Without cats.h, users who follow docs like
+#     #include <cats.h>
+# fail to compile after install.
 install(DIRECTORY include/libsed
-    DESTINATION include
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+install(FILES include/cats.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
+# Export the CMake target file (provides libsed::libsed).
 install(EXPORT libsed-targets
-    FILE libsed-config.cmake
+    FILE libsed-targets.cmake
     NAMESPACE libsed::
-    DESTINATION lib/cmake/libsed
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libsed
+)
+
+# Package config: wraps the targets file and handles find_dependency(Threads)
+# so downstream doesn't have to know libsed's transitive deps.
+configure_package_config_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/libsed-config.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/libsed-config.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libsed
+)
+
+# Version file: enables find_package(libsed 0.1.0 REQUIRED) version checks.
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/libsed-config-version.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/libsed-config.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/libsed-config-version.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libsed
 )
