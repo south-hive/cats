@@ -23,9 +23,10 @@ std::shared_ptr<ITransport> LoggingTransport::wrap(
 
 std::shared_ptr<ITransport> LoggingTransport::wrapDump(
     std::shared_ptr<ITransport> inner,
-    std::ostream& os)
+    std::ostream& os,
+    int verbosity)
 {
-    auto logger = CommandLogger::createDumper(os);
+    auto logger = CommandLogger::createDumper(os, verbosity);
     return std::make_shared<LoggingTransport>(std::move(inner), std::move(logger));
 }
 

@@ -130,20 +130,20 @@ uint32_t SedDrive::maxComPacketSize() const { return impl_->maxCPS; }
 
 // ── Debug ──
 
-void SedDrive::enableDump(std::ostream& os) {
-    impl_->transport = debug::LoggingTransport::wrapDump(impl_->rawTransport, os);
+void SedDrive::enableDump(std::ostream& os, int verbosity) {
+    impl_->transport = debug::LoggingTransport::wrapDump(impl_->rawTransport, os, verbosity);
 }
 
 void SedDrive::enableLog(const std::string& logDir) {
     impl_->transport = debug::LoggingTransport::wrap(impl_->rawTransport, logDir);
 }
 
-void SedDrive::enableDumpAndLog(const std::string& logDir, std::ostream& os) {
+void SedDrive::enableDumpAndLog(const std::string& logDir, std::ostream& os, int verbosity) {
     debug::LoggerConfig config;
     config.toFile = true;
     config.toStream = true;
     config.stream = &os;
-    config.alwaysHex = true;
+    config.verbosity = verbosity;
     config.logDir = logDir;
     auto logger = std::make_shared<debug::CommandLogger>(config);
     impl_->transport = std::make_shared<debug::LoggingTransport>(

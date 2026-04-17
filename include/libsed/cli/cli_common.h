@@ -24,7 +24,8 @@ namespace cli {
 
 struct CliOptions {
     std::string device;              ///< Device path (e.g., /dev/nvme0)
-    bool dump = false;               ///< --dump: hex dump all packets to stderr
+    bool dump = false;               ///< --dump: decoded packet summary to stderr
+    int  dumpLevel = 0;              ///< 0=off, 1=decoded (--dump), 2=decoded+hex (--dump2)
     bool log = false;                ///< --log: write command log to file
     bool help = false;               ///< --help: show usage
     bool force = false;              ///< --force: skip confirmation for destructive operations
@@ -39,7 +40,8 @@ inline bool parseCommon(int argc, char* argv[], CliOptions& opts,
                         const char* description = nullptr) {
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
-        if (arg == "--dump")       opts.dump = true;
+        if (arg == "--dump")       { opts.dump = true; if (opts.dumpLevel < 1) opts.dumpLevel = 1; }
+        else if (arg == "--dump2") { opts.dump = true; opts.dumpLevel = 2; }
         else if (arg == "--log")   opts.log = true;
         else if (arg == "--force") opts.force = true;
         else if (arg == "--help" || arg == "-h") opts.help = true;
@@ -57,7 +59,8 @@ inline bool parseCommon(int argc, char* argv[], CliOptions& opts,
         std::cerr << "Usage: " << name << " <device> [options]\n";
         if (description) std::cerr << "\n  " << description << "\n";
         std::cerr << "\nOptions:\n"
-                  << "  --dump        Show IF-SEND/IF-RECV packets on stderr\n"
+                  << "  --dump        Show decoded IF-SEND/IF-RECV packets on stderr\n"
+                  << "  --dump2       Like --dump but also show raw ComPacket hex\n"
                   << "  --log         Write command log to file\n"
                   << "  --logdir D    Log file directory (default: .)\n"
                   << "  --force       Skip confirmation for destructive operations\n"
@@ -68,12 +71,13 @@ inline bool parseCommon(int argc, char* argv[], CliOptions& opts,
     return true;
 }
 
-/// Scan for --dump/--log flags without touching positional args.
+/// Scan for --dump/--dump2/--log flags without touching positional args.
 /// Use this when examples have their own complex argument parsing.
 inline void scanFlags(int argc, char* argv[], CliOptions& opts) {
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
-        if (arg == "--dump")       opts.dump = true;
+        if (arg == "--dump")       { opts.dump = true; if (opts.dumpLevel < 1) opts.dumpLevel = 1; }
+        else if (arg == "--dump2") { opts.dump = true; opts.dumpLevel = 2; }
         else if (arg == "--log")   opts.log = true;
         else if (arg == "--logdir" && i + 1 < argc) opts.logDir = argv[++i];
     }
@@ -89,7 +93,7 @@ inline std::shared_ptr<ITransport> applyLogging(
         config.toFile = true;
         config.toStream = true;
         config.stream = &std::cerr;
-        config.alwaysHex = true;
+        config.verbosity = opts.dumpLevel;
         config.logDir = opts.logDir;
         auto logger = std::make_shared<debug::CommandLogger>(config);
         auto lt = std::make_shared<debug::LoggingTransport>(transport, logger);
@@ -97,7 +101,7 @@ inline std::shared_ptr<ITransport> applyLogging(
         return lt;
     }
     if (opts.dump) {
-        return debug::LoggingTransport::wrapDump(transport);
+        return debug::LoggingTransport::wrapDump(transport, std::cerr, opts.dumpLevel);
     }
     if (opts.log) {
         auto lt = debug::LoggingTransport::wrap(transport, opts.logDir);

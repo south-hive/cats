@@ -251,7 +251,7 @@ CommandLogger::CommandLogger(const std::string& filePath, bool /*explicit_path*/
 
 CommandLogger::CommandLogger(const LoggerConfig& config)
     : stream_(config.toStream ? config.stream : nullptr),
-      alwaysHex_(config.alwaysHex) {
+      verbosity_(config.verbosity) {
     if (config.toFile) {
         std::string dir = config.logDir;
         if (dir.empty()) dir = ".";
@@ -261,12 +261,12 @@ CommandLogger::CommandLogger(const LoggerConfig& config)
     }
 }
 
-std::shared_ptr<CommandLogger> CommandLogger::createDumper(std::ostream& os) {
+std::shared_ptr<CommandLogger> CommandLogger::createDumper(std::ostream& os, int verbosity) {
     LoggerConfig config;
     config.toFile = false;
     config.toStream = true;
     config.stream = &os;
-    config.alwaysHex = true;
+    config.verbosity = verbosity;
     return std::make_shared<CommandLogger>(config);
 }
 
@@ -682,7 +682,7 @@ void CommandLogger::logCommand(const char* direction,
         if (!isSend)
             os << std::setw(8) << std::right << elapsedMs << "ms";
         os << "\n";
-        if (alwaysHex_) writeRawHex(os, data, len);
+        if (verbosity_ >= 2) writeRawHex(os, data, len);
 
         {
             std::lock_guard<std::mutex> lk(mutex_);
@@ -703,7 +703,7 @@ void CommandLogger::logCommand(const char* direction,
         if (!isSend)
             os << std::setw(8) << std::right << elapsedMs << "ms";
         os << "\n";
-        if (alwaysHex_) writeRawHex(os, data, len);
+        if (verbosity_ >= 2) writeRawHex(os, data, len);
 
         {
             std::lock_guard<std::mutex> lk(mutex_);
@@ -775,11 +775,11 @@ void CommandLogger::logCommand(const char* direction,
             os << "    " << result << "\n";
     }
 
-    // ── Raw hex: on error always, on success if alwaysHex_ ──
+    // ── Raw hex: on error always, on success if verbosity >= 2 ──
     if (isError) {
         os << "    --- RAW (error response) ---\n";
         writeRawHex(os, data, len);
-    } else if (alwaysHex_) {
+    } else if (verbosity_ >= 2) {
         writeRawHex(os, data, len);
     }
 

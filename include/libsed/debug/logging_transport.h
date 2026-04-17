@@ -38,12 +38,14 @@ public:
         std::shared_ptr<ITransport> inner,
         const std::string& logDir = ".");
 
-    /// @brief --dump 모드: transport를 래핑하고 full hex를 stream에 출력
-    /// @param inner  래핑할 ITransport
-    /// @param os     출력 스트림 (기본값: stderr)
+    /// @brief --dump 모드: transport를 래핑하고 decoded 출력을 stream에 출력
+    /// @param inner     래핑할 ITransport
+    /// @param os        출력 스트림 (기본값: stderr)
+    /// @param verbosity 1=decoded only (--dump), 2=decoded+raw hex (--dump2)
     static std::shared_ptr<ITransport> wrapDump(
         std::shared_ptr<ITransport> inner,
-        std::ostream& os = std::cerr);
+        std::ostream& os = std::cerr,
+        int verbosity = 1);
 
     // ── ITransport interface ────────────────────────────
 

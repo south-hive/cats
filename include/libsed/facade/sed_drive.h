@@ -92,14 +92,15 @@ public:
 
     // ── 디버그 ──
 
-    /// 패킷 hex dump 활성화 (stderr)
-    void enableDump(std::ostream& os = std::cerr);
+    /// 패킷 dump 활성화 (stderr). verbosity: 1=decoded, 2=decoded+hex
+    void enableDump(std::ostream& os = std::cerr, int verbosity = 1);
 
     /// 커맨드 로그 파일 활성화
     void enableLog(const std::string& logDir = ".");
 
-    /// dump + log 동시 활성화
-    void enableDumpAndLog(const std::string& logDir = ".", std::ostream& os = std::cerr);
+    /// dump + log 동시 활성화. verbosity: 1=decoded, 2=decoded+hex
+    void enableDumpAndLog(const std::string& logDir = ".", std::ostream& os = std::cerr,
+                          int verbosity = 1);
 
     // ── 세션 (Multi-Session 지원) ──
 

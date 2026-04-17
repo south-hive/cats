@@ -41,7 +41,11 @@ struct LoggerConfig {
     bool toFile = true;              ///< Write to auto-named log file
     bool toStream = false;           ///< Write to an ostream (e.g., stderr)
     std::ostream* stream = nullptr;  ///< Target stream when toStream=true
-    bool alwaysHex = false;          ///< Show raw hex on every command (not just errors)
+    /// Verbosity level:
+    ///   0 = decoded summary only (errors also show raw hex)
+    ///   1 = decoded summary on every command (no extra hex)    [--dump]
+    ///   2 = decoded summary + raw ComPacket hex on every cmd   [--dump2]
+    int verbosity = 0;
     std::string logDir = ".";        ///< Directory for log file (when toFile=true)
 };
 
@@ -52,9 +56,11 @@ public:
     explicit CommandLogger(const LoggerConfig& config);
     ~CommandLogger();
 
-    /// Create a dumper that writes full hex to a stream (default: stderr)
+    /// Create a dumper that writes decoded output to a stream.
+    /// @param os        Target stream (default: stderr)
+    /// @param verbosity 1=decoded only, 2=decoded+raw hex (default: 1)
     static std::shared_ptr<CommandLogger> createDumper(
-        std::ostream& os = std::cerr);
+        std::ostream& os = std::cerr, int verbosity = 1);
 
     CommandLogger(const CommandLogger&) = delete;
     CommandLogger& operator=(const CommandLogger&) = delete;
@@ -94,7 +100,7 @@ private:
     mutable std::mutex    mutex_;
     std::ofstream         file_;
     std::ostream*         stream_ = nullptr;   ///< Optional external stream (--dump)
-    bool                  alwaysHex_ = false;   ///< Hex dump on every command
+    int                   verbosity_ = 0;       ///< 0=errors only, 1=decoded, 2=decoded+hex
     std::string           filePath_;
     std::atomic<uint32_t> cmdCount_{0};
 
