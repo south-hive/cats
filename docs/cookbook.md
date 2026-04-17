@@ -204,9 +204,15 @@ SedDrive pf1("/dev/nvme0", 0x0002);
 
 ```cpp
 SedDrive drive("/dev/nvme0");
-drive.enableDump();   // stderr에 hex dump
-drive.query();         // Discovery/Properties 패킷이 출력됨
+drive.enableDump();                              // stderr에 decoded 패킷
+drive.enableLogFile("/tmp/run42.sed.log");       // 파일에 decoded + raw hex
+drive.query();                                    // Discovery/Properties가 둘 다에 출력
 ```
+
+CLI로 동일하게: `./my_tool /dev/nvme0 --dump --logfile /tmp/run42.sed.log`.
+`--logfile`이 없으면 `--log`가 자동 파일명(`<exe>_<timestamp>.sed.log`)을 만든다.
+라이브러리 내부 흐름 로그(`LIBSED_INFO` 등)까지 파일로 남기려면
+`--flow-log PATH` 또는 `libsed::installDefaultFlowLog(path)`.
 
 ---
 

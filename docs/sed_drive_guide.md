@@ -81,15 +81,34 @@ drive.msidString()       // 문자열
 drive.info()             // DiscoveryInfo 구조체
 ```
 
-### 디버그
+### 디버그 / 로깅
+
+libsed 로그는 두 종류로 분리돼 있다:
+
+1. **흐름(Flow) 로그** — `LIBSED_INFO/DEBUG/WARN/ERROR`가 내보내는 "라이브러리가
+   지금 뭘 하고 있는가" 메시지. 기본 sink는 `StderrSink` (항상 화면). TC 플랫폼의
+   로거로 흘리려면 `Logger::setSink()`. 화면+파일 동시에 쓰려면
+   `installDefaultFlowLog("path")` 한 줄.
+2. **패킷(Packet) 로그** — IF-SEND/IF-RECV 바이트를 Rosetta Stone 형태로 decoded
+   해서 보여주고 파일에는 raw hex까지 같이 기록. `enableDump/enableLog`가 이걸
+   제어한다.
 
 ```cpp
-drive.enableDump();      // 패킷 hex dump → stderr
-drive.enableLog("./logs"); // 커맨드 로그 → 파일
-drive.enableDumpAndLog(); // 둘 다
+// 패킷 로그
+drive.enableDump();                            // decoded → stderr
+drive.enableLog("./logs");                     // 파일 (자동명: <exe>_<ts>.sed.log)
+drive.enableLogFile("/tmp/run42.sed.log");     // 파일 (경로 직접 지정)
+drive.enableDumpAndLog();                      // stderr + 자동명 파일
+drive.enableDumpAndLogFile("/tmp/run42.sed.log"); // stderr + 지정 파일
+
+// 흐름 로그
+libsed::installDefaultFlowLog("/tmp/flow.log");   // 화면 + 파일
+libsed::Logger::setSink(myPlatformSink);          // TC 플랫폼 로거로 교체
 ```
 
-**중요**: `enableDump()`는 `query()` 전에 호출하세요. query 과정도 덤프됩니다.
+`enableLogFile`로 찍는 파일엔 verbosity와 상관없이 **decoded + raw hex가 항상** 들어간다 — 아카이브용이기 때문. 콘솔 스트림만 `--dump2` / `verbosity=2`로 raw hex를 켠다.
+
+**중요**: `enableDump()` / `enableLog*()`는 `query()` 전에 호출하세요. query 과정도 덤프됩니다.
 
 ---
 

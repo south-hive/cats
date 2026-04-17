@@ -355,6 +355,39 @@ tc.disable();
 24 fault points, 동작: corrupt, drop, delay, duplicate, truncate, inject
 
 
+## 8.5. 플랫폼 로거 통합 (Flow Log)
+
+libsed 내부 로그는 `LIBSED_INFO / LIBSED_DEBUG / LIBSED_WARN / LIBSED_ERROR`
+매크로 하나의 경로를 탄다. TC 플랫폼 로거로 이 스트림을 흡수하려면 `ILogSink`를
+구현하고 `Logger::setSink()` 한 번만 호출하면 된다 — 라이브러리 전역에서 자동 반영.
+
+```cpp
+class MyPlatformSink : public libsed::ILogSink {
+public:
+    void log(libsed::LogLevel lv, const char* file, int line,
+             const std::string& msg) override {
+        platform_log(static_cast<int>(lv), file, line, msg.c_str());
+    }
+};
+
+// 부팅 시 한 번
+libsed::Logger::setSink(std::make_shared<MyPlatformSink>());
+```
+
+플랫폼 싱크를 안 연결한 상태에서도 기본 `StderrSink`가 항상 화면에 찍는다.
+추가로 화면 + 파일 동시 출력이 필요하면 `FileSink` + `TeeSink` 직접 합성하거나
+편의 헬퍼 한 줄:
+
+```cpp
+libsed::installDefaultFlowLog("/var/log/tc/libsed.log");   // screen + file tee
+```
+
+Flow 로그는 레벨 필터링(`Logger::setLevel`)과 thread-safe 배달 모두 라이브러리가
+이미 책임진다. 플랫폼 쪽은 최종 포맷만 신경 쓰면 된다.
+
+CLI 실험용: `--flow-log PATH` 플래그로 같은 screen+file 세팅을 부팅 인자로 가능.
+
+
 ## 9. Examples
 
 ### 평가 API 예제

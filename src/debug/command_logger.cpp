@@ -253,10 +253,15 @@ CommandLogger::CommandLogger(const LoggerConfig& config)
     : stream_(config.toStream ? config.stream : nullptr),
       verbosity_(config.verbosity) {
     if (config.toFile) {
-        std::string dir = config.logDir;
-        if (dir.empty()) dir = ".";
-        if (dir.back() != '/') dir += '/';
-        filePath_ = dir + getExecutableName() + "_" + getTimestamp() + ".sed.log";
+        if (!config.filePath.empty()) {
+            // Explicit path: use exactly what the caller gave, no timestamp append.
+            filePath_ = config.filePath;
+        } else {
+            std::string dir = config.logDir;
+            if (dir.empty()) dir = ".";
+            if (dir.back() != '/') dir += '/';
+            filePath_ = dir + getExecutableName() + "_" + getTimestamp() + ".sed.log";
+        }
         file_.open(filePath_, std::ios::out | std::ios::trunc);
     }
 }
@@ -665,6 +670,7 @@ void CommandLogger::logCommand(const char* direction,
     }
 
     std::ostringstream os;
+    std::ostringstream hexBuf; // collected separately so file always gets it
 
     // ── Protocol 0x02: ComID Management (compact) ──
     if (protocolId == 0x02) {
@@ -682,13 +688,21 @@ void CommandLogger::logCommand(const char* direction,
         if (!isSend)
             os << std::setw(8) << std::right << elapsedMs << "ms";
         os << "\n";
-        if (verbosity_ >= 2) writeRawHex(os, data, len);
+        writeRawHex(hexBuf, data, len);
 
         {
             std::lock_guard<std::mutex> lk(mutex_);
-            std::string text = os.str();
-            if (file_.is_open()) { file_ << text; file_.flush(); }
-            if (stream_) { *stream_ << text; stream_->flush(); }
+            std::string decoded = os.str();
+            std::string hex = hexBuf.str();
+            if (file_.is_open()) {
+                file_ << decoded << hex;
+                file_.flush();
+            }
+            if (stream_) {
+                *stream_ << decoded;
+                if (verbosity_ >= 2) *stream_ << hex;
+                stream_->flush();
+            }
         }
         return;
     }
@@ -703,13 +717,21 @@ void CommandLogger::logCommand(const char* direction,
         if (!isSend)
             os << std::setw(8) << std::right << elapsedMs << "ms";
         os << "\n";
-        if (verbosity_ >= 2) writeRawHex(os, data, len);
+        writeRawHex(hexBuf, data, len);
 
         {
             std::lock_guard<std::mutex> lk(mutex_);
-            std::string text = os.str();
-            if (file_.is_open()) { file_ << text; file_.flush(); }
-            if (stream_) { *stream_ << text; stream_->flush(); }
+            std::string decoded = os.str();
+            std::string hex = hexBuf.str();
+            if (file_.is_open()) {
+                file_ << decoded << hex;
+                file_.flush();
+            }
+            if (stream_) {
+                *stream_ << decoded;
+                if (verbosity_ >= 2) *stream_ << hex;
+                stream_->flush();
+            }
         }
         return;
     }
@@ -775,18 +797,22 @@ void CommandLogger::logCommand(const char* direction,
             os << "    " << result << "\n";
     }
 
-    // ── Raw hex: on error always, on success if verbosity >= 2 ──
-    if (isError) {
-        os << "    --- RAW (error response) ---\n";
-        writeRawHex(os, data, len);
-    } else if (verbosity_ >= 2) {
-        writeRawHex(os, data, len);
-    }
+    // ── Raw hex: always captured; file always gets it, stream respects verbosity ──
+    if (isError) hexBuf << "    --- RAW (error response) ---\n";
+    writeRawHex(hexBuf, data, len);
 
     std::lock_guard<std::mutex> lk(mutex_);
-    std::string text = os.str();
-    if (file_.is_open()) { file_ << text; file_.flush(); }
-    if (stream_) { *stream_ << text; stream_->flush(); }
+    std::string decoded = os.str();
+    std::string hex = hexBuf.str();
+    if (file_.is_open()) {
+        file_ << decoded << hex;
+        file_.flush();
+    }
+    if (stream_) {
+        *stream_ << decoded;
+        if (verbosity_ >= 2 || isError) *stream_ << hex;
+        stream_->flush();
+    }
 }
 
 } // namespace debug

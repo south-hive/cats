@@ -11,14 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - `tools/sed_compare/` — byte-for-byte packet comparison against sedutil-cli
-  for 13 commands (Tier 1: query, initialSetup, setSIDPassword, revertTPer,
-  revertLockingSP, PSIDrevert; Tier 2: activateLockingSP, setLockingRange,
-  enable/disableLockingRange, setupLockingRange, enableUser, setPassword,
-  listLockingRanges). 56/56 packets byte-identical on the current main.
+  for 17 commands across Tier 1 (ownership/revert), Tier 2 (locking/users),
+  and Tier 3 (MBR/DataStore/rekey). 68/68 packets byte-identical on the
+  current main; registered in CTest so drift fails the suite.
 - `docs/README.md` — audience-based documentation navigation map.
 - Top-level `README.md` and this `CHANGELOG.md`.
+- Enterprise SSC EGET/ESET/EAUTHENTICATE routing: `Session::setSscType()`
+  + method-UID parameterized `MethodCall::build*` + `method::getUidFor /
+  setUidFor / authenticateUidFor` helpers. `EnterpriseSession` facade
+  tags its sessions automatically.
+- **Logging — pluggable flow log with screen + file mirror.**
+  `libsed::FileSink` and `libsed::TeeSink` in `core/log.h`, plus a one-call
+  helper `libsed::installDefaultFlowLog(path)` that installs a
+  `Stderr + File` tee as the global `Logger` sink. TC platforms can still
+  replace the sink entirely with `Logger::setSink(theirSink)` as before.
+- **Logging — packet log with explicit filename.**
+  `SedDrive::enableLogFile(path)` / `enableDumpAndLogFile(path, ...)`,
+  `LoggingTransport::wrapToFile(inner, path)`, and
+  `LoggerConfig::filePath` expose the previously unreachable explicit-path
+  constructor of `CommandLogger`. CLI: `--logfile PATH` (implies `--log`,
+  overrides auto-naming) and `--flow-log PATH` (mirrors library flow log
+  to both stderr and the given file).
 
 ### Changed
+- `CommandLogger` file output now always includes the raw hex block under
+  each decoded line regardless of `verbosity` — the file is the archive.
+  Stream output still respects `verbosity` (0=decoded, 2=decoded+hex), so
+  `--dump` / `--dump2` console behavior is unchanged.
 - Reorganized `docs/` for distribution:
   - `tc_dev_guide.md` → `sed_drive_guide.md` (SedDrive facade users)
   - `developer_guide.md` → `eval_platform_guide.md` (EvalApi evaluation platform)

@@ -10,6 +10,7 @@ extern void run_endian_tests();
 extern void run_method_tests();
 extern void run_session_tests();
 extern void run_debug_layer_tests();
+extern void run_logging_tests();
 
 int main(int argc, char* argv[]) {
     (void)argc; (void)argv;
@@ -25,6 +26,7 @@ int main(int argc, char* argv[]) {
     run_method_tests();
     run_session_tests();
     run_debug_layer_tests();
+    run_logging_tests();
 
     printf("\nAll unit tests passed.\n");
     return 0;

@@ -21,6 +21,16 @@ std::shared_ptr<ITransport> LoggingTransport::wrap(
     return std::make_shared<LoggingTransport>(std::move(inner), std::move(logger));
 }
 
+std::shared_ptr<ITransport> LoggingTransport::wrapToFile(
+    std::shared_ptr<ITransport> inner,
+    const std::string& filePath)
+{
+    // Second ctor arg (bool explicit_path) is unused by CommandLogger; its
+    // presence selects the explicit-path overload.
+    auto logger = std::make_shared<CommandLogger>(filePath, true);
+    return std::make_shared<LoggingTransport>(std::move(inner), std::move(logger));
+}
+
 std::shared_ptr<ITransport> LoggingTransport::wrapDump(
     std::shared_ptr<ITransport> inner,
     std::ostream& os,

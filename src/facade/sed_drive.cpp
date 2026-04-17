@@ -138,6 +138,10 @@ void SedDrive::enableLog(const std::string& logDir) {
     impl_->transport = debug::LoggingTransport::wrap(impl_->rawTransport, logDir);
 }
 
+void SedDrive::enableLogFile(const std::string& filePath) {
+    impl_->transport = debug::LoggingTransport::wrapToFile(impl_->rawTransport, filePath);
+}
+
 void SedDrive::enableDumpAndLog(const std::string& logDir, std::ostream& os, int verbosity) {
     debug::LoggerConfig config;
     config.toFile = true;
@@ -145,6 +149,19 @@ void SedDrive::enableDumpAndLog(const std::string& logDir, std::ostream& os, int
     config.stream = &os;
     config.verbosity = verbosity;
     config.logDir = logDir;
+    auto logger = std::make_shared<debug::CommandLogger>(config);
+    impl_->transport = std::make_shared<debug::LoggingTransport>(
+        impl_->rawTransport, logger);
+}
+
+void SedDrive::enableDumpAndLogFile(const std::string& filePath,
+                                     std::ostream& os, int verbosity) {
+    debug::LoggerConfig config;
+    config.toFile = true;
+    config.toStream = true;
+    config.stream = &os;
+    config.verbosity = verbosity;
+    config.filePath = filePath;        // 명시적 경로 — logDir 무시됨
     auto logger = std::make_shared<debug::CommandLogger>(config);
     impl_->transport = std::make_shared<debug::LoggingTransport>(
         impl_->rawTransport, logger);

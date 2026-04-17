@@ -95,12 +95,20 @@ public:
     /// 패킷 dump 활성화 (stderr). verbosity: 1=decoded, 2=decoded+hex
     void enableDump(std::ostream& os = std::cerr, int verbosity = 1);
 
-    /// 커맨드 로그 파일 활성화
+    /// 커맨드 로그 파일 활성화 (자동 파일명: <exe>_<timestamp>.sed.log)
     void enableLog(const std::string& logDir = ".");
+
+    /// 커맨드 로그 — 파일 경로를 직접 지정 (자동 파일명 안 씀)
+    void enableLogFile(const std::string& filePath);
 
     /// dump + log 동시 활성화. verbosity: 1=decoded, 2=decoded+hex
     void enableDumpAndLog(const std::string& logDir = ".", std::ostream& os = std::cerr,
                           int verbosity = 1);
+
+    /// dump + log — 파일 경로 명시 버전. 스트림엔 verbosity 반영,
+    /// 파일엔 decoded + raw hex 항상 기록.
+    void enableDumpAndLogFile(const std::string& filePath,
+                               std::ostream& os = std::cerr, int verbosity = 1);
 
     // ── 세션 (Multi-Session 지원) ──
 

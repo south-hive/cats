@@ -37,16 +37,21 @@ class TokenDecoder;
 namespace debug {
 
 /// Configuration for CommandLogger output modes.
+///
+/// File output ALWAYS includes the raw hex block under each decoded line —
+/// the file is the archive. `verbosity` only affects the attached `stream`
+/// so `--dump` (v=1) stays a compact console view.
 struct LoggerConfig {
-    bool toFile = true;              ///< Write to auto-named log file
+    bool toFile = true;              ///< Write to a log file
     bool toStream = false;           ///< Write to an ostream (e.g., stderr)
     std::ostream* stream = nullptr;  ///< Target stream when toStream=true
-    /// Verbosity level:
+    /// Verbosity for the STREAM path (file output is always full):
     ///   0 = decoded summary only (errors also show raw hex)
     ///   1 = decoded summary on every command (no extra hex)    [--dump]
     ///   2 = decoded summary + raw ComPacket hex on every cmd   [--dump2]
     int verbosity = 0;
-    std::string logDir = ".";        ///< Directory for log file (when toFile=true)
+    std::string logDir = ".";        ///< Directory for auto-named file (when filePath empty)
+    std::string filePath;            ///< If non-empty, use this exact path (overrides logDir/auto-name)
 };
 
 class CommandLogger {

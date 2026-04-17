@@ -37,6 +37,7 @@
 #include "libsed/debug/logging_transport.h"
 #include "libsed/debug/command_logger.h"
 #include "libsed/packet/com_packet.h"
+#include <fstream>
 
 // ── Scenario 1: Inspect a Properties Exchange on the wire ──
 
@@ -152,6 +153,42 @@ static bool scenario3_rawSendRecv(std::shared_ptr<ITransport> transport,
     return true;
 }
 
+// ── Scenario 4: Capture wire log to an explicit file (--logfile demo) ──
+
+static bool scenario4_explicitLogFile(std::shared_ptr<ITransport> transport,
+                                       uint16_t comId) {
+    scenario(4, "Explicit Log File (Rosetta-Stone decoded + raw hex)");
+
+    const std::string logPath = "/tmp/15_wire_inspection.sed.log";
+    std::remove(logPath.c_str());
+
+    // enableLogFile-equivalent at the transport level: one-call wrap that
+    // writes BOTH the decoded one-liner AND the raw hex block to the file
+    // regardless of verbosity — the file is the archive.
+    auto loggedTransport = debug::LoggingTransport::wrapToFile(transport, logPath);
+
+    EvalApi api;
+    PropertiesResult props;
+    auto r = api.exchangeProperties(loggedTransport, comId, props);
+    step(1, "Properties exchange → " + logPath, r);
+    if (r.failed()) return false;
+
+    // Read the first ~20 lines back so the user sees what landed on disk.
+    std::ifstream f(logPath);
+    if (!f.good()) {
+        printf("    (log file not readable)\n");
+        return false;
+    }
+    printf("\n    ── Log file preview (%s) ──\n", logPath.c_str());
+    std::string line;
+    int n = 0;
+    while (std::getline(f, line) && n++ < 20) {
+        printf("    %s\n", line.c_str());
+    }
+    printf("    ── end preview ──\n");
+    return true;
+}
+
 int main(int argc, char* argv[]) {
     cli::CliOptions opts;
     auto transport = initTransport(argc, argv, opts,
@@ -169,6 +206,7 @@ int main(int argc, char* argv[]) {
     ok &= scenario1_propertiesWire(transport, info.baseComId);
     ok &= scenario2_sessionWire(transport, info.baseComId);
     ok &= scenario3_rawSendRecv(transport, info.baseComId);
+    ok &= scenario4_explicitLogFile(transport, info.baseComId);
 
     printf("\n%s\n", ok ? "All scenarios passed." : "Some scenarios failed.");
     return ok ? 0 : 1;

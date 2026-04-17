@@ -38,6 +38,13 @@ public:
         std::shared_ptr<ITransport> inner,
         const std::string& logDir = ".");
 
+    /// @brief 호출자가 파일 경로를 직접 지정하는 팩토리 (auto-naming 안 함).
+    /// @param inner    래핑할 ITransport
+    /// @param filePath 사용할 로그 파일 경로 (e.g. "/tmp/run42.sed.log")
+    static std::shared_ptr<ITransport> wrapToFile(
+        std::shared_ptr<ITransport> inner,
+        const std::string& filePath);
+
     /// @brief --dump 모드: transport를 래핑하고 decoded 출력을 stream에 출력
     /// @param inner     래핑할 ITransport
     /// @param os        출력 스트림 (기본값: stderr)

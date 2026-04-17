@@ -18,8 +18,11 @@
 #include <string>
 #include <cstdio>
 #include <cstdarg>
+#include <fstream>
+#include <initializer_list>
 #include <memory>
 #include <mutex>
+#include <vector>
 
 namespace libsed {
 
@@ -69,6 +72,76 @@ public:
              const std::string& msg) override {
         fprintf(stderr, "[%s] %s:%d: %s\n", logLevelName(level), file, line, msg.c_str());
     }
+};
+
+/// File sink: writes the same [LVL] file:line: msg format to a file. Thread-safe.
+/// Use together with TeeSink or StderrSink to mirror screen + file.
+class FileSink : public ILogSink {
+public:
+    explicit FileSink(const std::string& path, bool append = true)
+        : path_(path) {
+        file_.open(path_, std::ios::out | (append ? std::ios::app : std::ios::trunc));
+    }
+    ~FileSink() override {
+        std::lock_guard<std::mutex> lk(mu_);
+        if (file_.is_open()) { file_.flush(); file_.close(); }
+    }
+
+    void log(LogLevel level, const char* file, int line,
+             const std::string& msg) override {
+        std::lock_guard<std::mutex> lk(mu_);
+        if (!file_.is_open()) return;
+        file_ << '[' << logLevelName(level) << "] " << file << ':' << line
+              << ": " << msg << '\n';
+        file_.flush();
+    }
+
+    bool isOpen() const {
+        std::lock_guard<std::mutex> lk(mu_);
+        return file_.is_open();
+    }
+    std::string path() const { return path_; }
+
+private:
+    mutable std::mutex mu_;
+    std::ofstream      file_;
+    std::string        path_;
+};
+
+/// Fan-out composite sink: forwards each log call to every registered child.
+/// Useful for "screen AND file" output without writing a custom sink.
+class TeeSink : public ILogSink {
+public:
+    TeeSink() = default;
+
+    TeeSink(std::initializer_list<std::shared_ptr<ILogSink>> sinks) {
+        for (auto& s : sinks) if (s) sinks_.push_back(s);
+    }
+
+    void add(std::shared_ptr<ILogSink> sink) {
+        if (!sink) return;
+        std::lock_guard<std::mutex> lk(mu_);
+        sinks_.push_back(std::move(sink));
+    }
+
+    void clear() {
+        std::lock_guard<std::mutex> lk(mu_);
+        sinks_.clear();
+    }
+
+    void log(LogLevel level, const char* file, int line,
+             const std::string& msg) override {
+        std::vector<std::shared_ptr<ILogSink>> copy;
+        {
+            std::lock_guard<std::mutex> lk(mu_);
+            copy = sinks_;
+        }
+        for (auto& s : copy) s->log(level, file, line, msg);
+    }
+
+private:
+    std::mutex                                   mu_;
+    std::vector<std::shared_ptr<ILogSink>>       sinks_;
 };
 
 // ═══════════════════════════════════════════════════════
@@ -160,5 +233,30 @@ inline void logFwd(LogLevel level, const char* file, int line,
 #define LIBSED_INFO(...)  LIBSED_LOG(::libsed::LogLevel::Info,  __VA_ARGS__)
 #define LIBSED_WARN(...)  LIBSED_LOG(::libsed::LogLevel::Warn,  __VA_ARGS__)
 #define LIBSED_ERROR(...) LIBSED_LOG(::libsed::LogLevel::Error, __VA_ARGS__)
+
+// ═══════════════════════════════════════════════════════
+//  Convenience helpers
+// ═══════════════════════════════════════════════════════
+
+/// Install a Tee of StderrSink + FileSink(path) as the global sink.
+/// After this call, every LIBSED_INFO/DEBUG/WARN/ERROR goes to both
+/// stderr and the given file. Returns the composite so the caller can
+/// add more children (e.g., a platform-specific sink) without rebuilding.
+///
+/// @code
+///   libsed::installDefaultFlowLog("/var/log/tc/libsed.log");
+///   // ... later, optionally merge in the platform logger too:
+///   libsed::Logger::sink();  // still the TeeSink
+/// @endcode
+inline std::shared_ptr<TeeSink> installDefaultFlowLog(const std::string& filePath,
+                                                      bool append = true) {
+    auto tee = std::make_shared<TeeSink>(
+        std::initializer_list<std::shared_ptr<ILogSink>>{
+            std::make_shared<StderrSink>(),
+            std::make_shared<FileSink>(filePath, append)
+        });
+    Logger::setSink(tee);
+    return tee;
+}
 
 } // namespace libsed

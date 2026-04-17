@@ -159,6 +159,7 @@ if(LIBSED_BUILD_TESTS)
         tests/unit/test_method.cpp
         tests/unit/test_session.cpp
         tests/unit/test_debug_layer.cpp
+        tests/unit/test_logging.cpp
         tests/mock/mock_transport.cpp
     )
 
