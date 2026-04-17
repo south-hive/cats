@@ -23,6 +23,11 @@ void runSetupLockingRange();
 void runEnableUser();
 void runSetPassword();
 void runListLockingRanges();
+// Tier 3 — MBR / DataStore / rekey
+void runSetMBREnable();
+void runSetMBRDone();
+void runRekey();
+void runReadData();
 } // namespace sed_compare
 
 int main() {
@@ -49,10 +54,16 @@ int main() {
     runSetPassword();
     runListLockingRanges();
 
+    printf("\n>>> TIER 3: MBR / DataStore / Crypto\n");
+    runSetMBREnable();
+    runSetMBRDone();
+    runRekey();
+    runReadData();
+
     const int total = totals().pass + totals().fail;
     printf("\n═══════════════════════════════════════════════════════════════\n");
     if (totals().fail == 0) {
-        printf(" ✓ ALL %d packets byte-identical across all Tier 1/2 commands\n", total);
+        printf(" ✓ ALL %d packets byte-identical across Tier 1/2/3 commands\n", total);
     } else {
         printf(" ✗ %d/%d packets FAILED\n", totals().fail, total);
     }

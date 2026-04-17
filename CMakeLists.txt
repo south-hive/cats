@@ -268,6 +268,9 @@ if(LIBSED_BUILD_TOOLS)
         tools/sed_compare/t2_enable_user.cpp
         tools/sed_compare/t2_set_password.cpp
         tools/sed_compare/t2_list_locking_ranges.cpp
+        tools/sed_compare/t3_set_mbr.cpp
+        tools/sed_compare/t3_rekey.cpp
+        tools/sed_compare/t3_data_store.cpp
         third_party/sedutil/DtaCommand.cpp
         third_party/sedutil/DtaHexDump.cpp
     )
