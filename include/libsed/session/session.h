@@ -106,7 +106,7 @@ private:
     /// @brief ComPacket 전송 후 응답 수신 (재시도 처리 포함)
     Result sendRecv(const Bytes& sendData, Bytes& recvTokens);
 
-    /// @brief 다음 호스트 세션 번호 생성
+    /// @brief 호스트 세션 번호 반환 (sedutil 호환: 항상 105)
     static uint32_t nextHostSessionNumber();
 
     std::shared_ptr<ITransport> transport_;
@@ -115,7 +115,6 @@ private:
     uint16_t comId_ = 0;
     uint32_t tsn_ = 0;  // TPer session number
     uint32_t hsn_ = 0;  // Host session number
-    uint32_t seqNumber_ = 0;
     uint32_t maxComPacketSize_ = 2048;
     uint32_t timeoutMs_ = 30000;
     static inline uint32_t sessionCounter_ = 105;  // sedutil hardcodes HSN=105

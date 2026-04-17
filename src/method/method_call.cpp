@@ -72,10 +72,16 @@ Bytes MethodCall::buildGet(const Uid& objectUid, const CellBlock& cellBlock) {
 Bytes MethodCall::buildSet(const Uid& objectUid, const TokenList& values) {
     TokenEncoder paramEnc;
 
-    // Values only — no empty Where clause.
-    // SET on a row object (e.g. CPIN_SID) already identifies the row via the
-    // invoking UID; passing an empty Where clause is rejected as Invalid Parameter
-    // by strict Opal 2.0 drives (TCG Core Spec §5.3.3).
+    // Where (empty) — sedutil always includes this with proper ENDNAME.
+    // Our original code was missing ENDNAME, causing the token stream to be
+    // malformed and producing St=0x0C on strict drives.
+    paramEnc.startName();
+    paramEnc.encodeUint(0); // "Where" keyword
+    paramEnc.startList();
+    paramEnc.endList();
+    paramEnc.endName();     // Must close the named pair (was missing before!)
+
+    // Values
     paramEnc.startName();
     paramEnc.encodeUint(1); // "Values" keyword
     paramEnc.startList();

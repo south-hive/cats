@@ -32,7 +32,7 @@ Bytes PacketBuilder::buildComPacket(const Bytes& tokenPayload) {
     PacketHeader pktHdr;
     pktHdr.tperSessionNumber = tsn_;
     pktHdr.hostSessionNumber = hsn_;
-    pktHdr.seqNumber = seqNumber_++;
+    pktHdr.seqNumber = 0;  // sedutil always sends 0 (buffer zeroed per command)
     pktHdr.length = static_cast<uint32_t>(subPacketData.size());
 
     Bytes packetData;

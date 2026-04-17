@@ -410,7 +410,7 @@ static Packet buildSedutil_B1_StartSessionAuth() {
 
 // ── B.2: Set C_PIN_SID = new password (in-session, TSN=2/HSN=105) ──
 // sedutil: setTable(C_PIN_SID, PIN_COL, newPIN)
-// Method: SET with Values only (no Where — row is identified by invoking UID)
+// Method: SET with Where (empty) + Values { PIN: newPIN }
 
 static Packet buildLibsed_B2_SetSidPin() {
     TokenList values;
@@ -431,7 +431,14 @@ static Packet buildSedutil_B2_SetSidPin() {
 
     cmd.addToken(OPAL_TOKEN::STARTLIST);
 
-    // Values only — no empty Where (row identified by invoking UID per TCG §5.3.3)
+    // Where (empty) — sedutil always includes this with proper ENDNAME
+    cmd.addToken(OPAL_TOKEN::STARTNAME);
+    cmd.addToken(OPAL_TOKEN::WHERE);           // key = 0x00 (Where)
+    cmd.addToken(OPAL_TOKEN::STARTLIST);
+    cmd.addToken(OPAL_TOKEN::ENDLIST);
+    cmd.addToken(OPAL_TOKEN::ENDNAME);
+
+    // Values
     cmd.addToken(OPAL_TOKEN::STARTNAME);
     cmd.addToken(OPAL_TOKEN::VALUES);          // key = 0x01 (Values)
     cmd.addToken(OPAL_TOKEN::STARTLIST);
@@ -641,7 +648,7 @@ static Packet buildSedutil_D1_StartSessionAdmin1() {
 // ── D.2: Set Range1 config (in-session, TSN=4/HSN=105) ──
 // AppNote 5: Configure range start/length + enable read/write lock
 // SET on Locking Range 1 with columns: RangeStart(3), RangeLength(4),
-//   ReadLockEnabled(5), WriteLockEnabled(6) — Values only, no empty Where
+//   ReadLockEnabled(5), WriteLockEnabled(6)
 
 static Packet buildLibsed_D2_SetRangeConfig() {
     TokenList values;
@@ -666,7 +673,14 @@ static Packet buildSedutil_D2_SetRangeConfig() {
 
     cmd.addToken(OPAL_TOKEN::STARTLIST);
 
-    // Values only — no empty Where (row identified by invoking UID per TCG §5.3.3)
+    // Where (empty) — sedutil always includes this
+    cmd.addToken(OPAL_TOKEN::STARTNAME);
+    cmd.addToken(OPAL_TOKEN::WHERE);
+    cmd.addToken(OPAL_TOKEN::STARTLIST);
+    cmd.addToken(OPAL_TOKEN::ENDLIST);
+    cmd.addToken(OPAL_TOKEN::ENDNAME);
+
+    // Values
     cmd.addToken(OPAL_TOKEN::STARTNAME);
     cmd.addToken(OPAL_TOKEN::VALUES);
     cmd.addToken(OPAL_TOKEN::STARTLIST);
@@ -710,7 +724,7 @@ static Packet buildSedutil_D2_SetRangeConfig() {
 
 // ── D.3: Set Range1 lock (in-session, TSN=4/HSN=105) ──
 // AppNote 8: Lock the range by setting ReadLocked=true, WriteLocked=true
-// Same session as D.2 — sequential command — Values only, no empty Where
+// Same session as D.2 — sequential command
 
 static Packet buildLibsed_D3_SetRangeLock() {
     TokenList values;
@@ -733,7 +747,14 @@ static Packet buildSedutil_D3_SetRangeLock() {
 
     cmd.addToken(OPAL_TOKEN::STARTLIST);
 
-    // Values only — no empty Where (row identified by invoking UID per TCG §5.3.3)
+    // Where (empty) — sedutil always includes this
+    cmd.addToken(OPAL_TOKEN::STARTNAME);
+    cmd.addToken(OPAL_TOKEN::WHERE);
+    cmd.addToken(OPAL_TOKEN::STARTLIST);
+    cmd.addToken(OPAL_TOKEN::ENDLIST);
+    cmd.addToken(OPAL_TOKEN::ENDNAME);
+
+    // Values
     cmd.addToken(OPAL_TOKEN::STARTNAME);
     cmd.addToken(OPAL_TOKEN::VALUES);
     cmd.addToken(OPAL_TOKEN::STARTLIST);

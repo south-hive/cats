@@ -33,7 +33,6 @@ Session::Session(Session&& other) noexcept
     , comId_(other.comId_)
     , tsn_(other.tsn_)
     , hsn_(other.hsn_)
-    , seqNumber_(other.seqNumber_)
     , maxComPacketSize_(other.maxComPacketSize_)
     , timeoutMs_(other.timeoutMs_) {
     other.state_ = State::Closed;
@@ -48,7 +47,6 @@ Session& Session::operator=(Session&& other) noexcept {
         comId_ = other.comId_;
         tsn_ = other.tsn_;
         hsn_ = other.hsn_;
-        seqNumber_ = other.seqNumber_;
         maxComPacketSize_ = other.maxComPacketSize_;
         timeoutMs_ = other.timeoutMs_;
         other.state_ = State::Closed;
@@ -57,7 +55,8 @@ Session& Session::operator=(Session&& other) noexcept {
 }
 
 uint32_t Session::nextHostSessionNumber() {
-    return sessionCounter_++;
+    // sedutil hardcodes HSN=105 for ALL sessions. Do not increment.
+    return sessionCounter_;
 }
 
 Result Session::startSession(const Uid& spUid, bool write,
