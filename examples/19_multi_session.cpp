@@ -62,7 +62,7 @@ static bool scenario1_multiLogin(const char* device, cli::CliOptions& opts) {
     Bytes admin1Pw = pwBytes(ADMIN1_PW);
 
     // Open two sessions to Locking SP
-    auto session1 = drive.login(Uid(uid::SP_LOCKING), ADMIN1_PW, Uid(uid::AUTH_ADMIN1));
+    auto session1 = drive.login(uid::SP_LOCKING, ADMIN1_PW, uid::AUTH_ADMIN1);
     step(1, "Session 1: login(Locking SP, Admin1)", session1.openResult());
 
     if (session1.failed()) {
@@ -71,7 +71,7 @@ static bool scenario1_multiLogin(const char* device, cli::CliOptions& opts) {
     }
 
     // Try to open a second session
-    auto session2 = drive.login(Uid(uid::SP_LOCKING), ADMIN1_PW, Uid(uid::AUTH_ADMIN1));
+    auto session2 = drive.login(uid::SP_LOCKING, ADMIN1_PW, uid::AUTH_ADMIN1);
     step(2, "Session 2: login(Locking SP, Admin1)", session2.openResult());
 
     if (session2.ok()) {

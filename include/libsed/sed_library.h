@@ -57,4 +57,21 @@ void shutdown();
 /// Get library version string
 const char* versionString();
 
+// ──────────────────────────────────────────────────────────
+//  Re-exports: commonly used types from nested namespaces
+//  so users can write a single `using namespace libsed;` and
+//  get everything they need without having to know the split
+//  between libsed:: and libsed::eval::.
+// ──────────────────────────────────────────────────────────
+using eval::EvalApi;
+using eval::RawResult;
+using eval::StartSessionResult;
+using eval::SyncSessionResult;
+using eval::PropertiesResult;
+using eval::TableResult;
+using eval::LockingInfo;
+using eval::DataOpResult;
+using eval::SedContext;
+using eval::composite::CompositeResult;
+
 } // namespace libsed

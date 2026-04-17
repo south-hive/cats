@@ -77,7 +77,7 @@ Result EvalApi::writeMbrData(Session& session, uint32_t offset,
     enc.endList();
 
     // Build Set call on MBR table
-    Bytes tokens = buildMethodCall(uid::TABLE_MBR, method::SET, enc.data());
+    Bytes tokens = buildMethodCall(uid::TABLE_MBR, method::setUidFor(session.sscType()), enc.data());
     return sendMethod(session, tokens, result);
 }
 

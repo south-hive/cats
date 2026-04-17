@@ -122,9 +122,18 @@ struct Uid {
     /// @brief 모든 바이트가 0인 null UID를 기본 생성한다
     Uid() = default;
 
-    /// @brief 64비트 정수 값으로 UID를 생성한다
+    /// @brief 64비트 정수 값으로 UID를 생성한다 (implicit).
     /// @param val 빅엔디안으로 변환될 64비트 정수
-    explicit Uid(uint64_t val) {
+    ///
+    /// `uid::*` 상수들(SP_ADMIN, AUTH_SID, CPIN_SID 등)이 모두 uint64_t로
+    /// 정의되어 있어, 이 변환을 implicit으로 두어 호출부에서 다음처럼 자연스럽게
+    /// 쓸 수 있게 한다:
+    /// @code
+    ///   drive.login(uid::SP_ADMIN, "pw", uid::AUTH_SID);   // 명시적 Uid() 불필요
+    ///   session.setPin(uid::CPIN_SID, "new-pw");
+    /// @endcode
+    /// Bytes 오버로드는 여전히 explicit (Bytes↔uint64_t 혼동 방지).
+    Uid(uint64_t val) {
         for (int i = 7; i >= 0; --i) {
             bytes[i] = static_cast<uint8_t>(val & 0xFF);
             val >>= 8;

@@ -65,7 +65,7 @@ drive.unlockRange(1, "user1_pw", 1);
 SedDrive drive("/dev/nvme0");
 drive.query();
 
-auto s = drive.login(Uid(uid::SP_LOCKING), "admin1_pw", Uid(uid::AUTH_ADMIN1));
+auto s = drive.login(uid::SP_LOCKING, "admin1_pw", uid::AUTH_ADMIN1);
 LockingRangeInfo info;
 s.getRangeInfo(1, info);
 
@@ -98,12 +98,12 @@ SedDrive drive("/dev/nvme0");
 drive.query();
 
 // SID 비밀번호 변경
-auto s = drive.login(Uid(uid::SP_ADMIN), "old_pw", Uid(uid::AUTH_SID));
-s.setPin(Uid(uid::CPIN_SID), "new_pw");
+auto s = drive.login(uid::SP_ADMIN, "old_pw", uid::AUTH_SID);
+s.setPin(uid::CPIN_SID, "new_pw");
 
 // Admin1 비밀번호 변경 (LockingSP)
-auto s2 = drive.login(Uid(uid::SP_LOCKING), "old_admin1", Uid(uid::AUTH_ADMIN1));
-s2.setPin(Uid(uid::CPIN_ADMIN1), "new_admin1");
+auto s2 = drive.login(uid::SP_LOCKING, "old_admin1", uid::AUTH_ADMIN1);
+s2.setPin(uid::CPIN_ADMIN1, "new_admin1");
 ```
 
 ---
@@ -141,7 +141,7 @@ drive.query();
 drive.setMbrEnable(true, "admin1_pw");
 
 // PBA 이미지 쓰기
-auto s = drive.login(Uid(uid::SP_LOCKING), "admin1_pw", Uid(uid::AUTH_ADMIN1));
+auto s = drive.login(uid::SP_LOCKING, "admin1_pw", uid::AUTH_ADMIN1);
 Bytes pbaImage = /* PBA 이미지 데이터 */;
 s.writeMbr(0, pbaImage);
 s.setMbrDone(true);  // 부팅 시 원래 디스크로 전환
@@ -155,7 +155,7 @@ s.setMbrDone(true);  // 부팅 시 원래 디스크로 전환
 SedDrive drive("/dev/nvme0");
 drive.query();
 
-auto s = drive.login(Uid(uid::SP_LOCKING), "admin1_pw", Uid(uid::AUTH_ADMIN1));
+auto s = drive.login(uid::SP_LOCKING, "admin1_pw", uid::AUTH_ADMIN1);
 
 // 쓰기
 Bytes data = {0x48, 0x65, 0x6C, 0x6C, 0x6F};  // "Hello"
@@ -233,7 +233,7 @@ drive.query();
 
 // 세션을 열고 작업 후 자동 닫기
 auto r = drive.withSession(
-    Uid(uid::SP_LOCKING), "admin1_pw", Uid(uid::AUTH_ADMIN1),
+    uid::SP_LOCKING, "admin1_pw", uid::AUTH_ADMIN1,
     [](Session& s) -> Result {
         // 여기서 EvalApi 직접 사용 가능
         return Result::success();

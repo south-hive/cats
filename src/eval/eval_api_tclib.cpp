@@ -263,7 +263,7 @@ Result EvalApi::tcgWrite(Session& session, uint64_t tableUid,
     enc.namedBytes(1, data);     // Values
     enc.endList();
 
-    Bytes tokens = buildMethodCall(tableUid, method::SET, enc.data());
+    Bytes tokens = buildMethodCall(tableUid, method::setUidFor(session.sscType()), enc.data());
     return sendMethod(session, tokens, result);
 }
 

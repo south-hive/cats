@@ -143,13 +143,13 @@ static bool scenario3_facadeSession(const char* device, cli::CliOptions& opts) {
 
     // loginAnonymous() returns a SedSession — RAII, auto-closes
     {
-        auto session = drive.loginAnonymous(Uid(uid::SP_ADMIN));
+        auto session = drive.loginAnonymous(uid::SP_ADMIN);
         step(2, "SedDrive::loginAnonymous(Admin SP)", session.openResult());
         if (session.ok()) {
             printf("    Session is active: %s\n", session.isActive() ? "yes" : "no");
             // Read MSID through the session
             Bytes pin;
-            r = session.getPin(Uid(uid::CPIN_MSID), pin);
+            r = session.getPin(uid::CPIN_MSID, pin);
             step(3, "SedSession::getPin(MSID)", r);
             if (r.ok()) printString("MSID", pin);
         }

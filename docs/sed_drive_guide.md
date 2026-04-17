@@ -190,9 +190,9 @@ drive.setMbrDone(true, "admin1_pw");
 ```cpp
 // 인증 세션 (쓰기)
 auto session = drive.login(
-    Uid(uid::SP_ADMIN),     // SP UID
+    uid::SP_ADMIN,     // SP UID
     "password",              // 비밀번호
-    Uid(uid::AUTH_SID)      // Authority UID
+    uid::AUTH_SID      // Authority UID
 );
 
 if (session.failed()) {
@@ -201,7 +201,7 @@ if (session.failed()) {
 }
 
 // 익명 세션 (읽기 전용)
-auto session = drive.loginAnonymous(Uid(uid::SP_ADMIN));
+auto session = drive.loginAnonymous(uid::SP_ADMIN);
 ```
 
 ### 세션 내 작업
@@ -209,8 +209,8 @@ auto session = drive.loginAnonymous(Uid(uid::SP_ADMIN));
 ```cpp
 // PIN 읽기/쓰기
 Bytes pin;
-session.getPin(Uid(uid::CPIN_MSID), pin);
-session.setPin(Uid(uid::CPIN_SID), "new_password");
+session.getPin(uid::CPIN_MSID, pin);
+session.setPin(uid::CPIN_SID, "new_password");
 
 // Range 제어
 session.setRange(1, 0, 1048576);     // Range 설정
@@ -221,8 +221,8 @@ LockingRangeInfo info;
 session.getRangeInfo(1, info);        // 정보 조회
 
 // SP 관리
-session.activate(Uid(uid::SP_LOCKING));
-session.revertSP(Uid(uid::SP_ADMIN));
+session.activate(uid::SP_LOCKING);
+session.revertSP(uid::SP_ADMIN);
 
 // User 관리
 session.enableUser(1);
@@ -240,7 +240,7 @@ session.writeDataStore(0, data);
 session.readDataStore(0, 1024, data);
 
 // Crypto
-session.genKey(Uid(uid::makeKAesUid(1)));
+session.genKey(uid::makeKAesUid(1));
 session.cryptoErase(1);
 ```
 
@@ -256,11 +256,11 @@ session.close();  // 명시적 닫기
 여러 세션을 동시에 열 수 있습니다:
 
 ```cpp
-auto s1 = drive.login(Uid(uid::SP_ADMIN), "sid_pw", Uid(uid::AUTH_SID));
-auto s2 = drive.login(Uid(uid::SP_LOCKING), "admin1_pw", Uid(uid::AUTH_ADMIN1));
+auto s1 = drive.login(uid::SP_ADMIN, "sid_pw", uid::AUTH_SID);
+auto s2 = drive.login(uid::SP_LOCKING, "admin1_pw", uid::AUTH_ADMIN1);
 
 // s1, s2 독립적으로 사용
-s1.setPin(Uid(uid::CPIN_SID), "new_pw");
+s1.setPin(uid::CPIN_SID, "new_pw");
 s2.lockRange(1);
 // 소멸자가 각각 자동 닫기
 ```
@@ -299,7 +299,7 @@ drive.lockBand(0, "bandmaster0_pw");
 drive.unlockBand(0, "bandmaster0_pw");
 
 // 세션에서 직접
-auto s = drive.login(Uid(uid::SP_LOCKING), "bm0_pw", uid::makeBandMasterUid(0));
+auto s = drive.login(uid::SP_LOCKING, "bm0_pw", uid::makeBandMasterUid(0));
 s.configureBand(0, 0, 1048576);
 s.lockBand(0);
 s.unlockBand(0);
@@ -321,7 +321,7 @@ auto s = drive.login(...);
 Session& rawSession = s.raw();
 
 // withSession 패턴
-drive.withSession(Uid(uid::SP_ADMIN), "pw", Uid(uid::AUTH_SID),
+drive.withSession(uid::SP_ADMIN, "pw", uid::AUTH_SID,
     [](Session& s) -> Result {
         // 여기서 EvalApi를 직접 호출
         return Result::success();
