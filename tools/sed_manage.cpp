@@ -8,7 +8,7 @@
 
 static void printUsage(const char* prog) {
     printf("TCG SED Management Tool\n\n");
-    printf("Usage: %s <device> <command> [options] [--dump]\n\n", prog);
+    printf("Usage: %s <device> <command> [options] [--dump|--dump2]\n\n", prog);
     printf("Commands:\n");
     printf("  take-ownership <new_password>          Set SID password (reads MSID automatically)\n");
     printf("  activate <sid_password>                Activate Locking SP\n");
@@ -22,7 +22,8 @@ static void printUsage(const char* prog) {
     printf("  revert <sid_password>                  Revert TPer (factory reset)\n");
     printf("  psid-revert <psid>                     Emergency PSID revert\n\n");
     printf("Flags:\n");
-    printf("  --dump    Show IF-SEND/IF-RECV packets on stderr\n");
+    printf("  --dump    Show decoded IF-SEND/IF-RECV packets on stderr\n");
+    printf("  --dump2   Like --dump but also show raw ComPacket hex\n");
 }
 
 int main(int argc, char* argv[]) {
@@ -32,8 +33,12 @@ int main(int argc, char* argv[]) {
     const char* command = argv[2];
 
     libsed::SedDrive drive(device);
-    for (int i = 3; i < argc; i++)
-        if (std::strcmp(argv[i], "--dump") == 0) drive.enableDump();
+    int dumpLevel = 0;
+    for (int i = 3; i < argc; i++) {
+        if (std::strcmp(argv[i], "--dump") == 0 && dumpLevel < 1) dumpLevel = 1;
+        else if (std::strcmp(argv[i], "--dump2") == 0) dumpLevel = 2;
+    }
+    if (dumpLevel > 0) drive.enableDump(std::cerr, dumpLevel);
 
     auto r = drive.query();
     if (r.failed()) {

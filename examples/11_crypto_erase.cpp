@@ -143,7 +143,7 @@ static bool scenario3_facade(const char* device, cli::CliOptions& opts) {
     scenario(3, "SedDrive::cryptoErase()");
 
     SedDrive drive(device);
-    if (opts.dump) drive.enableDump();
+    if (opts.dump) drive.enableDump(std::cerr, opts.dumpLevel);
     drive.query();
 
     auto r = drive.cryptoErase(1, ADMIN1_PW);

@@ -7,14 +7,18 @@
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        printf("Usage: %s <device> [--dump]\n", argv[0]);
+        printf("Usage: %s <device> [--dump|--dump2]\n", argv[0]);
         return 1;
     }
 
     const char* device = argv[1];
     libsed::SedDrive drive(device);
-    for (int i = 2; i < argc; i++)
-        if (std::strcmp(argv[i], "--dump") == 0) drive.enableDump();
+    int dumpLevel = 0;
+    for (int i = 2; i < argc; i++) {
+        if (std::strcmp(argv[i], "--dump") == 0 && dumpLevel < 1) dumpLevel = 1;
+        else if (std::strcmp(argv[i], "--dump2") == 0) dumpLevel = 2;
+    }
+    if (dumpLevel > 0) drive.enableDump(std::cerr, dumpLevel);
 
     auto r = drive.query();
     if (r.failed()) {

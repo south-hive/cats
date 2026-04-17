@@ -829,7 +829,8 @@ static void printUsage(const char* prog) {
     printf("  --psid <password> PSID for emergency recovery\n");
     printf("  --yes             Skip confirmation prompts\n");
     printf("  --level <N>       Run only level N (1~4)\n");
-    printf("  --dump            Enable transport hex dump\n");
+    printf("  --dump            Show decoded packet summary on stderr\n");
+    printf("  --dump2           Like --dump but also show raw ComPacket hex\n");
     printf("  --output <file>   Write JSON test results to file\n");
     printf("\nLevels:\n");
     printf("  1  Read-only: Discovery, Properties, MSID, SecurityStatus, Locking Info\n");
@@ -859,7 +860,7 @@ int main(int argc, char* argv[]) {
     std::string device = argv[1];
     bool destructive = false;
     bool autoYes = false;
-    bool dump = false;
+    int dump = 0;  // 0=off, 1=decoded, 2=decoded+hex
     int level = 0;
     std::string sidPw = "test_sid";
     std::string userPw = "test_user1";
@@ -869,7 +870,8 @@ int main(int argc, char* argv[]) {
     for (int i = 2; i < argc; i++) {
         if (strcmp(argv[i], "--destructive") == 0) destructive = true;
         else if (strcmp(argv[i], "--yes") == 0) autoYes = true;
-        else if (strcmp(argv[i], "--dump") == 0) dump = true;
+        else if (strcmp(argv[i], "--dump") == 0) { if (dump < 1) dump = 1; }
+        else if (strcmp(argv[i], "--dump2") == 0) dump = 2;
         else if (strcmp(argv[i], "--level") == 0 && i + 1 < argc) level = atoi(argv[++i]);
         else if (strcmp(argv[i], "--sid") == 0 && i + 1 < argc) sidPw = argv[++i];
         else if (strcmp(argv[i], "--user") == 0 && i + 1 < argc) userPw = argv[++i];
@@ -892,9 +894,10 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "ERROR: Cannot open device %s\n", device.c_str());
         return 1;
     }
-    if (dump) {
-        transport = debug::LoggingTransport::wrapDump(transport, std::cerr);
-        printf("  Dump: ENABLED (hex output to stderr)\n\n");
+    if (dump > 0) {
+        transport = debug::LoggingTransport::wrapDump(transport, std::cerr, dump);
+        printf("  Dump: level %d (%s)\n\n", dump,
+               dump >= 2 ? "decoded+hex" : "decoded");
     }
 
     // ComID 획득

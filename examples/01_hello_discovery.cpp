@@ -31,7 +31,7 @@ static bool scenario1_facadeQuery(const char* device, cli::CliOptions& opts) {
 
     // SedDrive wraps transport creation internally
     SedDrive drive(device);
-    if (opts.dump) drive.enableDump();
+    if (opts.dump) drive.enableDump(std::cerr, opts.dumpLevel);
 
     // query() performs: Discovery -> Properties Exchange -> Read MSID
     auto r = drive.query();

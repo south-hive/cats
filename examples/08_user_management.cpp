@@ -146,7 +146,7 @@ static bool scenario3_facade(const char* device, uint16_t comId,
     scenario(3, "SedDrive::setupUser() + lockRange/unlockRange");
 
     SedDrive drive(device);
-    if (opts.dump) drive.enableDump();
+    if (opts.dump) drive.enableDump(std::cerr, opts.dumpLevel);
     drive.query();
 
     // setupUser bundles: enable + password + ACE assignment

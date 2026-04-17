@@ -56,7 +56,7 @@ static bool scenario1_multiLogin(const char* device, cli::CliOptions& opts) {
     scenario(1, "Multiple SedDrive Login Sessions");
 
     SedDrive drive(device);
-    if (opts.dump) drive.enableDump();
+    if (opts.dump) drive.enableDump(std::cerr, opts.dumpLevel);
     drive.query();
 
     Bytes admin1Pw = pwBytes(ADMIN1_PW);

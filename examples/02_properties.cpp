@@ -97,7 +97,7 @@ static bool scenario3_facadeAuto(const char* device, cli::CliOptions& opts) {
     scenario(3, "SedDrive Automatic Properties");
 
     SedDrive drive(device);
-    if (opts.dump) drive.enableDump();
+    if (opts.dump) drive.enableDump(std::cerr, opts.dumpLevel);
 
     auto r = drive.query();
     step(1, "SedDrive::query() (includes Properties)", r);

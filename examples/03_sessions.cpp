@@ -135,7 +135,7 @@ static bool scenario3_facadeSession(const char* device, cli::CliOptions& opts) {
     scenario(3, "SedDrive RAII Sessions");
 
     SedDrive drive(device);
-    if (opts.dump) drive.enableDump();
+    if (opts.dump) drive.enableDump(std::cerr, opts.dumpLevel);
 
     auto r = drive.query();
     step(1, "SedDrive::query()", r);

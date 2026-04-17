@@ -113,7 +113,7 @@ static bool scenario3_facadeMsid(const char* device, cli::CliOptions& opts) {
     scenario(3, "Read MSID via SedDrive");
 
     SedDrive drive(device);
-    if (opts.dump) drive.enableDump();
+    if (opts.dump) drive.enableDump(std::cerr, opts.dumpLevel);
 
     // query() runs Discovery + Properties + readMsid (opens/closes session internally)
     auto r = drive.query();

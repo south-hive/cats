@@ -159,7 +159,7 @@ static bool scenario3_facade(const char* device, cli::CliOptions& opts) {
     scenario(3, "SedDrive One-Liner Ownership");
 
     SedDrive drive(device);
-    if (opts.dump) drive.enableDump();
+    if (opts.dump) drive.enableDump(std::cerr, opts.dumpLevel);
     auto r = drive.query();
     if (r.failed()) return false;
 

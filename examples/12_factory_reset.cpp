@@ -152,7 +152,7 @@ static bool scenario3_facade(const char* device, cli::CliOptions& opts) {
     scenario(3, "SedDrive::revert() and psidRevert()");
 
     SedDrive drive(device);
-    if (opts.dump) drive.enableDump();
+    if (opts.dump) drive.enableDump(std::cerr, opts.dumpLevel);
     drive.query();
 
     // Take ownership and activate
