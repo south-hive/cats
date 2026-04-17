@@ -118,7 +118,7 @@ private:
     uint32_t seqNumber_ = 0;
     uint32_t maxComPacketSize_ = 2048;
     uint32_t timeoutMs_ = 30000;
-    static inline uint32_t sessionCounter_ = 1;
+    static inline uint32_t sessionCounter_ = 105;  // sedutil hardcodes HSN=105
 };
 
 } // namespace libsed
