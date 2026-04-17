@@ -109,7 +109,7 @@ A8 [SM_START_SESSION]           method
 F0                              STARTLIST
   82 00 69                      HSN=105
   A8 [SP_ADMIN]                 SP UID
-  01                            Write=true  (sedutil hardcodes UINT_01 always)
+  00                            Write=false (read-only for anonymous sessions)
 F1                              ENDLIST
 F9 F0 00 00 00 F1               EOD + status
 ```
@@ -155,7 +155,7 @@ F8                              CALL
 A8 [object_uid]                 e.g., CPIN_SID
 A8 [SET method]                 0x0000000600000017
 F0                              STARTLIST
-  F2 00 F0 F1                  Where (EMPTY, NO EndName — sedutil format)
+  F2 00 F0 F1 F3               Where (EMPTY but required — STARTNAME 0 STARTLIST ENDLIST ENDNAME)
   F2 01                         Values (index=1)
     F0                          STARTLIST
       F2 03 A8 [pin_bytes] F3  PIN column(3) = bytes
@@ -308,3 +308,134 @@ libsed      SHA-256           (none)                    —       32 B     D0 20
 Both encodings are accepted by Opal 2.0 drives.
 NEVER use raw ASCII password bytes — most drives require ≥ 20-byte PINs.
 Always call `HashPassword::passwordToBytes()` in libsed code.
+
+---
+
+## 11. DISCOVERY RESPONSE FORMAT
+
+Discovery (Protocol 0x01, ComID 0x0001) is **NOT** a ComPacket. Raw binary format:
+
+```
+Offset  Size  Field                    Notes
+──────  ────  ─────────────────────    ──────────────────────────────
+ 0-3     4    headerLength             BE uint32, length of data after this field
+ 4-5     2    majorVersion             BE uint16
+ 6-7     2    minorVersion             BE uint16
+ 8-47    40   Reserved                 Zero-filled
+48+      -    Feature Descriptors      Repeating, variable-length
+```
+
+### Feature Descriptor (repeating)
+
+```
+Offset  Size  Field                    Notes
+──────  ────  ─────────────────────    ──────────────────────────────
+ 0-1     2    featureCode              BE uint16 (0x0001=TPer, 0x0002=Locking, etc.)
+ 2       1    version + flags          Upper nibble = version
+ 3       1    dataLength               uint8, length of feature-specific data
+ 4+      N    featureData              Feature-specific payload
+```
+
+Feature codes: `0x0001`=TPer, `0x0002`=Locking, `0x0003`=Geometry,
+`0x0100`=Enterprise, `0x0200`=Opal v1, `0x0203`=Opal v2,
+`0x0302`=Pyrite v1, `0x0303`=Pyrite v2
+
+---
+
+## 12. SM RESPONSE FORMAT
+
+Session Manager responses (Properties, SyncSession) include a CALL header (LAW 9):
+
+```
+F8                              CALL
+A8 [SMUID]                      InvokingUID
+A8 [SM_METHOD_UID]              MethodUID
+F0                              STARTLIST
+  ... result tokens ...
+F1                              ENDLIST
+F9                              EOD
+F0 status 00 00 F1              Status list [status, reserved, reserved]
+```
+
+Regular method responses (Get, Set, etc.) do NOT have the CALL header.
+
+### Status List
+
+```
+F0                              STARTLIST
+  status_code                   uint (0x00=Success, 0x01=NotAuthorized, etc.)
+  00                            reserved
+  00                            reserved
+F1                              ENDLIST
+```
+
+### Status Codes
+
+```
+Code  Name                 Meaning
+────  ───────────────────  ──────────────────────────
+0x00  Success              Method completed successfully
+0x01  NotAuthorized        Auth state disallows operation
+0x03  SpBusy               SP processing another session
+0x04  SpFailed             SP internal error
+0x05  SpDisabled           SP is disabled
+0x06  SpFrozen             SP frozen (reset required)
+0x07  NoSessionsAvailable  No available session slots
+0x08  UniquenessConflict   Uniqueness constraint violation
+0x09  InsufficientSpace    Storage space exhausted
+0x0A  InsufficientRows     Table has insufficient rows
+0x0C  InvalidParameter     Invalid method parameter(s)
+0x0F  TPerMalfunction      TPer hardware/firmware failure
+0x10  TransactionFailure   Transaction processing failed
+0x11  ResponseOverflow     Response exceeds buffer size
+0x12  AuthorityLockedOut   Authority locked (too many attempts)
+0x3F  Fail                 Generic failure (unclassified)
+```
+
+### Properties Response
+
+```
+CALL + SMUID + SM_PROPERTIES + STARTLIST
+  STARTNAME "TPerProperties" STARTLIST
+    STARTNAME "MaxComPacketSize" value ENDNAME
+    STARTNAME "MaxResponseComPacketSize" value ENDNAME
+    STARTNAME "MaxPacketSize" value ENDNAME
+    STARTNAME "MaxIndTokenSize" value ENDNAME
+    STARTNAME "MaxPackets" value ENDNAME
+    STARTNAME "MaxSubpackets" value ENDNAME
+    STARTNAME "MaxMethods" value ENDNAME
+  ENDLIST ENDNAME
+  STARTNAME "HostProperties" STARTLIST
+    ... echoed host values ...
+  ENDLIST ENDNAME
+ENDLIST + EOD + status
+```
+
+Order of TPerProperties / HostProperties may vary (LAW 10).
+
+### SyncSession Response
+
+```
+CALL + SMUID + SM_SYNC_SESSION + STARTLIST
+  hsn                           uint (echoed HostSessionNumber)
+  tsn                           uint (TPer-assigned session number)
+  [optional named params]       SPChallenge(0), TransTimeout(4), etc.
+ENDLIST + EOD + status
+```
+
+---
+
+## 13. ENTERPRISE SSC METHOD UIDs
+
+Enterprise SSC uses different method UIDs from Opal:
+
+```
+Operation      Opal UID                  Enterprise UID
+───────────    ────────────────────────  ────────────────────────
+Get            0x0000000600000016 (GET)  0x0000000600000006 (EGET)
+Set            0x0000000600000017 (SET)  0x0000000600000007 (ESET)
+Authenticate   0x000000060000001C        0x000000060000000C (EAUTHENTICATE)
+```
+
+Note: EAUTHENTICATE (0x0C) and DELETE_ROW (0x0C) share the same UID.
+Context-dependent: EAUTHENTICATE targets THIS_SP, DELETE_ROW targets table UIDs.
