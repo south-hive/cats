@@ -1,55 +1,31 @@
 #include <cstdio>
 #include <cstdlib>
-#include <vector>
-#include <string>
-#include <functional>
 
-// Minimal test framework when Google Test is not available
-namespace minitest {
-    struct TestCase {
-        std::string name;
-        std::function<bool()> func;
-    };
-
-    static std::vector<TestCase>& tests() {
-        static std::vector<TestCase> t;
-        return t;
-    }
-
-    static int addTest(const char* name, std::function<bool()> func) {
-        tests().push_back({name, std::move(func)});
-        return 0;
-    }
-}
-
-#define TEST_CASE(name) \
-    static bool test_##name(); \
-    static int reg_##name = minitest::addTest(#name, test_##name); \
-    static bool test_##name()
-
-#define ASSERT_TRUE(expr) do { if (!(expr)) { fprintf(stderr, "  FAIL: %s (line %d)\n", #expr, __LINE__); return false; } } while(0)
-#define ASSERT_EQ(a, b) ASSERT_TRUE((a) == (b))
-#define ASSERT_NE(a, b) ASSERT_TRUE((a) != (b))
-
-// Include test files as compilation units reference these macros
-// The actual test functions are defined in the unit test .cpp files
-// using Google Test macros. For standalone mode, we provide a simple runner.
+// Declare run functions from each unit test file
+extern void run_token_codec_tests();
+extern void run_packet_tests();
+extern void run_discovery_tests();
+extern void run_hash_tests();
+extern void run_endian_tests();
+extern void run_method_tests();
+extern void run_session_tests();
+extern void run_debug_layer_tests();
 
 int main(int argc, char* argv[]) {
     (void)argc; (void)argv;
 
-    int passed = 0, failed = 0;
-    for (const auto& test : minitest::tests()) {
-        printf("[ RUN  ] %s\n", test.name.c_str());
-        if (test.func()) {
-            printf("[ PASS ] %s\n", test.name.c_str());
-            ++passed;
-        } else {
-            printf("[ FAIL ] %s\n", test.name.c_str());
-            ++failed;
-        }
-    }
+    printf("libsed unit tests\n");
+    printf("══════════════════════════════\n");
 
-    printf("\n%d passed, %d failed\n", passed, failed);
-    return failed > 0 ? 1 : 0;
+    run_token_codec_tests();
+    run_packet_tests();
+    run_discovery_tests();
+    run_hash_tests();
+    run_endian_tests();
+    run_method_tests();
+    run_session_tests();
+    run_debug_layer_tests();
+
+    printf("\nAll unit tests passed.\n");
+    return 0;
 }

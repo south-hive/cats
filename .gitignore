@@ -1,6 +1,9 @@
 # Build directory
 build/
 
+# Node.js (not used — C++ project)
+node_modules/
+
 # Log folder
 log/
 

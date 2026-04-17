@@ -296,7 +296,7 @@ void test_disabled_noop() {
     printf(" OK\n");
 }
 
-int main() {
+void run_debug_layer_tests() {
     printf("=== Debug Layer Tests ===\n");
 
     test_global_config();
@@ -313,6 +313,5 @@ int main() {
     test_session_lifecycle();
     test_disabled_noop();
 
-    printf("\nAll debug layer tests passed!\n");
-    return 0;
+    printf("  Debug layer: all passed\n");
 }

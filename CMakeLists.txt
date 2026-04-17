@@ -150,15 +150,20 @@ if(LIBSED_BUILD_TESTS)
     # Try to find Google Test
     find_package(GTest QUIET)
 
+    set(UNIT_TEST_SOURCES
+        tests/unit/test_token_codec.cpp
+        tests/unit/test_packet.cpp
+        tests/unit/test_discovery.cpp
+        tests/unit/test_hash.cpp
+        tests/unit/test_endian.cpp
+        tests/unit/test_method.cpp
+        tests/unit/test_session.cpp
+        tests/unit/test_debug_layer.cpp
+        tests/mock/mock_transport.cpp
+    )
+
     if(GTest_FOUND)
-        add_executable(libsed_tests
-            tests/unit/test_token_codec.cpp
-            tests/unit/test_packet.cpp
-            tests/unit/test_discovery.cpp
-            tests/unit/test_hash.cpp
-            tests/unit/test_endian.cpp
-            tests/mock/mock_transport.cpp
-        )
+        add_executable(libsed_tests ${UNIT_TEST_SOURCES})
         target_link_libraries(libsed_tests PRIVATE libsed GTest::gtest GTest::gtest_main)
         target_include_directories(libsed_tests PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/tests
@@ -168,15 +173,7 @@ if(LIBSED_BUILD_TESTS)
         gtest_discover_tests(libsed_tests)
     else()
         message(STATUS "Google Test not found - building standalone test runner")
-        add_executable(libsed_tests
-            tests/unit/test_token_codec.cpp
-            tests/unit/test_packet.cpp
-            tests/unit/test_discovery.cpp
-            tests/unit/test_hash.cpp
-            tests/unit/test_endian.cpp
-            tests/mock/mock_transport.cpp
-            tests/test_main.cpp
-        )
+        add_executable(libsed_tests ${UNIT_TEST_SOURCES} tests/test_main.cpp)
         target_link_libraries(libsed_tests PRIVATE libsed)
         target_include_directories(libsed_tests PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/tests
@@ -249,13 +246,22 @@ endif()
 if(LIBSED_BUILD_TOOLS)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tools)
 
-    add_executable(sed_discover  tools/sed_discover.cpp)
-    add_executable(sed_manage    tools/sed_manage.cpp)
-    add_executable(token_dump    tools/token_dump.cpp)
+    add_executable(sed_discover     tools/sed_discover.cpp)
+    add_executable(sed_manage       tools/sed_manage.cpp)
+    add_executable(token_dump       tools/token_dump.cpp)
+    add_executable(sed_sim_compare  tools/sed_sim_compare.cpp
+        third_party/sedutil/DtaCommand.cpp
+        third_party/sedutil/DtaHexDump.cpp
+    )
 
     target_link_libraries(sed_discover    PRIVATE libsed)
     target_link_libraries(sed_manage      PRIVATE libsed)
     target_link_libraries(token_dump      PRIVATE libsed)
+    target_link_libraries(sed_sim_compare PRIVATE libsed)
+    target_include_directories(sed_sim_compare PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/sedutil
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    )
 endif()
 
 # ── Integration tests (offline, no hardware) ──
