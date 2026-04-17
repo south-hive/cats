@@ -45,7 +45,7 @@ static bool scenario1_evalOwnership(std::shared_ptr<ITransport> transport,
     // ── Step 1: Read MSID (anonymous) ──
     Session anonSession(transport, comId);
     StartSessionResult ssr;
-    auto r = api.startSession(anonSession, uid::SP_ADMIN, false, ssr);
+    auto r = api.startSession(anonSession, uid::SP_ADMIN, true, ssr);
     step(1, "Anonymous session to Admin SP", r);
     if (r.failed()) return false;
 
@@ -130,7 +130,7 @@ static bool scenario2_revert(std::shared_ptr<ITransport> transport,
     if (r.ok()) {
         Session verifySession(transport, comId);
         StartSessionResult ssr2;
-        auto r2 = api.startSession(verifySession, uid::SP_ADMIN, false, ssr2);
+        auto r2 = api.startSession(verifySession, uid::SP_ADMIN, true, ssr2);
         Bytes msid;
         if (r2.ok()) {
             api.getCPin(verifySession, uid::CPIN_MSID, msid);

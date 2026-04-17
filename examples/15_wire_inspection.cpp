@@ -97,7 +97,7 @@ static bool scenario2_sessionWire(std::shared_ptr<ITransport> transport,
     StartSessionResult ssr;
 
     printf("    Opening anonymous session (watch TSN/HSN in packets)...\n\n");
-    auto r = api.startSession(session, uid::SP_ADMIN, false, ssr);
+    auto r = api.startSession(session, uid::SP_ADMIN, true, ssr);
     step(1, "StartSession", r);
     if (r.ok()) {
         printf("\n    After SyncSession:\n");

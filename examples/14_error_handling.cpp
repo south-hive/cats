@@ -80,7 +80,7 @@ static bool scenario2_spDisabled(std::shared_ptr<ITransport> transport,
     // Try to open a session to Locking SP when it's not activated
     Session session(transport, comId);
     StartSessionResult ssr;
-    auto r = api.startSession(session, uid::SP_LOCKING, false, ssr);
+    auto r = api.startSession(session, uid::SP_LOCKING, true, ssr);
 
     step(1, "Session to inactive Locking SP", r.failed());
     printf("    Error: %s\n", r.message().c_str());
@@ -100,7 +100,7 @@ static bool scenario3_invalidParam(std::shared_ptr<ITransport> transport,
     // Open a valid anonymous session
     Session session(transport, comId);
     StartSessionResult ssr;
-    auto r = api.startSession(session, uid::SP_ADMIN, false, ssr);
+    auto r = api.startSession(session, uid::SP_ADMIN, true, ssr);
     if (r.failed()) return false;
 
     // Try to read from a non-existent table row

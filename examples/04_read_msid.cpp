@@ -37,7 +37,7 @@ static bool scenario1_and_2(std::shared_ptr<ITransport> transport,
     Session session(transport, comId);
     StartSessionResult ssr;
 
-    auto r = api.startSession(session, uid::SP_ADMIN, false, ssr);
+    auto r = api.startSession(session, uid::SP_ADMIN, true, ssr);
     step(1, "Anonymous session to Admin SP", r);
     if (r.failed()) return false;
 

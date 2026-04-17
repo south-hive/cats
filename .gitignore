@@ -1,6 +1,9 @@
 # Build directory
 build/
 
+# Log folder
+log/
+
 # Prerequisites
 *.d
 

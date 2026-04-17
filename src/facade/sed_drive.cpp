@@ -175,7 +175,7 @@ SedSession SedDrive::login(Uid spUid, const Bytes& credential, Uid authUid,
 SedSession SedDrive::loginAnonymous(Uid spUid) {
     auto session = impl_->createSession();
     StartSessionResult ssr;
-    auto r = impl_->api.startSession(*session, spUid.toUint64(), false, ssr);
+    auto r = impl_->api.startSession(*session, spUid.toUint64(), true, ssr);
     return SedSession(std::move(session), impl_->api, r);
 }
 
@@ -184,7 +184,7 @@ SedSession SedDrive::loginAnonymous(Uid spUid) {
 Result SedDrive::readMsid(Bytes& outMsid) {
     auto session = impl_->createSession();
     StartSessionResult ssr;
-    auto r = impl_->api.startSession(*session, uid::SP_ADMIN, false, ssr);
+    auto r = impl_->api.startSession(*session, uid::SP_ADMIN, true, ssr);
     if (r.failed()) return r;
 
     r = impl_->api.getCPin(*session, uid::CPIN_MSID, outMsid);

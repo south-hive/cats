@@ -217,7 +217,7 @@ Result EvalApi::verifyAuthority(std::shared_ptr<ITransport> transport,
                                  uint64_t authorityUid, const Bytes& credential) {
     Session session(transport, comId);
     StartSessionResult ssr;
-    auto r = startSessionWithAuth(session, spUid, false, authorityUid, credential, ssr);
+    auto r = startSessionWithAuth(session, spUid, true, authorityUid, credential, ssr);
     if (r.ok()) closeSession(session);
     return r;
 }

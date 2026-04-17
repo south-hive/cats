@@ -164,7 +164,7 @@ static bool scenario4_callback(std::shared_ptr<ITransport> transport,
 
     Session session(transport, comId);
     StartSessionResult ssr;
-    api.startSession(session, uid::SP_ADMIN, false, ssr);
+    api.startSession(session, uid::SP_ADMIN, true, ssr);
     api.closeSession(session);
 
     step(1, "Callback fired on sends", callCount > 0);

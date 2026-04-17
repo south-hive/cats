@@ -48,7 +48,7 @@ static bool scenario1_anonymousSession(std::shared_ptr<ITransport> transport,
     // startSession() sends SM_START_SESSION (method 0xFF02) and
     // receives SM_SYNC_SESSION (method 0xFF03) response.
     //   SP = Admin SP, write = false (read-only)
-    auto r = api.startSession(session, uid::SP_ADMIN, false, ssr);
+    auto r = api.startSession(session, uid::SP_ADMIN, true, ssr);
     step(1, "Open anonymous session to Admin SP", r);
     if (r.failed()) return false;
 
@@ -83,7 +83,7 @@ static bool scenario2_authenticatedSession(std::shared_ptr<ITransport> transport
     // First, read MSID via anonymous session
     Session anonSession(transport, comId);
     StartSessionResult ssr;
-    auto r = api.startSession(anonSession, uid::SP_ADMIN, false, ssr);
+    auto r = api.startSession(anonSession, uid::SP_ADMIN, true, ssr);
     step(1, "Open anonymous session for MSID", r);
     if (r.failed()) return false;
 

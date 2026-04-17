@@ -40,7 +40,7 @@ CompositeResult getMsid(EvalApi& api,
     // Step 1: Anonymous AdminSP session
     Session session(transport, comId);
     StartSessionResult ssr;
-    auto r = api.startSession(session, uid::SP_ADMIN, false, ssr);
+    auto r = api.startSession(session, uid::SP_ADMIN, true, ssr);
     logStep(cr, "StartSession(AdminSP, Anybody)", r, ssr.raw);
     if (r.failed()) return cr;
 
@@ -282,7 +282,7 @@ Result withAnonymousSession(EvalApi& api,
                             std::function<Result(Session&)> fn) {
     Session session(transport, comId);
     StartSessionResult ssr;
-    auto r = api.startSession(session, spUid, false, ssr);
+    auto r = api.startSession(session, spUid, true, ssr);
     if (r.failed()) return r;
 
     r = fn(session);

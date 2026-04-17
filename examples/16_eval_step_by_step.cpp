@@ -49,7 +49,7 @@ static bool scenario1_fullQueryRaw(std::shared_ptr<ITransport> transport,
     // Step 3: Open anonymous session — get the raw send/recv payloads
     Session session(transport, comId);
     StartSessionResult ssr;
-    r = api.startSession(session, uid::SP_ADMIN, false, ssr);
+    r = api.startSession(session, uid::SP_ADMIN, true, ssr);
     step(3, "StartSession (anonymous)", r);
     if (r.failed()) return false;
 
@@ -132,7 +132,7 @@ static bool scenario3_genericTable(std::shared_ptr<ITransport> transport,
     EvalApi api;
     Session session(transport, comId);
     StartSessionResult ssr;
-    auto r = api.startSession(session, uid::SP_ADMIN, false, ssr);
+    auto r = api.startSession(session, uid::SP_ADMIN, true, ssr);
     if (r.failed()) return false;
 
     // tableGetAll: returns all columns of a row

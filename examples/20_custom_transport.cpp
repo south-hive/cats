@@ -99,7 +99,7 @@ static bool scenario1_countingTransport(std::shared_ptr<ITransport> transport,
     // Read MSID
     Session session(counting, comId);
     StartSessionResult ssr;
-    r = api.startSession(session, uid::SP_ADMIN, false, ssr);
+    r = api.startSession(session, uid::SP_ADMIN, true, ssr);
     if (r.ok()) {
         Bytes msid;
         api.getCPin(session, uid::CPIN_MSID, msid);
