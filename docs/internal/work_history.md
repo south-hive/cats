@@ -1,5 +1,64 @@
 # Work History
 
+## Session 2026-04-18 (3) — Distribution packaging cleanup
+
+### What was done
+
+최종 배포/패키징을 위한 docs 정리.
+
+**조사 결과 (agent survey)**:
+- tools 3개(`sed_discover`, `sed_manage`, `token_dump`)는 목적이 모두 고유. `sed_discover`만 예제 01과 약간 겹치지만 production CLI로서 유지.
+- examples 20개 — 학습 경로상 중복 없음, 전부 유지.
+- `developer_guide.md`와 `tc_dev_guide.md`는 실제로 다른 청중(EvalApi 평가 플랫폼 vs SedDrive facade 사용자). 둘 다 유지하되 이름을 청중 명확하게.
+- `design_nvme_sed_separation.md`는 설계 근거 — 기여자용으로 분리.
+- `test_scenarios.md`(2404 L)는 104 시나리오 카탈로그 — 구조상 길이 정당, 유지.
+
+**이름 변경 (사용자 문서)**:
+| Before | After | 이유 |
+|--------|-------|------|
+| `tc_dev_guide.md` | `sed_drive_guide.md` | SedDrive facade 대상 명확화 |
+| `developer_guide.md` | `eval_platform_guide.md` | EvalApi 평가 플랫폼 대상 명확화 |
+| `tcg_sed_lecture.md` | `tcg_sed_primer.md` | "lecture"보다 자연스러움 |
+| `examples_guide.md` | `examples.md` | 간결 |
+| `tc_cookbook.md` | `cookbook.md` | `tc_` 접두사 불필요 |
+| `rosetta_stone.md` | **유지** | 코드/CLAUDE 등에서 이미 확립된 참조 |
+
+**`docs/internal/`로 이동 (기여자 전용)**:
+- `hammurabi_code.md` — 15 인코딩 불변법칙
+- `work_history.md` — 세션 로그
+- `design_nvme_sed_separation.md` → `architecture_rationale.md`
+
+**신규**:
+- `docs/README.md` — 청중별 네비게이션 맵 (TC 앱 개발자 / SED 초심자 / 평가 플랫폼 엔지니어) + 자율 학습 순서
+
+**참조 업데이트**:
+- `CLAUDE.md` — hammurabi/work_history/developer_guide 경로
+- `docs/test_scenarios.md` — 존재하지 않는 `examples/appnote/`, `examples/facade/` 경로를 실제 예제(12, 19)와 `sed_compare` 참조로 교체
+- 메모리 `work_history.md` 포인터 — `docs/internal/` 경로 반영
+
+**부수적 수정**:
+- `MethodCall::buildGet`이 CellBlock을 이중 STARTLIST로 래핑하는 버그를 별도 커밋(`d94a674`)으로 정리. sed_compare가 찾아낸 버그로 이전 커밋(`742d956`) 메시지엔 포함됐다고 써있었으나 stage 누락이었음.
+
+### Current state
+
+- `libsed_tests` — PASS
+- `ioctl_validator` — 17/17 PASS
+- `scenario_tests` — 104/104 PASS
+- `sed_compare` — 56/56 byte-identical
+- `golden_validator` — PASS
+- 커밋: `d94a674`(buildGet fix + renames), `c4eb959`(README + refs)
+
+### 다음 세션에서 이어서 할 수 있는 작업
+
+| 항목 | 난이도 | 설명 |
+|------|--------|------|
+| **README 아이디엄 검증** | 하 | 실제 초심자/평가 엔지니어에게 docs/README.md를 보여주고 경로 선택이 명확한지 확인 |
+| **sed_compare Tier 3** | 중 | MBR Enable/Done, PBA multi-chunk Write, DataStore R/W, GenKey(rekey) |
+| **Enterprise SSC EGET/ESET** | 중 | `eval_api_enterprise.cpp`의 TODO 해결 |
+| **CHANGELOG.md 생성** | 하 | 배포용 버전 로그 시작 (work_history는 내부용) |
+
+---
+
 ## Session 2026-04-18 (2) — sed_compare Tier 1+2 (56 packet proof)
 
 ### What was done
