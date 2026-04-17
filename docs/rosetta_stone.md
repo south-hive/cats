@@ -135,18 +135,23 @@ Named param indices: **0=Challenge, 3=ExchangeAuth, 4=SigningAuth**
 
 ### 4d. Get with CellBlock (in-session, TSN=N/HSN=105)
 
+CellBlock named pairs go DIRECTLY in the method parameter list — NOT nested
+inside an inner STARTLIST/ENDLIST. sedutil and real Opal drives use this form;
+adding a second list wrap produces St=0x0C on strict drives.
+
 ```
 F8                              CALL
 A8 [object_uid]                 e.g., CPIN_MSID
 A8 [GET method]                 0x0000000600000016
-F0                              STARTLIST
-  F0                            STARTLIST (CellBlock)
-    F2 00 03 F3                 startColumn=3 (PIN)
-    F2 01 03 F3                 endColumn=3
-  F1                            ENDLIST (CellBlock)
+F0                              STARTLIST (method params)
+  F2 03 03 F3                   startColumn(key=3) = 3 (PIN)
+  F2 04 03 F3                   endColumn(key=4)   = 3 (PIN)
 F1                              ENDLIST
 F9 F0 00 00 00 F1               EOD + status
 ```
+
+Note: the CellBlock key numbers are 3=startColumn, 4=endColumn (TCG Core Spec
+Table 32) — NOT 0 and 1. Verified against sedutil DtaDevOpal::getTable.
 
 ### 4e. Set with Values (in-session, TSN=N/HSN=105)
 

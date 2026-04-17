@@ -302,7 +302,8 @@ static Packet buildSedutil_A3_GetMsid() {
     DtaCommand cmd;
     cmd.reset(OPAL_C_PIN_MSID, GET);
 
-    cmd.addToken(OPAL_TOKEN::STARTLIST);
+    // sedutil's DtaDevOpal::getTable() puts the CellBlock named pairs directly
+    // in the method's parameter list (single STARTLIST/ENDLIST), NOT nested.
     cmd.addToken(OPAL_TOKEN::STARTLIST);
 
     cmd.addToken(OPAL_TOKEN::STARTNAME);
@@ -315,7 +316,6 @@ static Packet buildSedutil_A3_GetMsid() {
     cmd.addToken(OPAL_TINY_ATOM::UINT_03);     // value: PIN column
     cmd.addToken(OPAL_TOKEN::ENDNAME);
 
-    cmd.addToken(OPAL_TOKEN::ENDLIST);
     cmd.addToken(OPAL_TOKEN::ENDLIST);
 
     cmd.complete();

@@ -59,10 +59,12 @@ Bytes MethodCall::buildSmCall(uint64_t smMethodUid, const Bytes& paramTokens) {
 Bytes MethodCall::buildGet(const Uid& objectUid, const CellBlock& cellBlock) {
     TokenEncoder paramEnc;
 
-    // CellBlock parameter
-    paramEnc.startList();
+    // CellBlock named pairs go DIRECTLY into the method's parameter list.
+    // MethodCall::build() already wraps the params in STARTLIST/ENDLIST; adding
+    // another inner list would produce a nested list, which sedutil does NOT do
+    // and real Opal drives do NOT accept. Confirmed by sed_compare byte diff
+    // against sedutil-cli Get for C_PIN_MSID.
     ParamEncoder::encodeCellBlock(paramEnc, cellBlock);
-    paramEnc.endList();
 
     MethodCall call(objectUid, Uid(method::GET));
     call.setParams(paramEnc.data());
