@@ -576,7 +576,7 @@ Result takeOwnershipStepByStep(
     Session msidSession(transport, comId);
     msidSession.setMaxComPacketSize(props.tperMaxComPacketSize);
     StartSessionResult ssr;
-    r = api.startSession(msidSession, uid::SP_ADMIN, true, ssr);  // sedutil always sends Write=true
+    r = api.startSession(msidSession, uid::SP_ADMIN, false, ssr);
     raw = ssr.raw;
     if (!notify("startSession(AdminSP, read)")) return r;
     if (r.failed()) return r;

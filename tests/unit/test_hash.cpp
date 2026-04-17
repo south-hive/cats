@@ -53,9 +53,10 @@ TEST(Hash, Pbkdf2) {
 
 TEST(Hash, PasswordToBytes) {
     auto bytes = HashPassword::passwordToBytes("test");
-    EXPECT_EQ(bytes.size(), 4u);
-    EXPECT_EQ(bytes[0], 't');
-    EXPECT_EQ(bytes[3], 't');
+    // passwordToBytes now uses SHA-256, producing 32-byte output
+    EXPECT_EQ(bytes.size(), 32u);
+    // SHA-256("test") first byte = 0x9f
+    EXPECT_EQ(bytes[0], 0x9f);
 }
 
 #ifndef GTEST_INCLUDE_GTEST_GTEST_H_

@@ -57,8 +57,8 @@ TEST(MethodCall, BuildAuthenticate) {
 }
 
 TEST(MethodCall, BuildStartSession) {
-    auto tokens = MethodCall::buildSmCall(
-        Uid(uid::SMUID), Uid(method::SM_START_SESSION));
+    auto params = ParamEncoder::encodeStartSession(105, Uid(uid::SP_ADMIN), false);
+    auto tokens = MethodCall::buildSmCall(method::SM_START_SESSION, params);
     EXPECT_TRUE(!tokens.empty());
 
     TokenDecoder dec;
@@ -105,9 +105,7 @@ TEST(MethodResult, ParseFailure) {
 }
 
 TEST(ParamEncoder, StartSession) {
-    TokenEncoder enc;
-    ParamEncoder::encodeStartSession(enc, 1, Uid(uid::SP_ADMIN));
-    auto data = enc.data();
+    auto data = ParamEncoder::encodeStartSession(105, Uid(uid::SP_ADMIN), false);
     EXPECT_TRUE(!data.empty());
 
     TokenDecoder dec;

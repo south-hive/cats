@@ -391,7 +391,7 @@ TEST_SCENARIO(L3, TS_3A_003_MbrLockingInteraction) {
     auto r = composite::takeOwnership(api, sim, COMID, "sid_pw");
     EXPECT_OK(r.overall);
 
-    Bytes sidCred = {'s','i','d','_','p','w'};
+    Bytes sidCred = hashPw("sid_pw");
     EXPECT_OK(activateLockingSP(api, sim, COMID, sidCred));
 
     // Get MSID for Admin1 auth
@@ -448,7 +448,7 @@ TEST_SCENARIO(L3, TS_3A_007_MultiRangeGlobal) {
 
     auto r = composite::takeOwnership(api, sim, COMID, "sid_pw");
     EXPECT_OK(r.overall);
-    Bytes sidCred = {'s','i','d','_','p','w'};
+    Bytes sidCred = hashPw("sid_pw");
     EXPECT_OK(activateLockingSP(api, sim, COMID, sidCred));
 
     Bytes msid;
@@ -495,7 +495,7 @@ TEST_SCENARIO(L3, TS_3A_009_UserDisableWhileActive) {
 
     auto r = composite::takeOwnership(api, sim, COMID, "sid_pw");
     EXPECT_OK(r.overall);
-    Bytes sidCred = {'s','i','d','_','p','w'};
+    Bytes sidCred = hashPw("sid_pw");
     EXPECT_OK(activateLockingSP(api, sim, COMID, sidCred));
 
     Bytes msid;
@@ -513,8 +513,8 @@ TEST_SCENARIO(L3, TS_3A_009_UserDisableWhileActive) {
         api.closeSession(s);
     }
 
-    // User1 verifies auth works
-    Bytes user1Cred = {'u','s','e','r','1','_','p','w'};
+    // User1 verifies auth works (setUserPassword stores SHA-256 hash)
+    Bytes user1Cred = hashPw("user1_pw");
     EXPECT_OK(api.verifyAuthority(sim, COMID, SP_LOCKING, AUTH_USER1, user1Cred));
 
     // Admin1 disables User1

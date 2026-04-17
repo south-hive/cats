@@ -10,6 +10,7 @@
 #include "libsed/packet/packet_builder.h"
 #include "libsed/method/method_call.h"
 #include "libsed/method/method_uids.h"
+#include "libsed/security/hash_password.h"
 #include "libsed/core/uid.h"
 #include "libsed/core/endian.h"
 #include "libsed/debug/fault_builder.h"
@@ -80,6 +81,12 @@ inline std::shared_ptr<MockTransport> makeMock() {
     // Session 소멸자의 closeSession()이 빠르게 완료되도록 함
     // (기본 동작: bytesReceived=0 → 30초 polling timeout)
     return mock;
+}
+
+/// @brief Hash a password string the same way EvalApi::setCPin(string) does.
+/// Use this to build credentials for startSessionWithAuth after takeOwnership.
+inline Bytes hashPw(const std::string& password) {
+    return HashPassword::passwordToBytes(password);
 }
 
 using eval::EvalApi;

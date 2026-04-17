@@ -18,6 +18,13 @@ namespace eval {
 // ════════════════════════════════════════════════════════
 //  Enterprise SSC
 // ════════════════════════════════════════════════════════
+//
+// WARNING: These functions currently delegate to Opal methods which use
+// GET (0x0000000600000016) and SET (0x0000000600000017) method UIDs.
+// Enterprise SSC requires EGET (0x0000000600000006) and ESET (0x0000000600000007).
+// This will fail on real Enterprise drives — only works in SimTransport.
+// TODO: Add Enterprise-aware method selection (EGET/ESET/EAUTHENTICATE).
+// See rosetta_stone.md Section 13 for Enterprise method UIDs.
 
 Result EvalApi::configureBand(Session& session, uint32_t bandId,
                                uint64_t bandStart, uint64_t bandLength,

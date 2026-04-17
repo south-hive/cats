@@ -154,7 +154,10 @@ void SedDrive::enableDumpAndLog(const std::string& logDir, std::ostream& os, int
 
 SedSession SedDrive::login(Uid spUid, const std::string& password, Uid authUid,
                            bool write) {
-    Bytes cred(password.begin(), password.end());
+    Bytes cred;
+    if (!password.empty()) {
+        cred = eval::EvalApi::hashPassword(password);
+    }
     return login(spUid, cred, authUid, write);
 }
 
@@ -175,7 +178,7 @@ SedSession SedDrive::login(Uid spUid, const Bytes& credential, Uid authUid,
 SedSession SedDrive::loginAnonymous(Uid spUid) {
     auto session = impl_->createSession();
     StartSessionResult ssr;
-    auto r = impl_->api.startSession(*session, spUid.toUint64(), true, ssr);
+    auto r = impl_->api.startSession(*session, spUid.toUint64(), false, ssr);
     return SedSession(std::move(session), impl_->api, r);
 }
 
@@ -184,7 +187,7 @@ SedSession SedDrive::loginAnonymous(Uid spUid) {
 Result SedDrive::readMsid(Bytes& outMsid) {
     auto session = impl_->createSession();
     StartSessionResult ssr;
-    auto r = impl_->api.startSession(*session, uid::SP_ADMIN, true, ssr);
+    auto r = impl_->api.startSession(*session, uid::SP_ADMIN, false, ssr);
     if (r.failed()) return r;
 
     r = impl_->api.getCPin(*session, uid::CPIN_MSID, outMsid);
@@ -197,11 +200,14 @@ Result SedDrive::takeOwnership(const std::string& newSidPassword) {
     auto r = readMsid(msidVal);
     if (r.failed()) return r;
 
-    return withSession(Uid(uid::SP_ADMIN), std::string(msidVal.begin(), msidVal.end()),
-                       Uid(uid::AUTH_SID),
-        [&](Session& s) -> Result {
-            return impl_->api.setCPin(s, uid::CPIN_SID, newSidPassword);
-        });
+    // Login with raw MSID bytes — MSID is a raw credential, NOT a human password.
+    // The Bytes overload of login() passes credentials directly without hashing.
+    auto s = login(Uid(uid::SP_ADMIN), msidVal, Uid(uid::AUTH_SID), true);
+    if (s.failed()) return s.openResult();
+    // setCPin(string) hashes newSidPassword via SHA-256 before storing
+    r = impl_->api.setCPin(s.raw(), uid::CPIN_SID, newSidPassword);
+    s.close();
+    return r;
 }
 
 Result SedDrive::activateLocking(const std::string& sidPassword) {

@@ -370,7 +370,7 @@ TEST_SCENARIO(L4, TS_4A_003_DisabledUserAuth) {
     // Setup: take ownership + activate
     auto cr = composite::takeOwnership(api, sim, COMID, "sid_pw");
     EXPECT_OK(cr.overall);
-    Bytes sidCred = {'s','i','d','_','p','w'};
+    Bytes sidCred = hashPw("sid_pw");
     EXPECT_OK(activateLockingSP(api, sim, COMID, sidCred));
 
     // User1 is disabled by default
@@ -437,13 +437,13 @@ TEST_SCENARIO(L4, TS_4B_006_MaxLengthPassword) {
     auto cr = composite::takeOwnership(api, sim, COMID, longPw);
     EXPECT_OK(cr.overall);
 
-    // Verify with the long password
-    Bytes longCred(longPw.begin(), longPw.end());
+    // Verify with the hashed long password (takeOwnership stores SHA-256)
+    Bytes longCred = hashPw(longPw);
     EXPECT_OK(api.verifyAuthority(sim, COMID, SP_ADMIN, AUTH_SID, longCred));
 
     // Wrong long password should fail
     std::string wrongLongPw(128, 'B');
-    Bytes wrongCred(wrongLongPw.begin(), wrongLongPw.end());
+    Bytes wrongCred = hashPw(wrongLongPw);
     EXPECT_FAIL(api.verifyAuthority(sim, COMID, SP_ADMIN, AUTH_SID, wrongCred));
 
     return true;
@@ -462,7 +462,7 @@ TEST_SCENARIO(L4, TS_4A_008_RangeOnInactiveSP) {
     EXPECT_OK(cr.overall);
 
     // Try to open session to Locking SP — should fail (not activated)
-    Bytes sidCred = {'s','i','d','_','p','w'};
+    Bytes sidCred = hashPw("sid_pw");
     Session s(sim, COMID);
     StartSessionResult ssr;
     auto r = api.startSessionWithAuth(s, SP_LOCKING, true, AUTH_ADMIN1, sidCred, ssr);

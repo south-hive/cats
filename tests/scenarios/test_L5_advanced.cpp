@@ -447,8 +447,8 @@ TEST_SCENARIO(L5, TS_5A_002_FullLifecycleAging) {
         auto cr = composite::takeOwnership(api, sim, COMID, pw);
         if (cr.failed()) return false;
 
-        // 2. Activate
-        Bytes cred(pw.begin(), pw.end());
+        // 2. Activate — use hashed credential (takeOwnership stores SHA-256)
+        Bytes cred = hashPw(pw);
         if (activateLockingSP(api, sim, COMID, cred).failed()) return false;
 
         // 3. Get MSID for Admin1
@@ -517,7 +517,7 @@ TEST_SCENARIO(L5, TS_5D_003_LargeDataStoreTransfer) {
     // Setup
     auto cr = composite::takeOwnership(api, sim, COMID, "sid_pw");
     EXPECT_OK(cr.overall);
-    Bytes sidCred = {'s','i','d','_','p','w'};
+    Bytes sidCred = hashPw("sid_pw");
     EXPECT_OK(activateLockingSP(api, sim, COMID, sidCred));
 
     Bytes msid;
