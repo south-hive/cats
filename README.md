@@ -123,7 +123,9 @@ ctest                    # All registered test suites
 
 ## License
 
-TBD — add your license file as `LICENSE` in the repository root.
+Proprietary — internal use only. See [`LICENSE`](LICENSE). External
+distribution, publication, or third-party disclosure is not permitted
+without prior written consent from the copyright holder.
 
 ## Status
 
