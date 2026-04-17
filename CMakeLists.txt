@@ -249,16 +249,34 @@ if(LIBSED_BUILD_TOOLS)
     add_executable(sed_discover     tools/sed_discover.cpp)
     add_executable(sed_manage       tools/sed_manage.cpp)
     add_executable(token_dump       tools/token_dump.cpp)
-    add_executable(sed_sim_compare  tools/sed_sim_compare.cpp
+
+    # sed_compare: byte-for-byte packet proof against sedutil-cli across
+    # Tier 1 (ownership/revert) and Tier 2 (locking/users) commands.
+    add_executable(sed_compare
+        tools/sed_compare/main.cpp
+        tools/sed_compare/common.cpp
+        tools/sed_compare/t1_query.cpp
+        tools/sed_compare/t1_initial_setup.cpp
+        tools/sed_compare/t1_set_sid_password.cpp
+        tools/sed_compare/t1_revert_tper.cpp
+        tools/sed_compare/t1_revert_locking_sp.cpp
+        tools/sed_compare/t1_psid_revert.cpp
+        tools/sed_compare/t2_activate_locking.cpp
+        tools/sed_compare/t2_set_locking_range.cpp
+        tools/sed_compare/t2_enable_locking_range.cpp
+        tools/sed_compare/t2_setup_locking_range.cpp
+        tools/sed_compare/t2_enable_user.cpp
+        tools/sed_compare/t2_set_password.cpp
+        tools/sed_compare/t2_list_locking_ranges.cpp
         third_party/sedutil/DtaCommand.cpp
         third_party/sedutil/DtaHexDump.cpp
     )
 
-    target_link_libraries(sed_discover    PRIVATE libsed)
-    target_link_libraries(sed_manage      PRIVATE libsed)
-    target_link_libraries(token_dump      PRIVATE libsed)
-    target_link_libraries(sed_sim_compare PRIVATE libsed)
-    target_include_directories(sed_sim_compare PRIVATE
+    target_link_libraries(sed_discover PRIVATE libsed)
+    target_link_libraries(sed_manage   PRIVATE libsed)
+    target_link_libraries(token_dump   PRIVATE libsed)
+    target_link_libraries(sed_compare  PRIVATE libsed)
+    target_include_directories(sed_compare PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/sedutil
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
     )
