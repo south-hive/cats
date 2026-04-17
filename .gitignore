@@ -1,52 +1,42 @@
-# Build directory
+# ── Build & IDE ─────────────────────────────────────────────
 build/
-
-# Node.js (not used — C++ project)
-node_modules/
-
-# Log folder
-log/
-
-# Prerequisites
 *.d
-
-# Compiled Object files
 *.slo
 *.lo
 *.o
 *.obj
-
-# Precompiled Headers
 *.gch
 *.pch
-
-# Linker files
 *.ilk
-
-# Debugger Files
 *.pdb
-
-# Compiled Dynamic libraries
 *.so
 *.dylib
 *.dll
-
-# Fortran module files
 *.mod
 *.smod
-
-# Compiled Static libraries
 *.lai
 *.la
 *.a
 *.lib
-
-# Executables
 *.exe
 *.out
 *.app
-
-# debug information files
 *.dwo
-packet
-tests/test_props_encoding.cpp
+
+# ── Claude Code workspace (local settings, worktrees, session files) ──
+.claude/settings.local.json
+.claude/worktrees/
+
+# ── Tool output (sed_compare, token_dump, etc.) ─────────────
+comparison_output.txt
+*_output.txt
+
+# ── Log folder ──────────────────────────────────────────────
+log/
+
+# ── Node.js (not used — C++ project) ────────────────────────
+node_modules/
+
+# ── OS junk ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
