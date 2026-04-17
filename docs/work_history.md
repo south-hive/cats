@@ -1,5 +1,64 @@
 # Work History
 
+## Session 2026-04-18 (2) — sed_compare Tier 1+2 (56 packet proof)
+
+### What was done
+
+sedutil-cli의 Tier 1/2 명령 13개를 재현하고 패킷별 byte-for-byte 비교하는 `sed_compare` 툴을 `tools/sed_compare/` 디렉토리에 작성. 이전의 `sed_sim_compare.cpp`(296줄, 단일 파일 프로토타입)를 대체.
+
+**커버리지 (13 commands, 56 packet comparisons):**
+
+| Tier | Command | Packets |
+|------|---------|---------|
+| T1 | `--query` | 2 |
+| T1 | `--initialSetup` | 18 (takeOwnership + activateLockingSP + configureRange + setRange + setMBREnable 전체 플로우) |
+| T1 | `--setSIDPassword` | 3 |
+| T1 | `--revertTPer` | 2 |
+| T1 | `--revertLockingSP` | 2 |
+| T1 | `--PSIDrevert` | 2 |
+| T2 | `--activateLockingSP` | 3 |
+| T2 | `--setLockingRange RW/RO/LK` | 5 |
+| T2 | `--enableLockingRange` | 3 |
+| T2 | `--disableLockingRange` | 3 |
+| T2 | `--setupLockingRange` | 3 |
+| T2 | `--enableUser` | 3 |
+| T2 | `--setPassword` | 3 |
+| T2 | `--listLockingRanges` | 4 |
+
+**공용 헬퍼** (`common.h/cpp`):
+- `Section` 클래스 — 명령별 배너 + 단계별 PASS/FAIL + 서머리
+- `compareStartSessionAnon` / `compareStartSessionAuth` — SM StartSession 양측 빌드 + 비교
+- `compareCloseSession` — 0xFA EndOfSession 단일 토큰
+- `compareRevertSP` / `compareProperties` — 반복 패턴 추출
+- `extractSedutilPacket` — DtaCommand 버퍼에서 TSN/HSN을 BE로 swap한 Packet 반환
+
+**버그 발견 및 수정 (sed_compare가 찾아낸 것):**
+
+`MethodCall::buildGet`이 CellBlock을 불필요한 이중 STARTLIST/ENDLIST로 래핑하고 있었음. sedutil 및 실제 Opal 드라이브는 CellBlock named pair를 메서드 parameter list에 **직접** 넣음 (단일 리스트). 수정 후:
+- `src/method/method_call.cpp::buildGet` — 내부 startList/endList 제거
+- `tests/integration/ioctl_validator.cpp` — sedutil reference도 동일한 이중 래핑이 있었음, 제거
+- `docs/rosetta_stone.md §4d` — 올바른 Get 인코딩으로 업데이트
+
+### Current state
+
+- `sed_compare` — **56/56 packets byte-identical** (Tier 1+2 13 commands)
+- `libsed_tests` — PASS
+- `ioctl_validator` — 17/17 PASS (Get 이중 래핑 수정 후)
+- `scenario_tests` — 104/104 PASS
+- `golden_validator` — PASS
+- 커밋: `742d956`
+
+### 다음 세션에서 이어서 할 수 있는 작업
+
+| 항목 | 난이도 | 설명 |
+|------|--------|------|
+| **Tier 3 커버리지** | 중 | MBR Enable/Done, PBA load (multi-chunk Write), DataStore R/W, GenKey (rekey), Random |
+| **Enterprise 명령** | 중 | Rosetta Stone §13에 따라 EGET/ESET/EAUTHENTICATE 경로로 재현. `eval_api_enterprise`의 TODO와 연계 |
+| **Hash algorithm 비교** | 하 | 현재는 raw password로 비교 (hash 우회). sedutil의 PBKDF2와 libsed의 SHA-256 경로를 명시적으로 격리 테스트 |
+| **실제 Opal 드라이브 검증** | 상 | `sed_compare`는 build 타임 검증. 실제 드라이브에 libsed가 실제로 같은 바이트를 전송하는지 hex dump로 재확인 |
+
+---
+
 ## Session 2026-04-18 — sedutil wire compat cleanup + refactor
 
 ### What was done
