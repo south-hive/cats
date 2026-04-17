@@ -125,12 +125,72 @@ TEST(ParamEncoder, CellBlock) {
     EXPECT_TRUE(!data.empty());
 }
 
+// ── SSC-aware method UID selection ─────────────────────────────────
+// buildGet/Set/Authenticate emit Opal GET/SET/AUTHENTICATE by default,
+// and EGET/ESET/EAUTHENTICATE when the Enterprise method UID is passed.
+// Method UID lives at bytes 10..17 of the built token stream (1 CALL +
+// 9-byte invoking-UID atom + 1-byte atom header for the method UID).
+
+static uint64_t extractMethodUid(const Bytes& tokens) {
+    // CALL (1) + invoking atom (1 hdr + 8 bytes) = offset 10 starts the
+    // method-UID atom payload. Preceded by 1 header byte (0xA8).
+    uint64_t uid = 0;
+    for (int i = 0; i < 8; ++i) uid = (uid << 8) | tokens[11 + i];
+    return uid;
+}
+
+TEST(MethodCall, OpalDefaults) {
+    TokenList values;
+    values.addUint(uid::col::PIN, 42);
+
+    auto getTokens = MethodCall::buildGet(Uid(uid::CPIN_SID));
+    auto setTokens = MethodCall::buildSet(Uid(uid::CPIN_SID), values);
+    auto authTokens = MethodCall::buildAuthenticate(Uid(uid::AUTH_SID),
+                                                     Bytes{'p','w'});
+
+    EXPECT_EQ(extractMethodUid(getTokens),  method::GET);           // 0x16
+    EXPECT_EQ(extractMethodUid(setTokens),  method::SET);           // 0x17
+    EXPECT_EQ(extractMethodUid(authTokens), method::AUTHENTICATE);  // 0x1C
+}
+
+TEST(MethodCall, EnterpriseOverride) {
+    TokenList values;
+    values.addUint(uid::col::PIN, 42);
+
+    auto getTokens = MethodCall::buildGet(Uid(uid::CPIN_SID), CellBlock{},
+                                           method::EGET);
+    auto setTokens = MethodCall::buildSet(Uid(uid::CPIN_SID), values,
+                                           method::ESET);
+    auto authTokens = MethodCall::buildAuthenticate(Uid(uid::AUTH_SID),
+                                                     Bytes{'p','w'},
+                                                     method::EAUTHENTICATE);
+
+    EXPECT_EQ(extractMethodUid(getTokens),  method::EGET);           // 0x06
+    EXPECT_EQ(extractMethodUid(setTokens),  method::ESET);           // 0x07
+    EXPECT_EQ(extractMethodUid(authTokens), method::EAUTHENTICATE);  // 0x0C
+}
+
+TEST(MethodCall, SscUidSelectors) {
+    EXPECT_EQ(method::getUidFor(SscType::Opal20),     method::GET);
+    EXPECT_EQ(method::getUidFor(SscType::Pyrite20),   method::GET);
+    EXPECT_EQ(method::getUidFor(SscType::Enterprise), method::EGET);
+
+    EXPECT_EQ(method::setUidFor(SscType::Opal20),     method::SET);
+    EXPECT_EQ(method::setUidFor(SscType::Enterprise), method::ESET);
+
+    EXPECT_EQ(method::authenticateUidFor(SscType::Opal20),     method::AUTHENTICATE);
+    EXPECT_EQ(method::authenticateUidFor(SscType::Enterprise), method::EAUTHENTICATE);
+}
+
 #ifndef GTEST_INCLUDE_GTEST_GTEST_H_
 void run_method_tests() {
     printf("Method tests:\n");
     RUN_TEST(MethodCall, BuildGet);
     RUN_TEST(MethodCall, BuildAuthenticate);
     RUN_TEST(MethodCall, BuildStartSession);
+    RUN_TEST(MethodCall, OpalDefaults);
+    RUN_TEST(MethodCall, EnterpriseOverride);
+    RUN_TEST(MethodCall, SscUidSelectors);
     RUN_TEST(MethodResult, ParseSuccess);
     RUN_TEST(MethodResult, ParseFailure);
     RUN_TEST(ParamEncoder, StartSession);

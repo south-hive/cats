@@ -25,7 +25,7 @@ Result EvalApi::tableGet(Session& session, uint64_t objectUid,
     CellBlock cb;
     cb.startColumn = startCol;
     cb.endColumn = endCol;
-    Bytes tokens = MethodCall::buildGet(Uid(objectUid), cb);
+    Bytes tokens = MethodCall::buildGet(Uid(objectUid), cb, method::getUidFor(session.sscType()));
     auto r = sendMethod(session, tokens, result.raw);
     if (r.failed()) return r;
 
@@ -42,7 +42,7 @@ Result EvalApi::tableGet(Session& session, uint64_t objectUid,
 
 Result EvalApi::tableGetAll(Session& session, uint64_t objectUid,
                              TableResult& result) {
-    Bytes tokens = MethodCall::buildGet(Uid(objectUid));
+    Bytes tokens = MethodCall::buildGet(Uid(objectUid), {}, method::getUidFor(session.sscType()));
     auto r = sendMethod(session, tokens, result.raw);
     if (r.failed()) return r;
 
@@ -64,7 +64,7 @@ Result EvalApi::tableSet(Session& session, uint64_t objectUid,
     for (auto& [col, tok] : columns) {
         values.add(col, tok);
     }
-    Bytes tokens = MethodCall::buildSet(Uid(objectUid), values);
+    Bytes tokens = MethodCall::buildSet(Uid(objectUid), values, method::setUidFor(session.sscType()));
     return sendMethod(session, tokens, result);
 }
 
@@ -73,7 +73,7 @@ Result EvalApi::tableSetUint(Session& session, uint64_t objectUid,
                               RawResult& result) {
     TokenList values;
     values.addUint(column, value);
-    Bytes tokens = MethodCall::buildSet(Uid(objectUid), values);
+    Bytes tokens = MethodCall::buildSet(Uid(objectUid), values, method::setUidFor(session.sscType()));
     return sendMethod(session, tokens, result);
 }
 
@@ -88,7 +88,7 @@ Result EvalApi::tableSetBytes(Session& session, uint64_t objectUid,
                                RawResult& result) {
     TokenList values;
     values.addBytes(column, value);
-    Bytes tokens = MethodCall::buildSet(Uid(objectUid), values);
+    Bytes tokens = MethodCall::buildSet(Uid(objectUid), values, method::setUidFor(session.sscType()));
     return sendMethod(session, tokens, result);
 }
 
@@ -251,7 +251,7 @@ Result EvalApi::tableSetMultiUint(Session& session, uint64_t objectUid,
     for (auto& [col, val] : columns) {
         values.addUint(col, val);
     }
-    Bytes tokens = MethodCall::buildSet(Uid(objectUid), values);
+    Bytes tokens = MethodCall::buildSet(Uid(objectUid), values, method::setUidFor(session.sscType()));
     return sendMethod(session, tokens, result);
 }
 

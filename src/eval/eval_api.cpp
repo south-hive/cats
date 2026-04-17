@@ -338,7 +338,7 @@ Result EvalApi::startSyncSession(Session& session,
 
 Result EvalApi::authenticate(Session& session, uint64_t authorityUid,
                               const Bytes& credential, RawResult& result) {
-    Bytes tokens = MethodCall::buildAuthenticate(Uid(authorityUid), credential);
+    Bytes tokens = MethodCall::buildAuthenticate(Uid(authorityUid), credential, method::authenticateUidFor(session.sscType()));
     return sendMethod(session, tokens, result);
 }
 

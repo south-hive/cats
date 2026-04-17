@@ -39,6 +39,22 @@ inline constexpr uint64_t ACTIVATE             = 0x0000000600000203;
 inline constexpr uint64_t ERASE                = 0x0000000600000803;
 inline constexpr uint64_t RANDOM               = 0x0000000600000601;
 
+// ──────────────────────────────────────────────────────
+//  SSC-aware UID selectors
+//  Pick the right Get/Set/Authenticate UID based on the
+//  session's SSC. Opal/Pyrite use 0x16/0x17/0x1C; Enterprise
+//  uses 0x06/0x07/0x0C.
+// ──────────────────────────────────────────────────────
+inline constexpr uint64_t getUidFor(SscType ssc) {
+    return (ssc == SscType::Enterprise) ? EGET : GET;
+}
+inline constexpr uint64_t setUidFor(SscType ssc) {
+    return (ssc == SscType::Enterprise) ? ESET : SET;
+}
+inline constexpr uint64_t authenticateUidFor(SscType ssc) {
+    return (ssc == SscType::Enterprise) ? EAUTHENTICATE : AUTHENTICATE;
+}
+
 // ══════════════════════════════════════════════════════
 //  Table-specific methods
 // ══════════════════════════════════════════════════════

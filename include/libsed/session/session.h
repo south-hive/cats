@@ -102,6 +102,17 @@ public:
     /// @param ms  타임아웃 값 (밀리초)
     void setTimeout(uint32_t ms) { timeoutMs_ = ms; }
 
+    /// @brief 이 세션의 SSC 타입 설정 — Get/Set/Authenticate UID 선택에 사용됨.
+    ///
+    /// Opal/Pyrite(기본) 세션은 GET=0x16/SET=0x17/AUTHENTICATE=0x1C를 쓰고,
+    /// Enterprise 세션은 EGET=0x06/ESET=0x07/EAUTHENTICATE=0x0C를 쓴다.
+    /// Enterprise SP에 세션을 열 때는 반드시 이 값을 SscType::Enterprise 로
+    /// 설정해야 EvalApi가 올바른 메서드 UID로 토큰을 빌드한다.
+    void setSscType(SscType ssc) { sscType_ = ssc; }
+
+    /// @brief 이 세션의 SSC 타입 반환 (기본: Opal20)
+    SscType sscType() const { return sscType_; }
+
 private:
     /// @brief ComPacket 전송 후 응답 수신 (재시도 처리 포함)
     Result sendRecv(const Bytes& sendData, Bytes& recvTokens);
@@ -117,6 +128,7 @@ private:
     uint32_t hsn_ = 0;  // Host session number
     uint32_t maxComPacketSize_ = 2048;
     uint32_t timeoutMs_ = 30000;
+    SscType sscType_ = SscType::Opal20;  // Default; call setSscType() for Enterprise
     static inline uint32_t sessionCounter_ = 105;  // sedutil hardcodes HSN=105
 };
 

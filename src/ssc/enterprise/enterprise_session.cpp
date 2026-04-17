@@ -20,8 +20,10 @@ Result EnterpriseSession::openAsBandMaster(uint32_t bandId, const std::string& p
     Uid authority = uid::makeBandMasterUid(bandId);
     Bytes credential = HashPassword::passwordToBytes(password);
 
-    return sessionManager_.openSession(
+    auto r = sessionManager_.openSession(
         Uid(uid::SP_ENTERPRISE), true, session_, authority, credential);
+    if (r.ok() && session_) session_->setSscType(SscType::Enterprise);
+    return r;
 }
 
 Result EnterpriseSession::openAsEraseMaster(const std::string& password) {
@@ -29,16 +31,20 @@ Result EnterpriseSession::openAsEraseMaster(const std::string& password) {
 
     Bytes credential = HashPassword::passwordToBytes(password);
 
-    return sessionManager_.openSession(
+    auto r = sessionManager_.openSession(
         Uid(uid::SP_ENTERPRISE), true, session_,
         Uid(uid::AUTH_ERASEMASTER), credential);
+    if (r.ok() && session_) session_->setSscType(SscType::Enterprise);
+    return r;
 }
 
 Result EnterpriseSession::openAsAnybody() {
     if (isActive()) close();
 
-    return sessionManager_.openSession(
+    auto r = sessionManager_.openSession(
         Uid(uid::SP_ENTERPRISE), false, session_);
+    if (r.ok() && session_) session_->setSscType(SscType::Enterprise);
+    return r;
 }
 
 Result EnterpriseSession::close() {

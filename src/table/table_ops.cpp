@@ -14,7 +14,7 @@ Result TableOps::sendAndParse(const Bytes& methodTokens, MethodResult& result) {
 
 Result TableOps::get(const Uid& objectUid, const CellBlock& cellBlock,
                       ParamDecoder::ColumnValues& values) {
-    auto tokens = MethodCall::buildGet(objectUid, cellBlock);
+    auto tokens = MethodCall::buildGet(objectUid, cellBlock, method::getUidFor(session_.sscType()));
 
     MethodResult result;
     auto r = sendAndParse(tokens, result);
@@ -72,7 +72,7 @@ Result TableOps::set(const Uid& objectUid, const ParamDecoder::ColumnValues& val
         }
     }
 
-    auto tokens = MethodCall::buildSet(objectUid, list);
+    auto tokens = MethodCall::buildSet(objectUid, list, method::setUidFor(session_.sscType()));
 
     MethodResult result;
     return sendAndParse(tokens, result);
@@ -81,7 +81,7 @@ Result TableOps::set(const Uid& objectUid, const ParamDecoder::ColumnValues& val
 Result TableOps::setUint(const Uid& objectUid, uint32_t column, uint64_t value) {
     TokenList list;
     list.addUint(column, value);
-    auto tokens = MethodCall::buildSet(objectUid, list);
+    auto tokens = MethodCall::buildSet(objectUid, list, method::setUidFor(session_.sscType()));
 
     MethodResult result;
     return sendAndParse(tokens, result);
@@ -94,7 +94,7 @@ Result TableOps::setBool(const Uid& objectUid, uint32_t column, bool value) {
 Result TableOps::setBytes(const Uid& objectUid, uint32_t column, const Bytes& value) {
     TokenList list;
     list.addBytes(column, value);
-    auto tokens = MethodCall::buildSet(objectUid, list);
+    auto tokens = MethodCall::buildSet(objectUid, list, method::setUidFor(session_.sscType()));
 
     MethodResult result;
     return sendAndParse(tokens, result);
@@ -110,7 +110,7 @@ Result TableOps::setPin(const Uid& cpinUid, const std::string& pin) {
 }
 
 Result TableOps::authenticate(const Uid& authority, const Bytes& credential) {
-    auto tokens = MethodCall::buildAuthenticate(authority, credential);
+    auto tokens = MethodCall::buildAuthenticate(authority, credential, method::authenticateUidFor(session_.sscType()));
 
     MethodResult result;
     auto r = session_.sendMethod(tokens, result);

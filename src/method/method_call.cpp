@@ -56,7 +56,8 @@ Bytes MethodCall::buildSmCall(uint64_t smMethodUid, const Bytes& paramTokens) {
     return enc.data();
 }
 
-Bytes MethodCall::buildGet(const Uid& objectUid, const CellBlock& cellBlock) {
+Bytes MethodCall::buildGet(const Uid& objectUid, const CellBlock& cellBlock,
+                            uint64_t methodUid) {
     TokenEncoder paramEnc;
 
     // CellBlock named pairs go DIRECTLY into the method's parameter list.
@@ -66,12 +67,13 @@ Bytes MethodCall::buildGet(const Uid& objectUid, const CellBlock& cellBlock) {
     // against sedutil-cli Get for C_PIN_MSID.
     ParamEncoder::encodeCellBlock(paramEnc, cellBlock);
 
-    MethodCall call(objectUid, Uid(method::GET));
+    MethodCall call(objectUid, Uid(methodUid));
     call.setParams(paramEnc.data());
     return call.build();
 }
 
-Bytes MethodCall::buildSet(const Uid& objectUid, const TokenList& values) {
+Bytes MethodCall::buildSet(const Uid& objectUid, const TokenList& values,
+                            uint64_t methodUid) {
     TokenEncoder paramEnc;
 
     // Where (empty) — sedutil always includes this with proper ENDNAME.
@@ -91,12 +93,13 @@ Bytes MethodCall::buildSet(const Uid& objectUid, const TokenList& values) {
     paramEnc.endList();
     paramEnc.endName();
 
-    MethodCall call(objectUid, Uid(method::SET));
+    MethodCall call(objectUid, Uid(methodUid));
     call.setParams(paramEnc.data());
     return call.build();
 }
 
-Bytes MethodCall::buildAuthenticate(const Uid& authorityUid, const Bytes& credential) {
+Bytes MethodCall::buildAuthenticate(const Uid& authorityUid, const Bytes& credential,
+                                     uint64_t methodUid) {
     TokenEncoder paramEnc;
 
     paramEnc.encodeUid(authorityUid);
@@ -107,7 +110,7 @@ Bytes MethodCall::buildAuthenticate(const Uid& authorityUid, const Bytes& creden
         paramEnc.endName();
     }
 
-    MethodCall call{Uid(uid::THIS_SP), Uid(method::AUTHENTICATE)};
+    MethodCall call{Uid(uid::THIS_SP), Uid(methodUid)};
     call.setParams(paramEnc.data());
     return call.build();
 }

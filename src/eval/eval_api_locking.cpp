@@ -25,7 +25,7 @@ Result EvalApi::getCPin(Session& session, uint64_t cpinUid,
     CellBlock cb;
     cb.startColumn = uid::col::PIN;
     cb.endColumn = uid::col::PIN;
-    Bytes tokens = MethodCall::buildGet(Uid(cpinUid), cb);
+    Bytes tokens = MethodCall::buildGet(Uid(cpinUid), cb, method::getUidFor(session.sscType()));
     auto r = sendMethod(session, tokens, result);
     if (r.failed()) return r;
 
@@ -45,7 +45,7 @@ Result EvalApi::setCPin(Session& session, uint64_t cpinUid,
                          const Bytes& newPin, RawResult& result) {
     TokenList values;
     values.addBytes(uid::col::PIN, newPin);
-    Bytes tokens = MethodCall::buildSet(Uid(cpinUid), values);
+    Bytes tokens = MethodCall::buildSet(Uid(cpinUid), values, method::setUidFor(session.sscType()));
     return sendMethod(session, tokens, result);
 }
 
@@ -86,7 +86,7 @@ Result EvalApi::readMbrData(Session& session, uint32_t offset, uint32_t length,
     CellBlock cb;
     cb.startRow = offset;
     cb.endRow = offset + length - 1;
-    Bytes tokens = MethodCall::buildGet(Uid(uid::TABLE_MBR), cb);
+    Bytes tokens = MethodCall::buildGet(Uid(uid::TABLE_MBR), cb, method::getUidFor(session.sscType()));
     auto r = sendMethod(session, tokens, result);
     if (r.ok() && result.methodResult.isSuccess()) {
         auto stream = result.methodResult.resultStream();
@@ -143,7 +143,7 @@ Result EvalApi::setRange(Session& session, uint32_t rangeId,
     values.addUint(uid::col::READ_LOCK_EN, readLockEnabled ? 1 : 0);
     values.addUint(uid::col::WRITE_LOCK_EN, writeLockEnabled ? 1 : 0);
 
-    Bytes tokens = MethodCall::buildSet(Uid(rangeUid), values);
+    Bytes tokens = MethodCall::buildSet(Uid(rangeUid), values, method::setUidFor(session.sscType()));
     return sendMethod(session, tokens, result);
 }
 
@@ -156,14 +156,14 @@ Result EvalApi::setRangeLock(Session& session, uint32_t rangeId,
     values.addUint(uid::col::READ_LOCKED, readLocked ? 1 : 0);
     values.addUint(uid::col::WRITE_LOCKED, writeLocked ? 1 : 0);
 
-    Bytes tokens = MethodCall::buildSet(Uid(rangeUid), values);
+    Bytes tokens = MethodCall::buildSet(Uid(rangeUid), values, method::setUidFor(session.sscType()));
     return sendMethod(session, tokens, result);
 }
 
 Result EvalApi::getRangeInfo(Session& session, uint32_t rangeId,
                               LockingRangeInfo& info, RawResult& result) {
     uint64_t rangeUid = uid::makeLockingRangeUid(rangeId).toUint64();
-    Bytes tokens = MethodCall::buildGet(Uid(rangeUid));
+    Bytes tokens = MethodCall::buildGet(Uid(rangeUid), {}, method::getUidFor(session.sscType()));
     auto r = sendMethod(session, tokens, result);
     if (r.failed()) return r;
 

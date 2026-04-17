@@ -46,7 +46,7 @@ Result EvalApi::addAuthorityToAce(Session& session, uint64_t aceUid,
     boolExpr.endList();
     values.addBytes(3, boolExpr.data());
 
-    Bytes tokens = MethodCall::buildSet(Uid(aceUid), values);
+    Bytes tokens = MethodCall::buildSet(Uid(aceUid), values, method::setUidFor(session.sscType()));
     return sendMethod(session, tokens, result);
 }
 
@@ -153,7 +153,7 @@ Result EvalApi::assignUserToRange(Session& session, uint32_t userId,
     uint64_t rdAce = uid::makeAceLockingRangeSetRdLocked(rangeId).toUint64();
     TokenList rdValues;
     rdValues.addBytes(uid::col::ACE_BOOLEAN_EXPR, boolExpr.data());
-    Bytes rdTokens = MethodCall::buildSet(Uid(rdAce), rdValues);
+    Bytes rdTokens = MethodCall::buildSet(Uid(rdAce), rdValues, method::setUidFor(session.sscType()));
     auto r = sendMethod(session, rdTokens, result);
     if (r.failed()) return r;
 
@@ -161,7 +161,7 @@ Result EvalApi::assignUserToRange(Session& session, uint32_t userId,
     uint64_t wrAce = uid::makeAceLockingRangeSetWrLocked(rangeId).toUint64();
     TokenList wrValues;
     wrValues.addBytes(uid::col::ACE_BOOLEAN_EXPR, boolExpr.data());
-    Bytes wrTokens = MethodCall::buildSet(Uid(wrAce), wrValues);
+    Bytes wrTokens = MethodCall::buildSet(Uid(wrAce), wrValues, method::setUidFor(session.sscType()));
     return sendMethod(session, wrTokens, result);
 }
 

@@ -174,7 +174,7 @@ Result EvalApi::getAllSecurityFeatures(std::shared_ptr<ITransport> transport,
 Result EvalApi::getLockingInfo(Session& session, uint32_t rangeId,
                                 LockingInfo& info, RawResult& result) {
     uint64_t rangeUid = uid::makeLockingRangeUid(rangeId).toUint64();
-    Bytes tokens = MethodCall::buildGet(Uid(rangeUid));
+    Bytes tokens = MethodCall::buildGet(Uid(rangeUid), {}, method::getUidFor(session.sscType()));
     auto r = sendMethod(session, tokens, result);
     if (r.failed()) return r;
 
@@ -274,7 +274,7 @@ Result EvalApi::tcgRead(Session& session, uint64_t tableUid,
     cb.startRow = offset;
     cb.endRow = offset + length - 1;
 
-    Bytes tokens = MethodCall::buildGet(Uid(tableUid), cb);
+    Bytes tokens = MethodCall::buildGet(Uid(tableUid), cb, method::getUidFor(session.sscType()));
     auto r = sendMethod(session, tokens, result.raw);
     if (r.ok() && result.raw.methodResult.isSuccess()) {
         auto stream = result.raw.methodResult.resultStream();

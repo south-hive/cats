@@ -45,14 +45,24 @@ public:
 
     // ── Convenience factory methods ──────────────────
 
-    /// Build GET method call with CellBlock
-    static Bytes buildGet(const Uid& objectUid, const CellBlock& cellBlock = {});
+    /// Build GET method call with CellBlock.
+    /// @param methodUid  Defaults to Opal GET (0x16). Pass method::EGET (0x06)
+    ///                   for Enterprise SSC sessions; use method::getUidFor(ssc)
+    ///                   to pick automatically.
+    static Bytes buildGet(const Uid& objectUid, const CellBlock& cellBlock = {},
+                          uint64_t methodUid = method::GET);
 
-    /// Build SET method call with values
-    static Bytes buildSet(const Uid& objectUid, const TokenList& values);
+    /// Build SET method call with values.
+    /// @param methodUid  Defaults to Opal SET (0x17). Pass method::ESET (0x07)
+    ///                   for Enterprise SSC sessions.
+    static Bytes buildSet(const Uid& objectUid, const TokenList& values,
+                          uint64_t methodUid = method::SET);
 
-    /// Build Authenticate method call
-    static Bytes buildAuthenticate(const Uid& authorityUid, const Bytes& credential);
+    /// Build Authenticate method call.
+    /// @param methodUid  Defaults to Opal AUTHENTICATE (0x1C). Pass
+    ///                   method::EAUTHENTICATE (0x0C) for Enterprise SSC.
+    static Bytes buildAuthenticate(const Uid& authorityUid, const Bytes& credential,
+                                   uint64_t methodUid = method::AUTHENTICATE);
 
     /// Build GenKey method call
     static Bytes buildGenKey(const Uid& objectUid);
