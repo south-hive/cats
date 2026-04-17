@@ -280,6 +280,12 @@ if(LIBSED_BUILD_TOOLS)
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/sedutil
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
     )
+
+    # Register sed_compare with CTest as a regression test — if libsed ever
+    # drifts from sedutil-cli's byte layout, this test fails (exit code != 0).
+    if(LIBSED_BUILD_TESTS)
+        add_test(NAME sed_compare COMMAND sed_compare)
+    endif()
 endif()
 
 # ── Integration tests (offline, no hardware) ──

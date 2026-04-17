@@ -4,8 +4,9 @@
 
 namespace libsed {
 
-/// Null/stub NVMe device — all operations return "not available".
-/// Replace with your libnvme implementation.
+/// Null/stub NVMe device — every operation returns TransportNotAvailable.
+/// Intended as a base class: subclass and override the methods you support
+/// by forwarding to your NVMe backend (libnvme, ioctl, etc.).
 class NullNvmeDevice : public INvmeDevice {
 public:
     explicit NullNvmeDevice(const std::string& device_path = "")
@@ -13,16 +14,16 @@ public:
     ~NullNvmeDevice() override = default;
 
     Result securitySend(uint8_t, uint16_t, const uint8_t*, uint32_t) override {
-        return ErrorCode::TransportNotAvailable; // TODO: your libnvme
+        return ErrorCode::TransportNotAvailable; // Override in your subclass to forward to libnvme
     }
     Result securityRecv(uint8_t, uint16_t, uint8_t*, uint32_t, uint32_t& r) override {
-        r = 0; return ErrorCode::TransportNotAvailable; // TODO: your libnvme
+        r = 0; return ErrorCode::TransportNotAvailable; // Override in your subclass to forward to libnvme
     }
     Result adminCommand(NvmeAdminCmd&, NvmeCompletion& c) override {
-        c = {}; return ErrorCode::TransportNotAvailable; // TODO: your libnvme
+        c = {}; return ErrorCode::TransportNotAvailable; // Override in your subclass to forward to libnvme
     }
     Result ioCommand(NvmeIoCmd&, NvmeCompletion& c) override {
-        c = {}; return ErrorCode::TransportNotAvailable; // TODO: your libnvme
+        c = {}; return ErrorCode::TransportNotAvailable; // Override in your subclass to forward to libnvme
     }
     Result identify(uint8_t, uint32_t, Bytes& d) override {
         d.clear(); return ErrorCode::TransportNotAvailable;
