@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## MANDATORY: Read Before Any Encoding/Protocol Change
 
-- **`docs/hammurabi_code.md`** — 15 immutable laws from every bug. Violate none.
+- **`docs/internal/hammurabi_code.md`** — 15 immutable laws from every bug. Violate none.
 - **`docs/rosetta_stone.md`** — Byte-exact encoding reference. The translation table.
-- **`docs/work_history.md`** — Session-by-session work log. Check when resuming work.
+- **`docs/internal/work_history.md`** — Session-by-session work log. Check when resuming work.
 - **`tools/ioctl_validator`** — 17 tests, 5 TCG sequences. Run after ANY encoding change.
 
 ## Project Overview
@@ -140,7 +140,7 @@ The recommended pattern injects an `INvmeDevice` implementation into `NvmeTransp
 
 ## Developer Guide
 
-Comprehensive documentation in `docs/developer_guide.md` (in Korean) covers architecture, NVMe DI patterns, session management, multi-threading rules, TC Library util mapping, fault injection, the SedContext/Worker integration pattern, and a full application note example catalog.
+Start at `docs/README.md` — it routes readers by audience (TC app developer → `sed_drive_guide.md` + `cookbook.md`; evaluation platform engineer → `eval_platform_guide.md` + `rosetta_stone.md`; SED newcomer → `tcg_sed_primer.md`).
 
 ---
 

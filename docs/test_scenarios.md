@@ -2397,8 +2397,9 @@ switch (option.sscType) {
 | `include/libsed/core/uid.h` | UID 상수 |
 | `include/libsed/core/error.h` | ErrorCode 정의 |
 | `include/libsed/eval/eval_types.h` | Result 구조체 |
-| `docs/hammurabi_code.md` | 15 인코딩 불변법칙 |
+| `docs/internal/hammurabi_code.md` | 15 인코딩 불변법칙 (기여자용) |
 | `docs/rosetta_stone.md` | 바이트 인코딩 참조 |
-| `tests/integration/ioctl_validator.cpp` | 5개 시퀀스 바이트 비교 |
-| `examples/appnote/appnote_opal.cpp` | Opal 전체 수명 주기 예제 |
-| `examples/facade/08_aging_4session.cpp` | 에이징 테스트 예제 |
+| `tests/integration/ioctl_validator.cpp` | 5개 시퀀스 바이트 비교 (17 tests) |
+| `tools/sed_compare/` | sedutil-cli 13개 명령 byte-identity 증명 |
+| `examples/12_factory_reset.cpp` | PSID/SID Revert 예제 |
+| `examples/19_multi_session.cpp` | 멀티 세션/에이징 예제 |
