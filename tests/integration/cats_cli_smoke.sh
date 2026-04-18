@@ -8,7 +8,13 @@
 
 set -u
 
-CLI="${1:-./build/tools/cats-cli}"
+# Resolve paths against the script's own location so ctest (cwd=build/) and
+# hand-invocation (cwd=repo root) both find the fixtures.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+FIXTURES="$REPO_ROOT/tests/fixtures"
+
+CLI="${1:-$REPO_ROOT/build/tools/cats-cli}"
 if [[ ! -x "$CLI" ]]; then
     echo "error: cats-cli binary not found at $CLI"
     exit 127
@@ -81,6 +87,68 @@ expect_exit 1 "raw-method odd-hex"           "$CLI" --sim --force eval raw-metho
     --invoke 0x1 --method 0x2 --payload "0xABC"
 expect_exit 1 "raw-method non-hex"           "$CLI" --sim --force eval raw-method \
     --invoke 0x1 --method 0x2 --payload "ZZ"
+
+# ── JSON output ──
+"$CLI" --sim --json drive discover 2>/dev/null | grep -q '"command"' && {
+    echo "  OK   drive discover --json has 'command' key"; PASS=$((PASS+1));
+} || { echo "  FAIL drive discover --json missing 'command'"; FAIL=$((FAIL+1)); }
+
+"$CLI" --sim --json drive msid 2>/dev/null | grep -q '"msid_hex"' && {
+    echo "  OK   drive msid --json has 'msid_hex'"; PASS=$((PASS+1));
+} || { echo "  FAIL drive msid --json missing 'msid_hex'"; FAIL=$((FAIL+1)); }
+
+"$CLI" --sim --json mbr status 2>/dev/null | grep -q '"supported"' && {
+    echo "  OK   mbr status --json has 'supported'"; PASS=$((PASS+1));
+} || { echo "  FAIL mbr status --json missing 'supported'"; FAIL=$((FAIL+1)); }
+
+# ── Password input paths ──
+echo "test_pw" > /tmp/cats_smoke_pw.txt
+expect_exit 0 "pw-file routes correctly (drive discover needs no pw)"  \
+    "$CLI" --sim --pw-file /tmp/cats_smoke_pw.txt drive discover
+
+TC_CATS_SMOKE_PW=envpw "$CLI" --sim --pw-env TC_CATS_SMOKE_PW drive discover >/dev/null 2>&1
+if [[ $? == 0 ]]; then echo "  OK   pw-env routes"; PASS=$((PASS+1)); \
+    else echo "  FAIL pw-env"; FAIL=$((FAIL+1)); fi
+
+expect_exit 1 "two pw sources rejected" \
+    "$CLI" --sim -p pw --pw-env TC_CATS_SMOKE_PW drive discover
+expect_exit 1 "pw-env unset var rejected" \
+    "$CLI" --sim --pw-env UNSET_VAR_XYZABC drive discover
+
+rm -f /tmp/cats_smoke_pw.txt
+
+# ── eval transaction runner ──
+expect_exit 0 "eval transaction anonymous read" \
+    "$CLI" --sim eval transaction --script "$FIXTURES/tx_sample_read.json"
+expect_exit 1 "eval transaction missing script" \
+    "$CLI" --sim eval transaction
+
+# ── --repeat N ──
+OUT=$("$CLI" --sim --repeat 3 drive discover 2>/dev/null | grep -c "SSC")
+if [[ "$OUT" == "3" ]]; then echo "  OK   --repeat 3 runs command thrice"; PASS=$((PASS+1)); \
+    else echo "  FAIL --repeat 3 (got $OUT executions)"; FAIL=$((FAIL+1)); fi
+
+# ── New subcommands parse/register ──
+"$CLI" --sim -p pw range lock --id 1 --read on --write off >/dev/null 2>&1; ec=$?
+if [[ "$ec" == "0" || "$ec" == "3" || "$ec" == "4" ]]; then
+    echo "  OK   range lock parses (exit=$ec)"; PASS=$((PASS+1));
+else echo "  FAIL range lock (exit=$ec)"; FAIL=$((FAIL+1)); fi
+
+"$CLI" --sim -p pw user enable --id 1 >/dev/null 2>&1; ec=$?
+if [[ "$ec" == "0" || "$ec" == "3" || "$ec" == "4" ]]; then
+    echo "  OK   user enable parses (exit=$ec)"; PASS=$((PASS+1));
+else echo "  FAIL user enable (exit=$ec)"; FAIL=$((FAIL+1)); fi
+
+"$CLI" --sim -p pw user set-pw --id 1 --new-pw newpw >/dev/null 2>&1; ec=$?
+if [[ "$ec" == "0" || "$ec" == "3" || "$ec" == "4" ]]; then
+    echo "  OK   user set-pw parses (exit=$ec)"; PASS=$((PASS+1));
+else echo "  FAIL user set-pw (exit=$ec)"; FAIL=$((FAIL+1)); fi
+
+expect_exit 1 "mbr enable without --force"   "$CLI" --sim -p pw mbr enable --state on
+"$CLI" --sim -p pw mbr done --state on >/dev/null 2>&1; ec=$?
+if [[ "$ec" == "0" || "$ec" == "3" || "$ec" == "4" ]]; then
+    echo "  OK   mbr done parses (exit=$ec)"; PASS=$((PASS+1));
+else echo "  FAIL mbr done (exit=$ec)"; FAIL=$((FAIL+1)); fi
 
 # ── Password input required where design mandates ──
 expect_exit 1 "range list without password"  "$CLI" --sim range list

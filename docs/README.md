@@ -47,10 +47,21 @@ injection.
 4. [`test_scenarios.md`](test_scenarios.md) — 104-scenario test catalog
    spanning Levels 1–6 (L1=unit, L5=stress, L6=SSC-specific).
 
+### I'm evaluating / debugging a drive from the shell
+
+[`cats_cli_guide.md`](cats_cli_guide.md) — the `cats-cli` tool with
+`<Resource> <Action>` subcommand tree, `--json` output, `--pw-env/file/
+stdin` password paths, `--sim` for hardware-free logic checks, `--force`
+gating on every destructive op, and `eval transaction <script.json>`
+for multi-op scenarios. The evaluator-facing counterpart to `sedutil-cli`.
+
+Transaction script schema: [`cats_cli_transaction_schema.md`](cats_cli_transaction_schema.md).
+
 ### I'm verifying compatibility or tracing a wire bug
 
 The tools in [`../tools/`](../tools/) have the byte-level answers.
 
+- `tools/cats-cli/` — full evaluation CLI (see `cats_cli_guide.md`).
 - `tools/sed_compare/` — byte-for-byte proof against `sedutil-cli` for
   13 commands (Tier 1+2). Run `./build/tools/sed_compare`.
 - `tools/token_dump.cpp` — decode a hex stream into TCG tokens.

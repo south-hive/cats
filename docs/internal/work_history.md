@@ -1,5 +1,65 @@
 # Work History
 
+## Session 2026-04-18 (7) — cats-cli ship-ready 최종 마무리
+
+### What was done
+
+이전 Round 2 리뷰 + 검수 후 cats-cli를 **ship-ready** 상태로 마감. 멘토 편지에서 동생에게 권한 "수직 진행(schema → fixture → minimal → smoke → 확장)" 순서를 리뷰어 본인도 따름.
+
+**주요 추가**:
+- `third_party/json/json.hpp` — nlohmann/json 3.11.3 single-header 벤더링 (폐쇄망 원칙 유지)
+- `tools/cats-cli/transaction.{h,cpp}` — `eval transaction <script.json>` JSON script runner. 한 세션 안에서 `start_transaction` / `set` / `get` / `genkey` / `erase` / `authenticate` / `sleep` / `commit` / `rollback` 실행, `on_error` 정책 (rollback / continue / abort)
+- `docs/cats_cli_transaction_schema.md` — JSON 스키마 v1 (샘플 3개 포함)
+- `tests/fixtures/tx_sample_{read,txn,genkey}.json` — smoke test용 + 사용자 예시
+- `docs/cats_cli_guide.md` — 사용자 가이드 (명령 트리, 전역 옵션, password 경로 4가지, exit code, JSON 스키마, 자동화 레시피)
+
+**Password 입력 다각화** — `--pw-env VAR` / `--pw-file PATH` / `--pw-stdin` 추가 (ps 노출 회피). `Context::resolvePassword()` 멱등성 확보.
+
+**JSON 출력** — `drive discover`, `drive msid`, `range list`, `user list`, `mbr status`, `eval transaction` 6개에 `--json` 적용. 공통 `{"command": ..., ...}` 래퍼. MSID binary는 hex만 넣고 printable ASCII일 때만 `msid_ascii` 추가 (nlohmann UTF-8 예외 회피).
+
+**새 subcommand**:
+- `range lock --id --read on/off --write on/off` (granular, `SedSession::setRangeLockState` 활용)
+- `user enable --id`, `user set-pw --id --new-pw/env/file`
+- `mbr enable --state`, `mbr done --state`
+- `eval transaction --script PATH`
+
+**`--repeat N` + `--repeat-delay MS`** — aging/stress. 반복 중 worst exit code 유지.
+
+**Smoke test 39개** — fixture 절대경로 해석(ctest cwd 의존성 제거), JSON 키 검증, password 경로 충돌, eval transaction, --repeat, 새 subcommand parse 포함.
+
+**Top-level README + CHANGELOG + docs/README** 업데이트. cats-cli가 highlights 맨 위에 노출.
+
+### Current state
+
+- ctest **6/6 PASS** (libsed_tests, sed_compare 68/68, ioctl_validator 17/17, scenario_tests 104/104, golden_validator, cats_cli_smoke **39/39**)
+- Downstream install + `find_package(libsed)` 재검증 통과
+- 모든 destructive 명령 `--force` 일관 게이트
+- 폐쇄망 컴플라이언트 (CLI11 + nlohmann/json 벤더링)
+
+### Phase 진행 상태
+
+| Phase | 상태 |
+|-------|------|
+| Phase 0 (facade gap) | ✅ 완료 (enumerateRanges/Authorities/Bands, getMbrStatus, revertLockingSP, setRangeLockState, runRawMethod, getTableColumn) |
+| Phase 1 (base cmds + JSON + pw 다각화 + exit codes) | ✅ 완료 |
+| Phase 2 (eval transaction, eval raw-method, --repeat) | ✅ **transaction script runner 포함** |
+| Phase 3 (session/compare/snapshot/golden/--timing) | ❌ Non-goal this session (설계 문서 §9) |
+| Phase 4 (벤더링 + 사용자 가이드 + CHANGELOG + smoke ctest) | ✅ 완료 |
+
+### 다음 세션에서 이어갈 수 있는 작업
+
+| 항목 | 난이도 |
+|------|-------|
+| `eval fault-list` + `eval fault-inject` — FaultBuilder 24지점 CLI 노출 | 중 |
+| `compare --cmd <sedutil-cmd>` — `tools/sed_compare`의 CLI 승격 | 하 |
+| `session run/repl` — 세션 유지 (readline REPL) | 중 |
+| `drive snapshot/restore` — 설정 백업/복원 JSON | 중 |
+| `--timing` 플래그 (`CommandLogger::elapsedMs` 노출) | 하 |
+| `eval golden record/compare` (`golden_validator` CLI 승격) | 하 |
+| 실기기 MoT 검증 — 각 명령별 실드라이브에서 1회 돌려보기 | 하드웨어 필요 |
+
+---
+
 ## Session 2026-04-18 (3) — Distribution packaging cleanup
 
 ### What was done

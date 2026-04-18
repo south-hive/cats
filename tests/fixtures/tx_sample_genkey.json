@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "session": {
+    "sp": "Locking",
+    "authority": "Admin1",
+    "pw_env": "TC_PW"
+  },
+  "ops": [
+    { "op": "genkey", "object": "LockingRange1" }
+  ]
+}

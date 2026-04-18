@@ -27,14 +27,24 @@ int main() {
 - **Two API layers.** `SedDrive` for quick application code; `EvalApi`
   when you need byte-level control, fault injection, or multi-threaded
   evaluation.
-- **Byte-identical to sedutil-cli.** The `sed_compare` tool proves 56/56
-  packets byte-identical against sedutil-cli for 13 commands spanning
-  ownership, revert, locking, and users.
+- **`cats-cli` evaluation CLI** — `<Resource> <Action>` subcommand tree
+  (`drive discover/msid/revert`, `range list/setup/lock/erase`, `user
+  list/enable/assign/set-pw`, `mbr status/enable/write`, `eval tx-start/
+  table-get/raw-method/transaction`) with `--json` output, `--pw-env /
+  file / stdin` password paths, `--sim` routing, `--force` on every
+  destructive op, `--repeat N` for aging, and a JSON script runner for
+  multi-op scenarios. Targets firmware engineers / QA / security
+  evaluators. See [`docs/cats_cli_guide.md`](docs/cats_cli_guide.md).
+- **Byte-identical to sedutil-cli.** The `sed_compare` tool proves 68/68
+  packets byte-identical against sedutil-cli for 17 commands across
+  Tier 1 (ownership/revert), Tier 2 (locking/users), and Tier 3 (MBR/
+  DataStore/rekey).
 - **Transport-agnostic.** `NvmeTransport`, `AtaTransport`, `ScsiTransport`,
   plus `SimTransport` for hardware-free testing.
-- **104 scenario tests** covering L1 unit → L6 SSC-specific behavior, and
-  17 wire-level `ioctl_validator` tests pinning sedutil compatibility.
-- **20 example programs** that form a beginner-to-expert learning path
+- **104 scenario tests + 39-case cats-cli smoke** covering L1 unit → L6
+  SSC-specific behavior, and 17 wire-level `ioctl_validator` tests
+  pinning sedutil compatibility.
+- **21 example programs** that form a beginner-to-expert learning path
   paired chapter-by-chapter with a TCG SED protocol primer.
 
 ## Requirements
@@ -63,7 +73,7 @@ cd build && ctest
 |--------|---------|-------------|
 | `LIBSED_BUILD_TESTS` | ON | Unit + scenario + integration tests |
 | `LIBSED_BUILD_EXAMPLES` | ON | 20 example programs in `examples/` |
-| `LIBSED_BUILD_TOOLS` | ON | CLI tools (`sed_discover`, `sed_manage`, `token_dump`, `sed_compare`) |
+| `LIBSED_BUILD_TOOLS` | ON | CLI tools (`cats-cli`, `sed_discover`, `sed_manage`, `token_dump`, `sed_compare`) |
 | `LIBSED_BUILD_SHARED` | OFF | Shared (ON) vs static (OFF) library |
 
 ## Install
@@ -92,7 +102,7 @@ include/libsed/      Public headers
   ssc/               Opal / Enterprise / Pyrite convenience layers
 src/                 Implementation
 examples/            01-20 progressive learning examples
-tools/               sed_discover, sed_manage, token_dump, sed_compare
+tools/               cats-cli, sed_discover, sed_manage, token_dump, sed_compare
 tests/               Unit, scenario, integration, mock/simulator transports
 docs/                Documentation — start at docs/README.md
 third_party/sedutil/ Subset of sedutil-cli sources used by sed_compare

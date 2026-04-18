@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "session": {
+    "sp": "Admin",
+    "authority": "Anybody"
+  },
+  "ops": [
+    { "op": "get", "object": "C_PIN_MSID", "columns": [3, 3] }
+  ]
+}

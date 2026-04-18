@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "session": {
+    "sp": "Locking",
+    "authority": "Admin1",
+    "pw_env": "TC_PW"
+  },
+  "ops": [
+    { "op": "start_transaction" },
+    { "op": "set", "object": "LockingRange1",
+      "values": { "RangeStart": 0, "RangeLength": 1024,
+                  "ReadLockEnabled": true, "WriteLockEnabled": true } },
+    { "op": "get", "object": "LockingRange1", "columns": [0, 10] },
+    { "op": "commit" }
+  ],
+  "on_error": "rollback"
+}

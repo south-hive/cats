@@ -255,10 +255,12 @@ if(LIBSED_BUILD_TOOLS)
     # (closed-network build — no FetchContent / network access).
     add_executable(cats-cli
         tools/cats-cli/main.cpp
+        tools/cats-cli/transaction.cpp
     )
     target_link_libraries(cats-cli PRIVATE libsed)
     target_include_directories(cats-cli PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/CLI11
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/json
     )
 
     # cats-cli smoke test (SimTransport only — no hardware needed).

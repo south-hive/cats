@@ -10,6 +10,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`tools/cats-cli/`** — TCG SED evaluation & debugging CLI, ship-ready.
+  Subcommand tree: `drive discover|msid|revert|psid-revert`,
+  `range list|setup|lock|erase`, `band list`, `user list|enable|assign|set-pw`,
+  `mbr status|enable|done|write`, `eval tx-start|table-get|raw-method|transaction`.
+  All destructive ops gated by `--force` via a common helper. Exit-code
+  schema 0–5 (EC_USAGE / EC_TRANSPORT / EC_TCG_METHOD / EC_AUTH / EC_NOT_SUPPORTED).
+  Closed-network: CLI11 2.3.2 + nlohmann/json 3.11.3 vendored at
+  `third_party/`.
+- **`eval transaction <script.json>`** — JSON script runner executing
+  multiple ops inside one session (start_transaction / set / get / genkey
+  / erase / authenticate / sleep / commit / rollback). Spec at
+  `docs/cats_cli_transaction_schema.md`.
+- **`--json` output** — machine-readable JSON on stdout for `drive
+  discover`, `drive msid`, `range list`, `user list`, `mbr status`, and
+  `eval transaction`. Unified `{"command": ..., ...}` envelope.
+- **Password input diversification** — `--pw-env VAR`, `--pw-file PATH`,
+  `--pw-stdin` in addition to `-p/--password`. Only one of the four may
+  be given; violation → EC_USAGE. Prevents literal-password leakage via
+  `ps(1)` in CI.
+- **`--repeat N` / `--repeat-delay MS`** — re-run a subcommand for
+  aging/stress; last failing exit is preserved.
+- **`SedDrive::enumerateRanges / enumerateAuthorities / enumerateBands /
+  getMbrStatus / revertLockingSP / runRawMethod / getTableColumn`** —
+  Phase 0 facade gap closed so the CLI stays thin (no TCG logic in
+  callbacks). `SedDrive::AuthorityKind` enum + `AuthorityInfo` now
+  carries Admin1-4 alongside User1-8.
+- **`docs/cats_cli_guide.md`**, **`docs/cats_cli_transaction_schema.md`** —
+  user-facing documentation.
+- **`tests/integration/cats_cli_smoke.sh`** — 39-case SimTransport smoke
+  (registered in CTest as `cats_cli_smoke`).
+
+### Changed
+- `DiscoveryInfo` gains `mbrSupported` (LockingFeature flag 0x40) so
+  `cats-cli mbr status` can report "supported" without opening a session
+  that real drives may refuse to anonymous readers.
+- `TokenEncoder::endTransaction(bool commit)` now emits the spec-
+  required status byte (`0xFC 0x00` commit / `0xFC 0x01` abort).
+  Default argument keeps existing callers at commit.
+
+### Deprecated / Removed
+- None.
+
+### Added (earlier pre-Unreleased items)
 - `tools/sed_compare/` — byte-for-byte packet comparison against sedutil-cli
   for 17 commands across Tier 1 (ownership/revert), Tier 2 (locking/users),
   and Tier 3 (MBR/DataStore/rekey). 68/68 packets byte-identical on the
