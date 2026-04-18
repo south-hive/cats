@@ -250,6 +250,17 @@ endif()
 if(LIBSED_BUILD_TOOLS)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tools)
 
+    # ── cats-cli (modern full-featured CLI) ──
+    # CLI11 is vendored as a single-header at third_party/CLI11/CLI11.hpp
+    # (closed-network build — no FetchContent / network access).
+    add_executable(cats-cli
+        tools/cats-cli/main.cpp
+    )
+    target_link_libraries(cats-cli PRIVATE libsed)
+    target_include_directories(cats-cli PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/CLI11
+    )
+
     add_executable(sed_discover     tools/sed_discover.cpp)
     add_executable(sed_manage       tools/sed_manage.cpp)
     add_executable(token_dump       tools/token_dump.cpp)
