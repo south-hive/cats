@@ -105,6 +105,7 @@ set(LIBSED_SOURCES
     src/eval/eval_api_enterprise.cpp
     src/eval/eval_api_tclib.cpp
     src/eval/eval_api_nvme.cpp
+    src/eval/eval_api_transaction.cpp
     src/eval/eval_composite.cpp
 )
 
@@ -231,6 +232,7 @@ if(LIBSED_BUILD_EXAMPLES)
     add_executable(18_fault_injection     examples/18_fault_injection.cpp)
     add_executable(19_multi_session       examples/19_multi_session.cpp)
     add_executable(20_custom_transport    examples/20_custom_transport.cpp)
+    add_executable(21_transactions        examples/21_transactions.cpp)
 
     target_link_libraries(14_error_handling      PRIVATE libsed)
     target_link_libraries(15_wire_inspection     PRIVATE libsed)
@@ -239,6 +241,7 @@ if(LIBSED_BUILD_EXAMPLES)
     target_link_libraries(18_fault_injection     PRIVATE libsed)
     target_link_libraries(19_multi_session       PRIVATE libsed Threads::Threads)
     target_link_libraries(20_custom_transport    PRIVATE libsed)
+    target_link_libraries(21_transactions        PRIVATE libsed)
 endif()
 
 # ══════════════════════════════════════════════════════

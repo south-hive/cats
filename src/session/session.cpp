@@ -228,6 +228,14 @@ Result Session::sendMethod(const Bytes& methodTokens, MethodResult& result) {
     return ErrorCode::Success;
 }
 
+Result Session::sendTokenPayload(const Bytes& tokens, Bytes& respTokens) {
+    if (state_ != State::Active) {
+        return ErrorCode::SessionNotStarted;
+    }
+    Bytes sendData = packetBuilder_.buildComPacket(tokens);
+    return sendRecv(sendData, respTokens);
+}
+
 Result Session::sendRaw(const Bytes& comPacketData) {
     return transport_->ifSend(PROTOCOL_ID, comId_,
                                ByteSpan(comPacketData.data(), comPacketData.size()));

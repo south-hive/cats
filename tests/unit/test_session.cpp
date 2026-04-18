@@ -2,7 +2,9 @@
 #include "libsed/session/session_manager.h"
 #include "libsed/packet/packet_builder.h"
 #include "libsed/codec/token_encoder.h"
+#include "libsed/codec/token.h"
 #include "libsed/core/uid.h"
+#include "libsed/eval/eval_api.h"
 #include "mock/mock_transport.h"
 #include <cassert>
 #include <cstdio>
@@ -101,6 +103,120 @@ TEST(Session, PacketBuilderRoundtrip) {
     EXPECT_EQ(resp.tokenPayload.size(), payload.size());
 }
 
+// ── Transaction token wire format ──────────────────────────────────
+
+TEST(TxToken, StartTransactionSingleByte) {
+    TokenEncoder enc;
+    enc.startTransaction();
+    auto d = enc.data();
+    EXPECT_EQ(d.size(), 1u);
+    EXPECT_EQ(d[0], static_cast<uint8_t>(TokenType::StartTransaction));
+    EXPECT_EQ(d[0], uint8_t{0xFB});
+}
+
+TEST(TxToken, EndTransactionCommit) {
+    TokenEncoder enc;
+    enc.endTransaction(true);
+    auto d = enc.data();
+    EXPECT_EQ(d.size(), 2u);
+    EXPECT_EQ(d[0], uint8_t{0xFC});
+    EXPECT_EQ(d[1], uint8_t{0x00}); // commit
+}
+
+TEST(TxToken, EndTransactionAbort) {
+    TokenEncoder enc;
+    enc.endTransaction(false);
+    auto d = enc.data();
+    EXPECT_EQ(d.size(), 2u);
+    EXPECT_EQ(d[0], uint8_t{0xFC});
+    EXPECT_EQ(d[1], uint8_t{0x01}); // abort
+}
+
+TEST(TxToken, EndTransactionDefaultsToCommit) {
+    // Default argument must behave as commit — matches the intent of
+    // backward-compatible callers who upgrade without touching signatures.
+    TokenEncoder enc;
+    enc.endTransaction();
+    auto d = enc.data();
+    EXPECT_EQ(d.size(), 2u);
+    EXPECT_EQ(d[1], uint8_t{0x00});
+}
+
+// ── EvalApi transaction boundaries → MockTransport round-trip ──────
+//
+// Drives a fully active Session against MockTransport, then calls each
+// transaction boundary. Verifies that the token payload that hit the
+// wire carried exactly the expected bytes and that RawResult captured
+// them in rawSendPayload.
+
+static void primeSessionActive(Session& session,
+                                std::shared_ptr<MockTransport> mock,
+                                uint32_t hsn, uint32_t tsn,
+                                uint16_t comId) {
+    // Queue a SyncSession response so startSession transitions to Active.
+    mock->queueRecvData(buildSyncSessionResponse(hsn, tsn, comId));
+    auto r = session.startSession(uid::SP_ADMIN, /*write=*/false);
+    (void)r;
+    // Also queue an empty response for the upcoming sendTokenPayload calls.
+}
+
+static Bytes buildEmptyStatusComPacket(uint16_t comId) {
+    // Minimal ComPacket with an empty token payload so recvRaw has
+    // something valid to hand back.
+    TokenEncoder enc;
+    enc.startList(); enc.endList();
+    PacketBuilder b;
+    b.setComId(comId);
+    b.setSessionNumbers(0, 0);
+    return b.buildSessionManagerPacket(enc.data());
+}
+
+TEST(TxApi, StartTransactionPayload) {
+    auto mock = std::make_shared<MockTransport>();
+    Session session(mock, 0x0001);
+    primeSessionActive(session, mock, 105, 1, 0x0001);
+
+    // Queue an empty-response packet so sendRecv has something to receive.
+    mock->queueRecvData(buildEmptyStatusComPacket(0x0001));
+
+    eval::EvalApi api;
+    eval::RawResult raw;
+    api.startTransaction(session, raw);
+
+    EXPECT_EQ(raw.rawSendPayload.size(), 1u);
+    EXPECT_EQ(raw.rawSendPayload[0], uint8_t{0xFB});
+}
+
+TEST(TxApi, CommitTransactionPayload) {
+    auto mock = std::make_shared<MockTransport>();
+    Session session(mock, 0x0001);
+    primeSessionActive(session, mock, 105, 1, 0x0001);
+    mock->queueRecvData(buildEmptyStatusComPacket(0x0001));
+
+    eval::EvalApi api;
+    eval::RawResult raw;
+    api.commitTransaction(session, raw);
+
+    EXPECT_EQ(raw.rawSendPayload.size(), 2u);
+    EXPECT_EQ(raw.rawSendPayload[0], uint8_t{0xFC});
+    EXPECT_EQ(raw.rawSendPayload[1], uint8_t{0x00});
+}
+
+TEST(TxApi, RollbackTransactionPayload) {
+    auto mock = std::make_shared<MockTransport>();
+    Session session(mock, 0x0001);
+    primeSessionActive(session, mock, 105, 1, 0x0001);
+    mock->queueRecvData(buildEmptyStatusComPacket(0x0001));
+
+    eval::EvalApi api;
+    eval::RawResult raw;
+    api.rollbackTransaction(session, raw);
+
+    EXPECT_EQ(raw.rawSendPayload.size(), 2u);
+    EXPECT_EQ(raw.rawSendPayload[0], uint8_t{0xFC});
+    EXPECT_EQ(raw.rawSendPayload[1], uint8_t{0x01});
+}
+
 #ifndef GTEST_INCLUDE_GTEST_GTEST_H_
 void run_session_tests() {
     printf("Session tests:\n");
@@ -109,6 +225,13 @@ void run_session_tests() {
     RUN_TEST(Session, MockRecvQueue);
     RUN_TEST(Session, MockDiscoveryResponse);
     RUN_TEST(Session, PacketBuilderRoundtrip);
+    RUN_TEST(TxToken, StartTransactionSingleByte);
+    RUN_TEST(TxToken, EndTransactionCommit);
+    RUN_TEST(TxToken, EndTransactionAbort);
+    RUN_TEST(TxToken, EndTransactionDefaultsToCommit);
+    RUN_TEST(TxApi, StartTransactionPayload);
+    RUN_TEST(TxApi, CommitTransactionPayload);
+    RUN_TEST(TxApi, RollbackTransactionPayload);
     printf("  All Session tests passed!\n\n");
 }
 #endif

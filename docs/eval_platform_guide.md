@@ -388,6 +388,51 @@ Flow 로그는 레벨 필터링(`Logger::setLevel`)과 thread-safe 배달 모두
 CLI 실험용: `--flow-log PATH` 플래그로 같은 screen+file 세팅을 부팅 인자로 가능.
 
 
+## 8.6. Transactions (명시적 boundary)
+
+`EvalApi`는 TCG transaction을 4개 primitive로 노출한다. 묵시적 auto-apply
+없음 — TC 시나리오가 start / commit / rollback을 직접 호출해야 한다. 이
+설계는 의도적이다. 시나리오가 각 경계마다 NVMe 수준 에러와 TCG 수준
+에러를 독립적으로 관찰/결정해야 하기 때문.
+
+```cpp
+RawResult txStart, setRaw1, setRaw2, txEnd;
+
+api.startTransaction(session, txStart);
+if (txStart.transportError != ErrorCode::Success) {
+    // NVMe/ATA/SCSI ioctl 자체가 실패. 트랜잭션 못 연다.
+    return;
+}
+if (!txStart.methodResult.isSuccess()) {
+    // TPer가 transaction 시작을 거부 (0x0F TPer_Malfunction,
+    // 0x10 TRANSACTION_FAILURE 등). 드라이브 미지원 가능.
+    return;
+}
+
+api.setRange(session, 1, 0, 0x1000, true, true, setRaw1);
+api.setRange(session, 2, 0x1000, 0x1000, true, true, setRaw2);
+
+bool allOk = setRaw1.ok() && setRaw1.methodResult.isSuccess()
+          && setRaw2.ok() && setRaw2.methodResult.isSuccess();
+
+if (allOk) api.commitTransaction(session, txEnd);
+else       api.rollbackTransaction(session, txEnd);
+```
+
+네 개 API 모두 `RawResult&`를 받는다:
+- `transportError` — NVMe/ATA/SCSI layer 결과
+- `methodResult.status()` — TCG method status byte
+- `rawSendPayload` / `rawRecvPayload` — 와이어 바이트 (scenario 재현용)
+
+와이어 포맷은 `rosetta_stone.md §14` 참조. 예제는
+`examples/21_transactions.cpp`.
+
+**벤더 편차 경고**: 실제 Opal 드라이브의 transaction 지원은 고르지 않다.
+다수 벤더가 `0x0F TPer_Malfunction` 또는 `0x10 TRANSACTION_FAILURE`를
+반환한다. TC 시나리오는 이 응답을 에러가 아닌 "드라이브 특성"으로 캡처해야
+한다 — libsed는 자동 해석하지 않고 원본을 그대로 돌려준다.
+
+
 ## 9. Examples
 
 ### 평가 API 예제

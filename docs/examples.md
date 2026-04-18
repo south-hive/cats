@@ -128,6 +128,7 @@ Opal과 다른 Enterprise SSC 드라이브 전용 트랙.
 | 18 | `fault_injection` | FaultBuilder, TestContext | 결함 주입 포인트 24개, 에러 시나리오 재현 |
 | 19 | `multi_session` | 동시 세션, 스레딩 | SedContext, 멀티스레드 Discovery, 세션 격리 |
 | 20 | `custom_transport` | ITransport 구현 | 데코레이터 패턴 (CountingTransport, FilteringTransport) |
+| 21 | `transactions` | StartTransaction / Commit / Rollback | 명시적 경계, RawResult로 NVMe + TCG 상태 분리 검사 |
 
 **전제조건**: 01-05 + 해당 예제의 Prerequisites 참조
 

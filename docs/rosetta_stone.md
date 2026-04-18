@@ -444,3 +444,48 @@ Authenticate   0x000000060000001C        0x000000060000000C (EAUTHENTICATE)
 
 Note: EAUTHENTICATE (0x0C) and DELETE_ROW (0x0C) share the same UID.
 Context-dependent: EAUTHENTICATE targets THIS_SP, DELETE_ROW targets table UIDs.
+
+---
+
+## 14. TRANSACTIONS
+
+TCG Core Spec §3.2.1.3. Group multiple method calls into an atomic batch
+on the TPer. Host drives the lifecycle explicitly: open the group, run
+methods, then either commit or abort. Each boundary travels as its own
+ComPacket so an ioctl error on one step is visible independently of the
+method-level status.
+
+### Wire tokens
+
+```
+0xFB                                  StartTransaction (single byte)
+
+0xFC  <status>                        EndTransaction
+                                        status = 0x00 → commit
+                                        status = 0x01 → abort / rollback
+                                      status is encoded as a tiny atom
+                                      (the same raw byte works at this range).
+```
+
+### Packet layout
+
+Each boundary is its own ComPacket within an active session. Method calls
+in between use the normal `CALL ... EOD status` framing:
+
+```
+ComPacket { Packet(TSN,HSN) { SubPacket { FB } } }                    -- Start
+ComPacket { Packet(TSN,HSN) { SubPacket { F8 … F9 F0 00 00 00 F1 } } } -- method
+ComPacket { Packet(TSN,HSN) { SubPacket { F8 … F9 F0 00 00 00 F1 } } } -- method
+ComPacket { Packet(TSN,HSN) { SubPacket { FC 00 } } }                 -- Commit
+```
+
+### TPer response
+
+Varies by drive. Common outcomes:
+- Empty response (status list absent) — success.
+- Method-status list with `St=0x00` — success.
+- `St=0x10 TRANSACTION_FAILURE` — TPer aborted the group itself.
+- `St=0x0F TPer_Malfunction` — drive does not implement transactions.
+
+libsed does NOT auto-commit or auto-rollback. The host code checks each
+`RawResult` and decides. See `examples/21_transactions.cpp` for the pattern.

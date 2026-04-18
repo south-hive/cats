@@ -52,7 +52,17 @@ public:
     void endOfData()        { buffer_.push_back(static_cast<uint8_t>(TokenType::EndOfData)); }
     void endOfSession()     { buffer_.push_back(static_cast<uint8_t>(TokenType::EndOfSession)); }
     void startTransaction() { buffer_.push_back(static_cast<uint8_t>(TokenType::StartTransaction)); }
-    void endTransaction()   { buffer_.push_back(static_cast<uint8_t>(TokenType::EndTransaction)); }
+
+    /// Emit EndTransaction (0xFC) followed by a 1-byte commit status.
+    /// @param commit  true → commit (0x00). false → abort/rollback (0x01).
+    ///
+    /// Per TCG Core Spec §3.2.1.3, EndTransaction requires the status byte
+    /// encoded as a tiny atom. `commit == true` asks the TPer to apply all
+    /// operations accumulated since StartTransaction; `false` discards them.
+    void endTransaction(bool commit = true) {
+        buffer_.push_back(static_cast<uint8_t>(TokenType::EndTransaction));
+        buffer_.push_back(commit ? uint8_t{0x00} : uint8_t{0x01});
+    }
 
     // ── Named value helpers ────────────────────────────
 

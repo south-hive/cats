@@ -32,6 +32,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   constructor of `CommandLogger`. CLI: `--logfile PATH` (implies `--log`,
   overrides auto-naming) and `--flow-log PATH` (mirrors library flow log
   to both stderr and the given file).
+- **Transactions — explicit Start / Commit / Rollback / End primitives.**
+  New `EvalApi::startTransaction`, `endTransaction(commit)`,
+  `commitTransaction`, `rollbackTransaction` — each returns `RawResult`
+  so TC scenarios can observe transport-level (NVMe/ATA/SCSI) and TCG
+  method-status errors independently at every boundary. No implicit
+  wrapping or auto-commit; the host composes the lifecycle itself and
+  inspects results. Backed by `TokenEncoder::endTransaction(bool commit)`
+  which emits the spec-required `0xFC <0x00|0x01>` pair, and by a new
+  public `Session::sendTokenPayload` primitive. See
+  `examples/21_transactions.cpp` and `docs/rosetta_stone.md §14`.
 
 ### Changed
 - `CommandLogger` file output now always includes the raw hex block under

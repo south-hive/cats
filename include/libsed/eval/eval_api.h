@@ -161,6 +161,35 @@ public:
     /// @return 성공 또는 오류 코드
     Result closeSession(Session& session);
 
+    // ── Transactions (명시적 boundary — automatic composition 없음) ─
+    //
+    // 호출자가 start / commit 또는 rollback 을 **직접** 호출해야 한다.
+    // 각 호출은 개별 ComPacket(ioctl)로 나가며 RawResult로 다음을 돌려준다:
+    //   - transportError: NVMe/ATA/SCSI layer 오류 (ioctl 실패 등)
+    //   - methodResult:   TCG method status (TRANSACTION_FAILURE=0x10 등)
+    //   - rawSendPayload / rawRecvPayload: 와이어 바이트
+    //
+    // 사이에 Set/Get 등 일반 methodCall을 호출하면 TPer가 transaction
+    // 컨텍스트에 누적한다. commit/rollback 으로 마무리될 때까지 지속.
+    //
+    // 주의: 실제 드라이브에서 transaction 지원 편차가 크다. St=0x0F(TPer
+    // Malfunction) 또는 0x10(TRANSACTION_FAILURE) 반환하는 벤더 있음.
+    // 시나리오에서 이 RawResult를 그대로 캡처해 검증해야 한다.
+
+    /// StartTransaction (0xFB) 토큰을 ComPacket으로 전송. 현재 세션에서
+    /// 후속 method call들이 transaction 그룹에 포함된다.
+    Result startTransaction(Session& session, RawResult& result);
+
+    /// EndTransaction (0xFC) + commit status 바이트를 전송.
+    /// @param commit  true → commit (0x00), false → abort/rollback (0x01)
+    Result endTransaction(Session& session, bool commit, RawResult& result);
+
+    /// endTransaction(session, true, result) 편의 래퍼.
+    Result commitTransaction(Session& session, RawResult& result);
+
+    /// endTransaction(session, false, result) 편의 래퍼.
+    Result rollbackTransaction(Session& session, RawResult& result);
+
     // ── 세션 수명 주기 (분리된 REQ/OPT) ────────────────
 
     /// @brief StartSession만 구성하여 전송 (REQ + OPT 필드 사용)

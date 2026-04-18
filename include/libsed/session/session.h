@@ -57,6 +57,17 @@ public:
     /// @return 전송/수신 결과
     Result sendMethod(const Bytes& methodTokens, MethodResult& result);
 
+    /// @brief 메서드 프레이밍 없이 raw 토큰 payload를 ComPacket으로 보내고 응답 payload 수신.
+    ///
+    /// StartTransaction / EndTransaction / EndOfSession 처럼 CALL…EOD 구조를
+    /// 가지지 않는 primitive token 전송용. 응답은 method result로 파싱하지 않고
+    /// 그대로 반환하므로 호출자가 직접 해석한다.
+    ///
+    /// @param tokens      보낼 token payload
+    /// @param respTokens  TPer가 돌려준 token payload (출력, 있을 수 있음)
+    /// @return 전송/수신 결과 (transport 레벨 에러)
+    Result sendTokenPayload(const Bytes& tokens, Bytes& respTokens);
+
     // ── Session state ────────────────────────────────
 
     /// @brief 현재 세션 상태 반환
