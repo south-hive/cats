@@ -56,6 +56,18 @@ expect_exit 1 "range erase without --force" "$CLI" --sim -p pw range erase --id 
 expect_exit 1 "mbr write without --force"   "$CLI" --sim -p pw mbr write --file /dev/null
 expect_exit 1 "raw-method without --force"  "$CLI" --sim eval raw-method --invoke 0x1 --method 0x2
 expect_exit 1 "psid-revert without --force" "$CLI" --sim drive psid-revert --psid PSID123
+expect_exit 1 "range setup without --force" "$CLI" --sim -p pw range setup --id 1 --start 0 --len 1000
+
+# ── Author-added commands also register and route ──
+#    SimTransport can return EC_TCG_METHOD(3) for operations it doesn't
+#    fully model; we accept {0,3} and only fail on parse / crash codes.
+"$CLI" --sim -p pw band list >/dev/null 2>&1; ec=$?
+if [[ "$ec" == "0" || "$ec" == "3" ]]; then echo "  OK   band list (exit=$ec)"; PASS=$((PASS+1)); \
+    else echo "  FAIL band list (exit=$ec)"; FAIL=$((FAIL+1)); fi
+
+"$CLI" --sim -p pw eval table-get --table 0x0000000B00008402 --col 3 >/dev/null 2>&1; ec=$?
+if [[ "$ec" == "0" || "$ec" == "3" ]]; then echo "  OK   eval table-get (exit=$ec)"; PASS=$((PASS+1)); \
+    else echo "  FAIL eval table-get (exit=$ec)"; FAIL=$((FAIL+1)); fi
 
 # ── Usage / parse errors must return EC_USAGE=1 (not CLI11's 105/106) ──
 expect_exit 1 "no subcommand"                "$CLI"

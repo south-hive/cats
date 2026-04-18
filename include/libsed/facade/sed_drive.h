@@ -233,13 +233,23 @@ public:
     /// Discovery 파서 직접 접근
     const Discovery& discovery() const;
 
-    /// 세션 내에서 콜백 실행 (withSession 패턴)
+    /// 특정 권한으로 세션 내에서 콜백 실행 (withSession 패턴)
     Result withSession(Uid spUid, const std::string& password, Uid authUid,
                        std::function<Result(Session&)> fn);
 
     /// 익명 세션 내에서 콜백 실행
     Result withAnonymousSession(Uid spUid,
                                 std::function<Result(Session&)> fn);
+
+    // ── 평가자 전용 (Expert Eval) ──
+
+    /// 임의의 토큰 스트림 전송 및 상세 결과 획득
+    Result runRawMethod(Uid spUid, Uid authUid, const std::string& password,
+                        const Bytes& tokens, eval::RawResult& raw);
+
+    /// 테이블 컬럼 데이터 조회 (인증 자동 처리)
+    Result getTableColumn(Uid spUid, Uid authUid, const std::string& password,
+                          uint64_t tableUid, uint32_t col, Token& out, eval::RawResult& raw);
 
 private:
     struct Impl;

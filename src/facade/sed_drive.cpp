@@ -418,6 +418,24 @@ Result SedDrive::withAnonymousSession(Uid spUid,
     return r;
 }
 
+Result SedDrive::runRawMethod(Uid spUid, Uid authUid, const std::string& password,
+                               const Bytes& tokens, eval::RawResult& raw) {
+    auto s = login(spUid, password, authUid);
+    if (s.failed()) return s.openResult();
+    auto r = impl_->api.sendRawMethod(s.raw(), tokens, raw);
+    s.close();
+    return r;
+}
+
+Result SedDrive::getTableColumn(Uid spUid, Uid authUid, const std::string& password,
+                                 uint64_t tableUid, uint32_t col, Token& out, eval::RawResult& raw) {
+    auto s = login(spUid, password, authUid);
+    if (s.failed()) return s.openResult();
+    auto r = impl_->api.tableGetColumn(s.raw(), tableUid, col, out, raw);
+    s.close();
+    return r;
+}
+
 // ═══════════════════════════════════════════════════════
 //  SedSession::Impl
 // ═══════════════════════════════════════════════════════
