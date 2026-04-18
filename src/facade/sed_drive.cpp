@@ -282,6 +282,64 @@ Result SedDrive::cryptoErase(uint32_t rangeId, const std::string& admin1Password
         });
 }
 
+Result SedDrive::enumerateRanges(const std::string& admin1Password,
+                                 std::vector<eval::LockingInfo>& ranges) {
+    return withSession(Uid(uid::SP_LOCKING), admin1Password, Uid(uid::AUTH_ADMIN1),
+        [&](Session& s) -> Result {
+            return impl_->api.getAllLockingInfo(s, ranges, 16); // 16개까지 시도
+        });
+}
+
+Result SedDrive::enumerateAuthorities(const std::string& admin1Password,
+                                      std::vector<AuthorityInfo>& authorities) {
+    return withSession(Uid(uid::SP_LOCKING), admin1Password, Uid(uid::AUTH_ADMIN1),
+        [&](Session& s) -> Result {
+            // Admin1 ~ Admin4 — Authority 테이블의 AUTH_ENABLED(col=5) 조회
+            for (uint32_t i = 1; i <= 4; ++i) {
+                Uid authUid = uid::makeAdminUid(i);
+                Token v;
+                eval::RawResult raw;
+                auto r = impl_->api.tableGetColumn(
+                    s, authUid.toUint64(), uid::col::AUTH_ENABLED, v, raw);
+                bool enabled = r.ok() && raw.methodResult.isSuccess()
+                             && !v.isByteSequence && v.getUint() != 0;
+                authorities.push_back({AuthorityKind::Admin, i, authUid, enabled});
+            }
+            // User1 ~ User8
+            for (uint32_t i = 1; i <= 8; ++i) {
+                bool enabled = false;
+                auto r = impl_->api.isUserEnabled(s, i, enabled);
+                if (r.ok()) {
+                    authorities.push_back({AuthorityKind::User, i, uid::makeUserUid(i), enabled});
+                }
+            }
+            return ErrorCode::Success;
+        });
+}
+
+Result SedDrive::enumerateBands(const std::string& bandMasterPassword,
+                                std::vector<eval::LockingInfo>& bands) {
+    return withSession(Uid(uid::SP_ENTERPRISE), bandMasterPassword, Uid(uid::AUTH_BANDMASTER0),
+        [&](Session& s) -> Result {
+            return impl_->api.getAllLockingInfo(s, bands, 16); 
+        });
+}
+
+Result SedDrive::getMbrStatus(MbrStatus& status) {
+    status.supported = impl_->dinfo.mbrSupported;
+    return withAnonymousSession(Uid(uid::SP_ADMIN),
+        [&](Session& s) -> Result {
+            return impl_->api.getMbrStatus(s, status.enabled, status.done);
+        });
+}
+
+Result SedDrive::revertLockingSP(const std::string& admin1Password) {
+    return withSession(Uid(uid::SP_LOCKING), admin1Password, Uid(uid::AUTH_ADMIN1),
+        [&](Session& s) -> Result {
+            return impl_->api.revertSP(s, uid::SP_LOCKING);
+        });
+}
+
 Result SedDrive::setupUser(uint32_t userId, const std::string& userPassword,
                            uint32_t rangeId, const std::string& admin1Password) {
     return withSession(Uid(uid::SP_LOCKING), admin1Password, Uid(uid::AUTH_ADMIN1),
@@ -430,23 +488,26 @@ Result SedSession::setPin(Uid cpinUid, const Bytes& newPin) {
 // ── Locking Range ──
 
 Result SedSession::setRange(uint32_t rangeId,
-                            uint64_t rangeStart, uint64_t rangeLength,
-                            bool readLockEnabled, bool writeLockEnabled) {
+                         uint64_t rangeStart, uint64_t rangeLength,
+                         bool readLockEnabled, bool writeLockEnabled) {
     if (!isActive()) return Result(ErrorCode::SessionNotStarted);
-    return impl_->api->setRange(*impl_->session, rangeId,
-                                 rangeStart, rangeLength,
-                                 readLockEnabled, writeLockEnabled);
+    return impl_->api->setRange(*impl_->session, rangeId, rangeStart, rangeLength,
+                                readLockEnabled, writeLockEnabled);
+}
+
+Result SedSession::setRangeLockState(uint32_t rangeId, bool readLocked, bool writeLocked) {
+    if (!isActive()) return Result(ErrorCode::SessionNotStarted);
+    return impl_->api->setRangeLock(*impl_->session, rangeId, readLocked, writeLocked);
 }
 
 Result SedSession::lockRange(uint32_t rangeId) {
-    if (!isActive()) return Result(ErrorCode::SessionNotStarted);
-    return impl_->api->setRangeLock(*impl_->session, rangeId, true, true);
+    return setRangeLockState(rangeId, true, true);
 }
 
 Result SedSession::unlockRange(uint32_t rangeId) {
-    if (!isActive()) return Result(ErrorCode::SessionNotStarted);
-    return impl_->api->setRangeLock(*impl_->session, rangeId, false, false);
+    return setRangeLockState(rangeId, false, false);
 }
+
 
 Result SedSession::getRangeInfo(uint32_t rangeId, LockingRangeInfo& info) {
     if (!isActive()) return Result(ErrorCode::SessionNotStarted);

@@ -139,6 +139,7 @@ DiscoveryInfo Discovery::buildInfo() const {
         info.lockingPresent = true;
         info.lockingEnabled = locking->lockingEnabled;
         info.locked = locking->locked;
+        info.mbrSupported = locking->mbrSupported;
         info.mbrEnabled = locking->mbrEnabled;
         info.mbrDone = locking->mbrDone;
     }

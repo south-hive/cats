@@ -75,6 +75,8 @@ public:
     bool locked = false;
     /// @brief 미디어 암호화 지원 여부
     bool mediaEncryption = false;
+    /// @brief MBR 섀도잉 지원 여부
+    bool mbrSupported = false;
     /// @brief MBR 섀도잉 활성화 여부
     bool mbrEnabled = false;
     /// @brief MBR 섀도잉 완료 여부

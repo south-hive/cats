@@ -353,6 +353,174 @@ $ cd build && ctest
 
 ---
 
-## 14. 피드백 제출 시 한 줄 요약
+## 14. 피드백 제출 시 한 줄 요약 (Round 1)
 
 > 초기 구현을 검토했고 빌드 실패 원인(API 7건 + 네트워크 의존) 및 최소 안전성 문제를 수정해 baseline을 돌려놓았습니다. 구조적 개선(Phase 0 facade gap, 남은 subcommand, JSON/password/session 명세)은 이 문서 §11 순서대로 이어서 진행하시면 됩니다. 세부는 docs/internal/cats_cli_review.md 참조.
+
+---
+
+# Round 2 (리뉴얼 이후)
+
+리뷰 작성자 Round 1의 권고(§12) 일부를 수용해서 원 저작자가 cats-cli를 리뉴얼함. Round 2 리뷰는 그 결과물을 대상. Round 1 결과(Context·SessionScope·brick gate·exit code enum 등) 기반 위에서 Phase 0 facade gap을 흡수하며 feature mix가 바뀌었기 때문에 단순 "후속"이 아니라 **별도 리뷰 라운드**로 기록.
+
+## 15. 리뉴얼에서 관찰된 변화
+
+### 15.1 수용된 Round 1 권고
+
+- ✅ Phase 0 facade gap 대부분 구현됨: `SedDrive::enumerateRanges`, `enumerateAuthorities`, `enumerateBands`, `getMbrStatus`, `revertLockingSP`. CLI 콜백이 1-2줄로 축소.
+- ✅ `--sim` 플래그 추가 — Round 1에서 언급한 `SimTransport` 라우팅(plan §9.5)을 먼저 도입.
+- ✅ CLI11 `finalExit` 패턴, `ExitCode` enum 유지.
+- ✅ Build clean, 기존 ctest 5/5 회귀 없음.
+- ✅ `third_party/CLI11/CLI11.hpp` 벤더링 유지 (폐쇄망 원칙 보존).
+
+### 15.2 회귀된 것 (🔴 블로커급)
+
+| 항목 | Round 1 상태 | Round 2 상태 | 왜 문제인가 |
+|------|-------------|-------------|------------|
+| `eval` 서브커맨드 (tx-start, table-get, raw-method) | 있음 | **전부 삭제** | cats-cli-design.md §1.1 "평가 플랫폼" 정체성의 핵심. 삭제 시 sedutil-cli 대체제 수준으로 축소 |
+| `eval raw-method`의 `--force` brick 게이트 | 있음 | **삭제** (eval 자체가 삭제되면서) | 원칙("destructive=`--force`")이 기능과 함께 소실 |
+| `drive msid` | 있음 | **삭제** | 가장 자주 쓰이는 명령. sedutil-cli와 비교해서 후퇴 |
+| `--log-file` CLI 옵션 | 있음 | **Context 필드는 남기고 CLI 바인딩 삭제** | dead code — 사용자가 옵션을 줘도 무시됨 |
+
+### 15.3 새로 도입된 문제 (🔴)
+
+| 항목 | 위치 | 원인 |
+|------|------|------|
+| `drive revert` — 가장 파괴적인 연산에 `--force` 게이트 없음 | `main.cpp::drive_revert` | `range erase`에만 `--force`를 적용하고 "파괴성" 개념을 **규칙화하지 않음**. destructive 속성의 일관된 모델 부재 |
+| `mbr write` — 잘못된 SP/Auth (`SP_ADMIN`+`AUTH_SID`) | `main.cpp::mbr_write` | TCG Opal 스펙상 MBR 테이블 쓰기는 **LockingSP/Admin1**. SimTransport가 관대해서 "동작" 했을 뿐. 실기에서는 `St=0x01 NotAuthorized` |
+| CLI11 parse error → CLI11 내부 exit code (105/106) | `main()` 끝의 `app.exit(e)` | Round 1 권고 §12 "`return EC_USAGE`" 못 지킴. CI가 parse 에러와 drive 실패를 구분 못 함 |
+| `Context::trace()` dead code | `main.cpp::Context::trace` | eval 제거 시 호출처 사라졌는데 함수는 남김. "전체 참조 미확인" 신호 |
+
+### 15.4 품질 저하 (🟡)
+
+- `reportResult`가 모든 실패를 `EC_TRANSPORT`로 반환 — ErrorCode 범위 미매핑
+- `enumerateAuthorities` 가 User1..8만 보고 Admin1..4 생략 — 펌웨어 평가자가 정작 궁금한 게 Admin 상태
+- `range list` / `enumerateBands` 하드코딩 16개 — Discovery의 `maxRanges` 미참조
+- `drive revert --sp foo` 조용히 admin으로 폴백 — validator 없음
+- 매개변수명 `uid`가 `libsed::uid::` 네임스페이스 섀도잉 — 작은 주의 부족
+- `drive psid-revert` design doc §3.1 명시됐는데 미구현
+- `enumerateBands`/`getMbrStatus`/`setMbrEnable` facade는 추가했는데 CLI에서 호출 안 함 — 절반만 연결된 feature
+
+## 16. 근본 원인 패턴 (Root Cause Analysis)
+
+증상보다 **반복되는 작업 방식**이 더 중요한 신호다. Round 1·Round 2에 걸쳐 관찰된 패턴 6가지:
+
+### 16.1 폐쇄-루프 검증 부재 — "컴파일 = 완성" 오해
+
+**증거**: Round 1의 API 7건(존재하지 않는 `Logger::enableDump` 등), Round 2의 `mbr write` 잘못된 auth, `--log-file` dead option, `Context::trace` 미호출, facade 추가 후 CLI 미연결 3건.
+
+**구조**: 코드 작성 → 빌드 성공 → 커밋. 그 사이에 "실제 사용 시나리오로 실행" 이 없음. SimTransport가 관대해서 잘못된 auth도 통과 → "된다"로 판단.
+
+**처방**: 빌드 성공은 완성의 1/3. 나머지 2/3:
+1. 실행: 한 번이라도 실기(또는 엄격한 시뮬레이터)에서 명령 돌려보기
+2. 자동화: smoke test를 ctest에 등록해서 **빌드마다 자동 실행**
+
+### 16.2 넓이 우선 덫 — 체크리스트 커버리지
+
+**증거**: Round 2에서 리소스 5개(drive/range/user/mbr) × 동작 1-2개씩 얇게 찍고, `eval` 전체를 0으로 돌림.
+
+**구조**: 설계 문서 §3의 명령 이름을 체크리스트로 읽고 "각 항목에 점 찍기"를 목표로 삼음. "차별화 요소"라는 우선순위 언어가 §1.1에 있어도 §3 목록 수보다 작아 보여서 후순위.
+
+**처방**: 
+- **Depth-first**: 한 리소스를 `list/setup/lock/erase` 모두 + `--json` + exit code까지 깊게 완성하고 커밋. 그 다음 다음 리소스.
+- "차별화 요소" 같은 우선순위 문구를 실제로 우선으로 스케줄링.
+
+### 16.3 안전 장치의 규칙화 실패
+
+**증거**: Round 1에서 `raw-method`에 `--force` 추가를 받아들였으나, Round 2에서 동일 원칙(파괴성)을 `drive revert`에 전파하지 않음.
+
+**구조**: 안전 장치를 "명령 단위"로 따로 판단. 파괴성 계층도(data wipe ⊂ range erase ⊂ drive revert)를 먼저 정의하지 않음.
+
+**처방**: destructive 속성을 **규칙/invariant**로 관리:
+```cpp
+static int requireForce(const Context& ctx, const char* what);
+// 모든 destructive 명령 첫 줄에서 호출
+```
+이러면 새 destructive 명령 추가 시 "--force 깜빡"이 구조적으로 어려워짐.
+
+### 16.4 Spec 문자 그대로 옮기고 의도는 안 읽음
+
+**증거**: `--sp <admin|locking>`을 옮기되 **validator 없음**; `AUTH_BANDMASTER0`로 `enumerateBands` (BandMaster0은 Band 0만 보는 권한); `--psid` 경로 누락(design doc §3.1).
+
+**구조**: 설계 문서 § 텍스트를 CLI 선언 동기화 대상으로만 사용. TCG 스펙상 권한 모델이나 문서 §6~§11 리뷰 수정 지시는 참조 안 함.
+
+**처방**: 각 명령 구현할 때 `docs/rosetta_stone.md` + `docs/internal/hammurabi_code.md` 한 번 스쳐가기. 설계 문서는 §1~§N을 끝까지 읽기 — 뒷섹션은 앞섹션의 수정 지시인 경우가 많음.
+
+### 16.5 피드백을 기능이 아닌 **원칙**으로 추출 못 함
+
+**증거**: Round 1 권고 "`eval raw-method`에 brick gate"가 Round 2에서 `eval` 전체 삭제와 함께 소실. "파괴적 명령엔 게이트" 원칙으로 추출했더라면 `drive revert`·`mbr write`·`range erase`에도 일관 적용됐을 것.
+
+**구조**: 리뷰 피드백을 "이 라인을 고쳐라"로 읽고, "왜 그렇게 고쳐야 하는가"를 뽑지 않음.
+
+**처방**: 피드백 받을 때 노트 템플릿:
+```
+지적: <한 줄>
+원칙: <왜 그게 문제인가>
+영향 범위: <이 원칙이 적용되는 모든 곳>
+체크리스트로 반영 완료
+```
+
+### 16.6 저장소를 "쓰기"로만 쓰고 "읽기"로 안 씀
+
+**증거**: `sed_drive.cpp`에 이미 있는 `setMbrEnable`이 `SP_LOCKING/ADMIN1`인 걸 모른 채 `mbr_write`가 `SP_ADMIN/SID` 사용. `makeAdminUid` 있는데 `enumerateAuthorities`가 User만 본 것.
+
+**구조**: 새 코드 작성할 때 **같은 파일/디렉터리 내 유사 패턴** grep 안 함.
+
+**처방**: 새 메서드 추가 전 30초만 `grep -n "setMbr\|SP_LOCKING\|AUTH_ADMIN1" file.cpp`. 기존 패턴 재사용이 자동으로 일어남.
+
+## 17. Round 2에서 적용한 수정 매트릭스
+
+원 저작자가 완성본과 자기 구현의 **차이점을 항목 단위로 비교**할 수 있도록 매트릭스로 정리.
+
+### 17.1 블로커 (🔴)
+
+| # | 문제 | 적용한 수정 | 확인 |
+|---|------|------------|------|
+| 1 | `drive revert`에 `--force` 게이트 없음 | 공용 `requireForce(ctx, "drive revert")` 헬퍼 추가 후 drive_revert 첫 줄에서 호출. 동일 헬퍼를 range erase/mbr write/raw-method/psid-revert에도 일관 적용 | smoke test "revert without --force" → exit=1 |
+| 2 | `mbr write` 가 `SP_ADMIN`+`AUTH_SID`로 잘못 인증 | `SP_LOCKING`+`AUTH_ADMIN1`로 교정. `writeMbr`에 `--force` 게이트도 같이 추가 | smoke "mbr write without --force" exit=1, 실제 실행 시 올바른 session으로 진입 |
+| 3 | CLI11 parse error가 105/106 리턴 | `app.exit(e); return EC_USAGE;` 로 매핑 | smoke "no subcommand"/"missing required --id"/"invalid --sp value" 모두 exit=1 |
+| 4 | `--log-file` CLI 바인딩 누락 | `app.add_option("--log-file", ...)` 추가 | 코드상 바인딩 존재, Context::init()이 사용 |
+| 5 | `Context::trace()` dead code | eval 복원으로 호출처 부활. 또는 불필요 시 인라인 `dissect()` 호출로 처리 | eval 명령들이 직접 dissect 호출 |
+| 6 | `eval` 서브커맨드 전체 회귀 | `tx-start`, `table-get`, `raw-method` 복원. `raw-method`에 `--force` 게이트 재적용. `table-get`은 `--sp admin|locking` 추가 | smoke "eval tx-start", "raw-method without --force" |
+
+### 17.2 품질 (🟡)
+
+| # | 문제 | 적용한 수정 |
+|---|------|------------|
+| 7 | `reportResult`가 모두 `EC_TRANSPORT` 리턴 | `exitFor(ErrorCode)` 헬퍼 도입 — Transport 100-199 → EC_TRANSPORT, Auth 600-699 → EC_AUTH, Discovery 500-599 → EC_NOT_SUPPORTED, 그 외 → EC_TCG_METHOD |
+| 8 | `enumerateAuthorities`가 User만 | facade에 `AuthorityKind { Admin, User }` enum 추가 → `AuthorityInfo`에 `kind` 필드. Admin1-4는 `tableGetColumn(AUTH_ENABLED)`로, User1-8은 기존 `isUserEnabled` 경로 유지 |
+| 9 | `drive revert --sp foo` 조용히 admin 폴백 | CLI11 `->check(CLI::IsMember({"admin","locking"}))` validator 추가. `eval table-get --sp`에도 동일 적용 |
+| 10 | `user_assign(uint32_t uid, …)` 네임스페이스 섀도잉 | 매개변수명 `userId`/`rangeId` 로 교체 |
+| 11 | `drive psid-revert` 누락 | `cmd::drive_psid_revert` 추가 — `--psid required`, `--force` 게이트 |
+
+### 17.3 회귀 복원
+
+| # | 복원 내용 |
+|---|----------|
+| 12 | `drive msid` — facade `SedDrive::msid()` 사용, MSID가 유일한 stdout 산출이므로 quiet에서도 출력 |
+| 13 | `mbr status` — facade `getMbrStatus()` 사용. drive.query() 먼저 호출해서 `mbrSupported` 채움 |
+| 14 | `user list` — facade `enumerateAuthorities` 사용. Admin+User 모두 출력 |
+
+### 17.4 회귀 방지
+
+| # | 추가 |
+|---|------|
+| 15 | `tests/integration/cats_cli_smoke.sh` — SimTransport 대상 21개 case (happy path 6 + force gate 5 + parse error 5 + hex parser 2 + password 3) |
+| 16 | CMakeLists.txt에 ctest 등록 — `LIBSED_BUILD_TESTS=ON` 시 자동 포함. 현재 ctest 6/6 통과 |
+
+## 18. Round 2 남은 작업 (의도적으로 안 한 것)
+
+Phase 1 신규 기능은 본 라운드 **범위 밖**. 원 저작자가 이어서 해야 할 것:
+
+| Phase | 항목 |
+|-------|------|
+| Phase 1 | `range setup`, `range lock --read --write`, `band list/setup/erase`, `user enable/set-pw`, `mbr enable`, `drive activate-locking`, password 다각화(`--pw-env/file/stdin`), `--json` 스키마 |
+| Phase 2 | `eval transaction <script.json>`, `eval fault-list/inject`, `--repeat N`, `--dry-run` 전역화 |
+| Phase 3 | `session run/repl`, `compare`, `snapshot/restore`, `--timing`, `eval golden` |
+| Phase 4 | `nlohmann/json` 벤더링, `docs/cats_cli_guide.md`, CHANGELOG, `LIBSED_BUILD_CLI` 옵션 분리 |
+
+각 항목의 근거와 설계는 `cats-cli-design.md` §3~§11 및 이 문서 §11을 참조.
+
+## 19. Round 2 한 줄 요약 (원 저작자에게)
+
+> 리뉴얼에서 Phase 0 facade는 잘 받아들였지만, `eval` 전체 삭제로 cats-cli의 차별화 축이 소실됐고 `mbr write`·`drive revert`·`--log-file`에서 "빌드 성공 = 완성" 패턴이 재현됐습니다. 제가 이 두 라운드 리뷰의 지적을 **전부** 닫은 baseline(ctest 6/6, smoke 21/21 통과)을 커밋했습니다. 이 완성본과 본인 구현을 diff로 비교해보시면 §16 여섯 패턴(폐쇄-루프/넓이우선/게이트 규칙화/스펙 의도/원칙 추출/코드 읽기) 중 본인이 어느 패턴에 걸리는지 스스로 판단 가능하실 겁니다.

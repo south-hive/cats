@@ -261,6 +261,16 @@ if(LIBSED_BUILD_TOOLS)
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/CLI11
     )
 
+    # cats-cli smoke test (SimTransport only — no hardware needed).
+    # Verifies force gates, exit-code mapping, parse-error → EC_USAGE, etc.
+    if(LIBSED_BUILD_TESTS)
+        add_test(
+            NAME cats_cli_smoke
+            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/cats_cli_smoke.sh
+                    $<TARGET_FILE:cats-cli>
+        )
+    endif()
+
     add_executable(sed_discover     tools/sed_discover.cpp)
     add_executable(sed_manage       tools/sed_manage.cpp)
     add_executable(token_dump       tools/token_dump.cpp)

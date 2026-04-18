@@ -294,6 +294,7 @@ struct DiscoveryInfo {
     bool     lockingPresent = false;      ///< Locking 기능 디스크립터 존재 여부
     bool     lockingEnabled = false;      ///< Locking 기능 활성화 여부
     bool     locked = false;              ///< 현재 잠금 상태 여부
+    bool     mbrSupported = false;        ///< MBR 섀도잉 지원 여부
     bool     mbrEnabled = false;          ///< MBR 섀도잉 활성화 여부
     bool     mbrDone = false;             ///< MBR Done 플래그 상태
     uint16_t baseComId = 0;               ///< 기본 ComID (통신 식별자)

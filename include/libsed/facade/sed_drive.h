@@ -160,6 +160,41 @@ public:
     /// Crypto Erase
     Result cryptoErase(uint32_t rangeId, const std::string& admin1Password);
 
+    // ── 리스트 및 상태 조회 (cats-cli 지원) ──
+
+    /// 모든 잠금 범위 상태 요약 조회 (Locking SP Admin1 인증 필요)
+    Result enumerateRanges(const std::string& admin1Password,
+                           std::vector<eval::LockingInfo>& ranges);
+
+    /// Authority 종류 — Admin1..4 와 User1..N 을 구분.
+    enum class AuthorityKind { Admin, User };
+
+    /// 모든 Authority (Admin + User) 상태 요약 조회.
+    /// Admin1~4 + User1~8 기준으로 `isUserEnabled`/`isAdminEnabled`을 폴링.
+    struct AuthorityInfo {
+        AuthorityKind kind;
+        uint32_t      id;         ///< 1-based (Admin1, Admin2, … User1, User2, …)
+        Uid           uid;
+        bool          enabled;
+    };
+    Result enumerateAuthorities(const std::string& admin1Password,
+                                std::vector<AuthorityInfo>& authorities);
+
+    /// Enterprise Band 상태 요약 조회 (Enterprise SSC 전용)
+    Result enumerateBands(const std::string& bandMasterPassword,
+                          std::vector<eval::LockingInfo>& bands);
+
+    /// MBR 현재 상태 상세 조회 (AdminSP 세션 사용)
+    struct MbrStatus {
+        bool supported;
+        bool enabled;
+        bool done;
+    };
+    Result getMbrStatus(MbrStatus& status);
+
+    /// Locking SP를 공장 초기 상태로 복원 (Admin1 패스워드 필요)
+    Result revertLockingSP(const std::string& admin1Password);
+
     // ── User 관리 ──
 
     /// User 활성화 + 비밀번호 설정 + Range 할당 (한 번에)
@@ -261,7 +296,10 @@ public:
                     uint64_t rangeStart, uint64_t rangeLength,
                     bool readLockEnabled = true, bool writeLockEnabled = true);
 
-    /// Range 잠금
+    /// Range 잠금 상태를 직접 지정 (read/write 개별 제어)
+    Result setRangeLockState(uint32_t rangeId, bool readLocked, bool writeLocked);
+
+    /// Range 잠금 (단축형)
     Result lockRange(uint32_t rangeId);
 
     /// Range 잠금 해제

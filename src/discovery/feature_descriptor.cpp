@@ -27,6 +27,7 @@ void LockingFeature::parse(const uint8_t* data, size_t len) {
     mediaEncryption  = (flags & 0x08) != 0;
     mbrEnabled       = (flags & 0x10) != 0;
     mbrDone          = (flags & 0x20) != 0;
+    mbrSupported     = (flags & 0x40) != 0;
 }
 
 void GeometryFeature::parse(const uint8_t* data, size_t len) {
