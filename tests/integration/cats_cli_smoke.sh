@@ -155,6 +155,22 @@ expect_exit 1 "range list without password"  "$CLI" --sim range list
 expect_exit 1 "user list without password"   "$CLI" --sim user list
 expect_exit 1 "revert without password"      "$CLI" --sim --force drive revert --sp admin
 
+# ── Password contract: auth commands must accept --pw-env / --pw-file ──
+#    Regression guard for the bug where per-command prechecks ran BEFORE
+#    Context::init() had a chance to resolve env/file/stdin sources. Before
+#    the fix, these returned EC_USAGE(1) with "--password required". After
+#    the fix, they route into the TCG layer and return whatever SimTransport
+#    decides (0/2/3/4) — anything but 1 is evidence the contract holds.
+echo "authpw" > /tmp/cats_smoke_authpw.txt
+TC_CATS_SMOKE_AUTHPW=envauthpw "$CLI" --sim --pw-env TC_CATS_SMOKE_AUTHPW range list >/dev/null 2>&1; ec=$?
+if [[ "$ec" != "1" ]]; then echo "  OK   range list --pw-env bypasses precheck (exit=$ec)"; PASS=$((PASS+1)); \
+    else echo "  FAIL range list --pw-env hit EC_USAGE"; FAIL=$((FAIL+1)); fi
+
+"$CLI" --sim --pw-file /tmp/cats_smoke_authpw.txt --force drive revert --sp admin >/dev/null 2>&1; ec=$?
+if [[ "$ec" != "1" ]]; then echo "  OK   drive revert --pw-file bypasses precheck (exit=$ec)"; PASS=$((PASS+1)); \
+    else echo "  FAIL drive revert --pw-file hit EC_USAGE"; FAIL=$((FAIL+1)); fi
+rm -f /tmp/cats_smoke_authpw.txt
+
 # ── band setup / erase force gates ──
 expect_exit 1 "band setup without --force"   "$CLI" --sim -p pw band setup --id 0 --start 0 --len 1024
 expect_exit 1 "band erase without --force"   "$CLI" --sim -p pw band erase --id 0

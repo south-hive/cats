@@ -333,7 +333,8 @@ int drive_msid(Context& ctx) {
 
 int drive_revert(Context& ctx, const std::string& sp) {
     if (int e = requireForce(ctx, "drive revert"); e) return e;
-    if (ctx.password.empty()) { std::cerr << "error: --password required\n"; return EC_USAGE; }
+    if (int e = ctx.resolvePassword(); e) return e;
+    if (ctx.password.empty()) { std::cerr << "error: --password* required\n"; return EC_USAGE; }
     if (int e = ctx.init(); e) return e;
     SedDrive drive(ctx.transport);
     return reportResult(ctx, "revert " + sp, (sp == "locking" ? drive.revertLockingSP(ctx.password) : drive.revert(ctx.password)));
@@ -390,7 +391,8 @@ int range_list(Context& ctx) {
 
 int range_setup(Context& ctx, uint32_t rid, uint64_t start, uint64_t len) {
     if (int e = requireForce(ctx, "range setup"); e) return e;
-    if (ctx.password.empty()) { std::cerr << "error: --password (Admin1) required\n"; return EC_USAGE; }
+    if (int e = ctx.resolvePassword(); e) return e;
+    if (ctx.password.empty()) { std::cerr << "error: --password* (Admin1) required\n"; return EC_USAGE; }
     if (int e = ctx.init(); e) return e;
     SedDrive drive(ctx.transport);
     auto s = drive.login(uid::SP_LOCKING, ctx.password, uid::AUTH_ADMIN1);
@@ -400,14 +402,16 @@ int range_setup(Context& ctx, uint32_t rid, uint64_t start, uint64_t len) {
 
 int range_erase(Context& ctx, uint32_t rid) {
     if (int e = requireForce(ctx, "range erase"); e) return e;
-    if (ctx.password.empty()) { std::cerr << "error: --password (Admin1) required\n"; return EC_USAGE; }
+    if (int e = ctx.resolvePassword(); e) return e;
+    if (ctx.password.empty()) { std::cerr << "error: --password* (Admin1) required\n"; return EC_USAGE; }
     if (int e = ctx.init(); e) return e;
     SedDrive drive(ctx.transport);
     return reportResult(ctx, "crypto-erase", drive.cryptoErase(rid, ctx.password));
 }
 
 int band_list(Context& ctx) {
-    if (ctx.password.empty()) { std::cerr << "error: --password required\n"; return EC_USAGE; }
+    if (int e = ctx.resolvePassword(); e) return e;
+    if (ctx.password.empty()) { std::cerr << "error: --password* required\n"; return EC_USAGE; }
     if (int e = ctx.init(); e) return e;
     SedDrive drive(ctx.transport);
     std::vector<LockingInfo> bands;
@@ -420,7 +424,8 @@ int band_list(Context& ctx) {
 
 int mbr_write(Context& ctx, const std::string& path) {
     if (int e = requireForce(ctx, "mbr write"); e) return e;
-    if (ctx.password.empty()) { std::cerr << "error: --password (Admin1) required\n"; return EC_USAGE; }
+    if (int e = ctx.resolvePassword(); e) return e;
+    if (ctx.password.empty()) { std::cerr << "error: --password* (Admin1) required\n"; return EC_USAGE; }
     std::ifstream f(path, std::ios::binary);
     if (!f) { std::cerr << "error: cannot read " << path << "\n"; return EC_USAGE; }
     Bytes data((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
@@ -496,7 +501,8 @@ int user_list(Context& ctx) {
 }
 
 int user_assign(Context& ctx, uint32_t userId, uint32_t rangeId) {
-    if (ctx.password.empty()) { std::cerr << "error: --password (Admin1) required\n"; return EC_USAGE; }
+    if (int e = ctx.resolvePassword(); e) return e;
+    if (ctx.password.empty()) { std::cerr << "error: --password* (Admin1) required\n"; return EC_USAGE; }
     if (int e = ctx.init(); e) return e;
     SedDrive drive(ctx.transport);
     auto s = drive.login(uid::SP_LOCKING, ctx.password, uid::AUTH_ADMIN1);
@@ -633,7 +639,8 @@ int eval_fault_list(Context& ctx) {
 // ── Range: granular lock control ────────────────────────────────────────────
 
 int range_lock(Context& ctx, uint32_t rid, bool readLocked, bool writeLocked) {
-    if (ctx.password.empty()) { std::cerr << "error: --password (Admin1) required\n"; return EC_USAGE; }
+    if (int e = ctx.resolvePassword(); e) return e;
+    if (ctx.password.empty()) { std::cerr << "error: --password* (Admin1) required\n"; return EC_USAGE; }
     if (int e = ctx.init(); e) return e;
     SedDrive drive(ctx.transport);
     auto s = drive.login(uid::SP_LOCKING, ctx.password, uid::AUTH_ADMIN1);
@@ -645,7 +652,8 @@ int range_lock(Context& ctx, uint32_t rid, bool readLocked, bool writeLocked) {
 // ── User enable / set-pw ────────────────────────────────────────────────────
 
 int user_enable(Context& ctx, uint32_t userId) {
-    if (ctx.password.empty()) { std::cerr << "error: --password (Admin1) required\n"; return EC_USAGE; }
+    if (int e = ctx.resolvePassword(); e) return e;
+    if (ctx.password.empty()) { std::cerr << "error: --password* (Admin1) required\n"; return EC_USAGE; }
     if (int e = ctx.init(); e) return e;
     SedDrive drive(ctx.transport);
     auto s = drive.login(uid::SP_LOCKING, ctx.password, uid::AUTH_ADMIN1);
@@ -654,7 +662,8 @@ int user_enable(Context& ctx, uint32_t userId) {
 }
 
 int user_set_pw(Context& ctx, uint32_t userId, const std::string& newPw) {
-    if (ctx.password.empty())  { std::cerr << "error: --password (Admin1) required (--new-pw* for the new user password)\n"; return EC_USAGE; }
+    if (int e = ctx.resolvePassword(); e) return e;
+    if (ctx.password.empty())  { std::cerr << "error: --password* (Admin1) required (--new-pw* for the new user password)\n"; return EC_USAGE; }
     if (newPw.empty())         { std::cerr << "error: --new-pw required\n"; return EC_USAGE; }
     if (int e = ctx.init(); e) return e;
     SedDrive drive(ctx.transport);
@@ -667,7 +676,8 @@ int user_set_pw(Context& ctx, uint32_t userId, const std::string& newPw) {
 
 int mbr_enable(Context& ctx, bool on) {
     if (int e = requireForce(ctx, "mbr enable"); e) return e;
-    if (ctx.password.empty()) { std::cerr << "error: --password (Admin1) required\n"; return EC_USAGE; }
+    if (int e = ctx.resolvePassword(); e) return e;
+    if (ctx.password.empty()) { std::cerr << "error: --password* (Admin1) required\n"; return EC_USAGE; }
     if (int e = ctx.init(); e) return e;
     SedDrive drive(ctx.transport);
     return reportResult(ctx, on ? "mbr enable" : "mbr disable",
@@ -675,7 +685,8 @@ int mbr_enable(Context& ctx, bool on) {
 }
 
 int mbr_done(Context& ctx, bool on) {
-    if (ctx.password.empty()) { std::cerr << "error: --password (Admin1) required\n"; return EC_USAGE; }
+    if (int e = ctx.resolvePassword(); e) return e;
+    if (ctx.password.empty()) { std::cerr << "error: --password* (Admin1) required\n"; return EC_USAGE; }
     if (int e = ctx.init(); e) return e;
     SedDrive drive(ctx.transport);
     return reportResult(ctx, on ? "mbr done=Y" : "mbr done=N",
