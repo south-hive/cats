@@ -155,6 +155,30 @@ expect_exit 1 "range list without password"  "$CLI" --sim range list
 expect_exit 1 "user list without password"   "$CLI" --sim user list
 expect_exit 1 "revert without password"      "$CLI" --sim --force drive revert --sp admin
 
+# ── band setup / erase force gates ──
+expect_exit 1 "band setup without --force"   "$CLI" --sim -p pw band setup --id 0 --start 0 --len 1024
+expect_exit 1 "band erase without --force"   "$CLI" --sim -p pw band erase --id 0
+
+"$CLI" --sim -p pw --force band setup --id 0 --start 0 --len 1024 >/dev/null 2>&1; ec=$?
+if [[ "$ec" == "0" || "$ec" == "3" || "$ec" == "4" ]]; then
+    echo "  OK   band setup parses (exit=$ec)"; PASS=$((PASS+1));
+else echo "  FAIL band setup (exit=$ec)"; FAIL=$((FAIL+1)); fi
+
+"$CLI" --sim -p pw --force band erase --id 0 >/dev/null 2>&1; ec=$?
+if [[ "$ec" == "0" || "$ec" == "3" || "$ec" == "4" ]]; then
+    echo "  OK   band erase parses (exit=$ec)"; PASS=$((PASS+1));
+else echo "  FAIL band erase (exit=$ec)"; FAIL=$((FAIL+1)); fi
+
+# ── eval fault-list (read-only, no device) ──
+expect_exit 0 "eval fault-list"              "$CLI" eval fault-list
+OUT=$("$CLI" eval fault-list 2>/dev/null | wc -l)
+if [[ "$OUT" -ge "10" ]]; then echo "  OK   eval fault-list non-empty ($OUT lines)"; PASS=$((PASS+1)); \
+    else echo "  FAIL eval fault-list only $OUT lines"; FAIL=$((FAIL+1)); fi
+
+"$CLI" --json eval fault-list 2>/dev/null | grep -q '"points"' && {
+    echo "  OK   eval fault-list --json has 'points' array"; PASS=$((PASS+1));
+} || { echo "  FAIL eval fault-list --json missing 'points'"; FAIL=$((FAIL+1)); }
+
 echo "=="
 echo "  pass=$PASS fail=$FAIL"
 exit $((FAIL > 0 ? 1 : 0))

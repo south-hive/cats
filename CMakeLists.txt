@@ -161,6 +161,8 @@ if(LIBSED_BUILD_TESTS)
         tests/unit/test_session.cpp
         tests/unit/test_debug_layer.cpp
         tests/unit/test_logging.cpp
+        tests/unit/test_cats_cli_transaction.cpp
+        tools/cats-cli/transaction.cpp
         tests/mock/mock_transport.cpp
     )
 
@@ -168,7 +170,9 @@ if(LIBSED_BUILD_TESTS)
         add_executable(libsed_tests ${UNIT_TEST_SOURCES})
         target_link_libraries(libsed_tests PRIVATE libsed GTest::gtest GTest::gtest_main)
         target_include_directories(libsed_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
             ${CMAKE_CURRENT_SOURCE_DIR}/tests
+            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/json
         )
 
         include(GoogleTest)
@@ -178,7 +182,9 @@ if(LIBSED_BUILD_TESTS)
         add_executable(libsed_tests ${UNIT_TEST_SOURCES} tests/test_main.cpp)
         target_link_libraries(libsed_tests PRIVATE libsed)
         target_include_directories(libsed_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
             ${CMAKE_CURRENT_SOURCE_DIR}/tests
+            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/json
         )
         add_test(NAME libsed_tests COMMAND libsed_tests)
     endif()
@@ -388,6 +394,15 @@ install(TARGETS libsed
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+
+# Install the cats-cli binary so users get it on their system alongside the
+# library. Only meaningful when LIBSED_BUILD_TOOLS=ON (otherwise the target
+# does not exist).
+if(LIBSED_BUILD_TOOLS AND TARGET cats-cli)
+    install(TARGETS cats-cli
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
 
 # Public headers: both the libsed/ directory and the top-level cats.h
 # umbrella include. Without cats.h, users who follow docs like

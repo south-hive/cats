@@ -222,6 +222,10 @@ public:
     /// Band 잠금 해제 (Enterprise)
     Result unlockBand(uint32_t bandId, const std::string& bandMasterPassword);
 
+    /// Band Erase — Enterprise SSC의 EraseMaster 권한으로 band의 crypto 키를
+    /// 교체하여 데이터를 파괴. 호출자는 EraseMaster 비밀번호 전달.
+    Result eraseBand(uint32_t bandId, const std::string& eraseMasterPassword);
+
     // ── 고급 접근 (파워 유저용) ──
 
     /// EvalApi 직접 접근

@@ -32,7 +32,9 @@ cats-cli
 │   ├── lock --read --write   # Set lock state
 │   └── erase             # Crypto-erase (DESTRUCTIVE, --force)
 ├── band                  # Enterprise SSC
-│   └── list
+│   ├── list
+│   ├── setup --id --start --len  # Configure band (DESTRUCTIVE, --force)
+│   └── erase --id                 # Crypto-erase band (DESTRUCTIVE, --force)
 ├── user
 │   ├── list              # Admin1-4 + User1-8 + enabled state
 │   ├── enable            # Enable user authority
@@ -47,7 +49,8 @@ cats-cli
     ├── tx-start          # StartTransaction (session closes on exit)
     ├── table-get         # Read table columns
     ├── raw-method        # Send arbitrary method (DESTRUCTIVE, --force)
-    └── transaction       # Run JSON script in one session
+    ├── transaction       # Run JSON script in one session
+    └── fault-list        # Enumerate FaultBuilder fault points (read-only)
 ```
 
 ## 전역 옵션
@@ -200,6 +203,9 @@ cats-cli -d /dev/nvme0 --pw-env TC_PW --json \
 - **`drive revert --sp admin`**: 공장 드라이브에서는 SID == MSID이므로 `--password`에 **MSID 바이트**를 주어야 한다. Ownership 후에는 사용자가 설정한 SID 비밀번호.
 - **`eval transaction`의 commit/rollback**: 실제 Opal 드라이브의 트랜잭션 지원은 편차가 크다. `St=0x10 (TRANSACTION_FAILURE)` 또는 `St=0x0F (TPer_Malfunction)` 반환하는 드라이브 있음. JSON 출력의 `tcg_status_name`에 그대로 노출되니 자동화에서 판별 가능.
 - **`band list`**: `BandMaster0` 권한으로 열리므로 Band0 정보만 정확히 보인다. 다른 Band는 각자의 BandMaster 자격증명이 필요 (library 제약).
+- **`band setup --id N`**: BandMaster<N> 자격증명을 `-p/--pw-env/...`로 전달. `--force` 필수. Range Start/Length를 변경하면 GenKey를 발급한 것과 같은 효과로 데이터가 손실될 수 있다.
+- **`band erase --id N`**: EraseMaster 자격증명 필요. instant erase 효과 — 복원 불가. `--force` 필수.
+- **`eval fault-list`**: 디바이스 접속 없이 빌드된 `FaultBuilder` fault point 카탈로그를 출력 (text/JSON). 후속 `fault-inject` 작업의 입력으로 사용.
 
 ## Logging / Trace
 

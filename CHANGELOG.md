@@ -38,10 +38,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   carries Admin1-4 alongside User1-8.
 - **`docs/cats_cli_guide.md`**, **`docs/cats_cli_transaction_schema.md`** —
   user-facing documentation.
-- **`tests/integration/cats_cli_smoke.sh`** — 39-case SimTransport smoke
+- **`tests/integration/cats_cli_smoke.sh`** — 46-case SimTransport smoke
   (registered in CTest as `cats_cli_smoke`).
+- **`band setup --id --start --len` / `band erase --id`** — Enterprise
+  SSC band lifecycle on the CLI. Both gated by `--force`. Builds on
+  `SedDrive::eraseBand()` (new) and existing `configureBand()`.
+- **`eval fault-list`** — read-only enumeration of `FaultBuilder`'s 20
+  fault points (text or `--json`). Input catalog for upcoming
+  `eval fault-inject`.
+- **`tests/unit/test_cats_cli_transaction.cpp`** — 17 parser tests
+  (3 positive + 14 negative). Covers paths the smoke shell can't:
+  unknown SP/Authority/Object/Column, two password sources, `Anybody`
+  with credential, empty `pw_env`, bad `on_error`, malformed JSON.
 
 ### Changed
+- `SedDrive::configureBand / lockBand / unlockBand` now route via
+  `SP_ENTERPRISE` (was `SP_LOCKING`). Aligned with `enumerateBands`.
+  SimTransport hid this discrepancy; real Enterprise drives would
+  reject the wrong SP UID.
+- `cats-cli` is now an installed target (`make install` / `cmake
+  --install`). Lands in `${CMAKE_INSTALL_BINDIR}/cats-cli`.
 - `DiscoveryInfo` gains `mbrSupported` (LockingFeature flag 0x40) so
   `cats-cli mbr status` can report "supported" without opening a session
   that real drives may refuse to anonymous readers.

@@ -1,5 +1,64 @@
 # Work History
 
+## Session 2026-04-18 (8) — cats-cli ship-ready 후 보완 (band/install/parser-tests/fault-list)
+
+### What was done
+
+ship-ready 이후 잔여 갭 4건 마감. 멘토 편지의 "수직 우선" 원칙을 그대로 적용 (각 항목 schema → minimal → smoke → docs 단위로 닫고 다음으로).
+
+**1) Enterprise band 운영 명령 — `band setup` / `band erase`**
+- `SedDrive::eraseBand(bandId, eraseMasterPassword)` 추가 — `withSession(SP_ENTERPRISE, AUTH_ERASEMASTER)` + `EvalApi::eraseBand`
+- `band setup --id --start --len` (BandMaster<N> 권한, configureBand 활용) / `band erase --id` (EraseMaster 권한) 모두 `--force` 게이트
+- **함께 발견된 SimTransport 가림 버그**: 기존 `configureBand`/`lockBand`/`unlockBand`가 `SP_LOCKING` (Opal)을 사용하고 있었음. `enumerateBands`만 `SP_ENTERPRISE`였다 → 모두 `SP_ENTERPRISE`로 정렬. SimTransport는 SP UID 검증을 안 해서 단위 테스트가 통과해도 실Enterprise 드라이브에서 실패할 수 있던 자잘한 시한폭탄. MoT 직전에 잡힘
+
+**2) `cats-cli` install 타겟**
+- `install(TARGETS cats-cli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})` 조건부 추가
+- `/tmp/libsed_install/bin/cats-cli` 동작 확인 — `--help` 출력
+
+**3) Transaction parser 단위 테스트 17개 (3 positive + 14 negative)**
+- `tests/unit/test_cats_cli_transaction.cpp` 신규
+- positive: anonymous read, txn with pw_env, genkey
+- negative: missing/unsupported version, unknown SP/Authority/Object/Column, two pw sources, Anybody+pw, empty env var, missing credential, bad on_error, unknown op, sleep without ms, malformed JSON
+- `getenvFn` 인자 stub로 호스트 환경 비의존
+- CMake `UNIT_TEST_SOURCES`에 추가 + `tools/cats-cli/transaction.cpp`도 같이 컴파일 (libsed가 아니라 tool 코드라서). `target_include_directories`에 repo root + `third_party/json` 추가
+- `test_main.cpp`에 `run_cats_cli_transaction_tests()` extern + 호출
+
+**4) `eval fault-list` (read-only)**
+- `FaultBuilder::FaultPoint` enum 20개 string 카탈로그 (`kFaultPoints[]`)
+- 기본 출력 `BeforeIfSend (0x0100)` 형식, `--json` 시 `{"command":"eval fault-list","points":[...]}`
+- 디바이스 접속 불필요 (Context 초기화 전에 처리)
+
+### Current state
+
+- ctest **6/6 PASS** (libsed_tests +17 / sed_compare 68 / ioctl_validator 17 / scenario_tests 104 / golden_validator / cats_cli_smoke **46/46** ← 39 → 46)
+- Install 타겟 검증: `/tmp/libsed_install/bin/cats-cli --help` OK
+- 모든 새 명령 SimTransport에서 force 게이트 + parse 정상
+
+### Phase 진행 상태
+
+| Phase | 상태 |
+|-------|------|
+| Phase 0 (facade gap) | ✅ + `eraseBand` |
+| Phase 1 (base cmds + JSON + pw + exit) | ✅ |
+| Phase 2 (eval transaction, raw-method, --repeat, **fault-list**) | ✅ |
+| Phase 3 (session/compare/snapshot/golden/--timing) | ❌ Non-goal (설계 §9) |
+| Phase 4 (벤더링 + 가이드 + CHANGELOG + smoke ctest + **install + parser tests**) | ✅ |
+
+### 다음 세션에서 이어갈 수 있는 작업
+
+| 항목 | 난이도 |
+|------|-------|
+| `eval fault-inject --point ...` — TestContext lifecycle 결합 (fault-list가 입력) | 중 |
+| `session run/repl` — 세션 유지 (readline 의존, lifecycle 설계) | 중 |
+| `compare --cmd <sedutil-cmd>` — `tools/sed_compare`의 CLI 승격 | 하 |
+| `drive snapshot/restore` — 설정 백업/복원 JSON (C_PIN 보안 고려) | 중 |
+| `--timing` 플래그 (모든 명령 출력 일관성 검토 후) | 하 |
+| `eval golden record/compare` (`golden_validator` CLI 승격) | 하 |
+| `--dry-run` vs `--sim` 의미론 명확화 | 하 |
+| 실기 MoT 검증 — 각 명령 실드라이브에서 1회 (Enterprise 우선 — band/SP_ENTERPRISE 정렬 검증) | 하드웨어 필요 |
+
+---
+
 ## Session 2026-04-18 (7) — cats-cli ship-ready 최종 마무리
 
 ### What was done

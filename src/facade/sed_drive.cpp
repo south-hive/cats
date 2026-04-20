@@ -367,12 +367,20 @@ Result SedDrive::setMbrDone(bool done, const std::string& admin1Password) {
 }
 
 // ── Enterprise Band ──
+//
+// Band operations live in the Enterprise SSC's own Locking SP (uid::
+// SP_ENTERPRISE = 0x0000020500010001 — "Enterprise Locking SP"), NOT in
+// the Opal LockingSP (0x0000020500000002). A real Enterprise drive
+// rejects Opal's SP_LOCKING; SimTransport is permissive so the
+// difference only bites at the first-real-drive moment of truth.
+// Keep all band-* methods aligned with enumerateBands which already
+// uses SP_ENTERPRISE.
 
 Result SedDrive::configureBand(uint32_t bandId,
                                uint64_t bandStart, uint64_t bandLength,
                                const std::string& bandMasterPassword) {
     Uid auth = uid::makeBandMasterUid(bandId);
-    return withSession(Uid(uid::SP_LOCKING), bandMasterPassword, auth,
+    return withSession(Uid(uid::SP_ENTERPRISE), bandMasterPassword, auth,
         [&](Session& s) -> Result {
             return impl_->api.configureBand(s, bandId, bandStart, bandLength, true, true);
         });
@@ -380,7 +388,7 @@ Result SedDrive::configureBand(uint32_t bandId,
 
 Result SedDrive::lockBand(uint32_t bandId, const std::string& bandMasterPassword) {
     Uid auth = uid::makeBandMasterUid(bandId);
-    return withSession(Uid(uid::SP_LOCKING), bandMasterPassword, auth,
+    return withSession(Uid(uid::SP_ENTERPRISE), bandMasterPassword, auth,
         [&](Session& s) -> Result {
             return impl_->api.lockBand(s, bandId);
         });
@@ -388,9 +396,20 @@ Result SedDrive::lockBand(uint32_t bandId, const std::string& bandMasterPassword
 
 Result SedDrive::unlockBand(uint32_t bandId, const std::string& bandMasterPassword) {
     Uid auth = uid::makeBandMasterUid(bandId);
-    return withSession(Uid(uid::SP_LOCKING), bandMasterPassword, auth,
+    return withSession(Uid(uid::SP_ENTERPRISE), bandMasterPassword, auth,
         [&](Session& s) -> Result {
             return impl_->api.unlockBand(s, bandId);
+        });
+}
+
+Result SedDrive::eraseBand(uint32_t bandId, const std::string& eraseMasterPassword) {
+    // Per Enterprise SSC: Band erase is authorized by EraseMaster (not
+    // the band's BandMaster), because EraseMaster is the single Authority
+    // that holds Erase ACL across all bands.
+    return withSession(Uid(uid::SP_ENTERPRISE), eraseMasterPassword,
+                        Uid(uid::AUTH_ERASEMASTER),
+        [&](Session& s) -> Result {
+            return impl_->api.eraseBand(s, bandId);
         });
 }
 

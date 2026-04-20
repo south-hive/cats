@@ -18,6 +18,8 @@
 
 #include "transaction.h"
 
+#include <libsed/debug/test_context.h>
+
 #include <cctype>
 #include <chrono>
 #include <cstdlib>
@@ -552,6 +554,82 @@ int eval_raw_method(Context& ctx, uint64_t inv, uint64_t method, const std::stri
     return reportRaw(ctx, "raw-method", raw);
 }
 
+// ── Band: Enterprise setup / erase ──────────────────────────────────────────
+
+int band_setup(Context& ctx, uint32_t bandId, uint64_t start, uint64_t length) {
+    if (int e = requireForce(ctx, "band setup"); e) return e;
+    if (int e = ctx.resolvePassword(); e) return e;
+    if (ctx.password.empty()) { std::cerr << "error: --password* (BandMaster) required\n"; return EC_USAGE; }
+    if (int e = ctx.init(); e) return e;
+    SedDrive drive(ctx.transport);
+    return reportResult(ctx, "band setup",
+                        drive.configureBand(bandId, start, length, ctx.password));
+}
+
+int band_erase(Context& ctx, uint32_t bandId) {
+    if (int e = requireForce(ctx, "band erase"); e) return e;
+    if (int e = ctx.resolvePassword(); e) return e;
+    if (ctx.password.empty()) { std::cerr << "error: --password* (EraseMaster) required\n"; return EC_USAGE; }
+    if (int e = ctx.init(); e) return e;
+    SedDrive drive(ctx.transport);
+    return reportResult(ctx, "band erase",
+                        drive.eraseBand(bandId, ctx.password));
+}
+
+// ── eval: fault-list (enumerate FaultPoint values) ──────────────────────────
+
+// Translation table for FaultPoint enum → stable string names used on the
+// wire. Kept in sync with test_context.h §FaultPoint.
+static const struct { libsed::debug::FaultPoint p; const char* name; } kFaultPoints[] = {
+    { libsed::debug::FaultPoint::BeforeIfSend,       "BeforeIfSend"       },
+    { libsed::debug::FaultPoint::AfterIfSend,        "AfterIfSend"        },
+    { libsed::debug::FaultPoint::BeforeIfRecv,       "BeforeIfRecv"       },
+    { libsed::debug::FaultPoint::AfterIfRecv,        "AfterIfRecv"        },
+    { libsed::debug::FaultPoint::BeforePacketBuild,  "BeforePacketBuild"  },
+    { libsed::debug::FaultPoint::AfterPacketParse,   "AfterPacketParse"   },
+    { libsed::debug::FaultPoint::BeforeTokenEncode,  "BeforeTokenEncode"  },
+    { libsed::debug::FaultPoint::AfterTokenDecode,   "AfterTokenDecode"   },
+    { libsed::debug::FaultPoint::BeforeStartSession, "BeforeStartSession" },
+    { libsed::debug::FaultPoint::AfterStartSession,  "AfterStartSession"  },
+    { libsed::debug::FaultPoint::BeforeSendMethod,   "BeforeSendMethod"   },
+    { libsed::debug::FaultPoint::AfterRecvMethod,    "AfterRecvMethod"    },
+    { libsed::debug::FaultPoint::BeforeCloseSession, "BeforeCloseSession" },
+    { libsed::debug::FaultPoint::BeforeMethodBuild,  "BeforeMethodBuild"  },
+    { libsed::debug::FaultPoint::AfterMethodParse,   "AfterMethodParse"   },
+    { libsed::debug::FaultPoint::BeforeDiscovery,    "BeforeDiscovery"    },
+    { libsed::debug::FaultPoint::AfterDiscovery,     "AfterDiscovery"     },
+    { libsed::debug::FaultPoint::BeforeOpalOp,       "BeforeOpalOp"       },
+    { libsed::debug::FaultPoint::BeforeEnterpriseOp, "BeforeEnterpriseOp" },
+    { libsed::debug::FaultPoint::BeforePyriteOp,     "BeforePyriteOp"     },
+};
+static constexpr size_t kFaultPointCount = sizeof(kFaultPoints)/sizeof(kFaultPoints[0]);
+
+int eval_fault_list(Context& ctx) {
+    // No device / session needed — this is a pure introspection command so
+    // users can discover valid fault step names before wiring up fault-inject
+    // (future). Intentionally skip ctx.init() to keep this snappy.
+    if (ctx.jsonOut) {
+        nlohmann::json arr = nlohmann::json::array();
+        for (const auto& fp : kFaultPoints) {
+            arr.push_back({
+                {"name", fp.name},
+                {"code", static_cast<uint32_t>(fp.p)},
+            });
+        }
+        std::cout << nlohmann::json({{"command", "eval fault-list"}, {"points", arr}}).dump(2)
+                  << "\n";
+        return EC_OK;
+    }
+    if (ctx.v() >= Verbosity::Quiet) {
+        for (const auto& fp : kFaultPoints) {
+            std::cout << fp.name << "  (0x" << std::hex << std::setw(4)
+                      << std::setfill('0') << static_cast<uint32_t>(fp.p)
+                      << std::dec << std::setfill(' ') << ")\n";
+        }
+    }
+    return EC_OK;
+}
+
 // ── Range: granular lock control ────────────────────────────────────────────
 
 int range_lock(Context& ctx, uint32_t rid, bool readLocked, bool writeLocked) {
@@ -791,6 +869,18 @@ int main(int argc, char** argv) {
     auto* band = app.add_subcommand("band", "Enterprise Band operations");
     band->add_subcommand("list", "List bands")->callback([&]{ finalExit = cmd::band_list(ctx); });
 
+    uint32_t bandSetupId = 0; uint64_t bandStart = 0, bandLen = 0;
+    auto* bandSetup = band->add_subcommand("setup", "Configure Enterprise band (Destructive)");
+    bandSetup->add_option("--id",    bandSetupId, "Band ID (0 = global)")->required();
+    bandSetup->add_option("--start", bandStart,   "Band start LBA")->required();
+    bandSetup->add_option("--len",   bandLen,     "Band length (LBAs)")->required();
+    bandSetup->callback([&]{ finalExit = cmd::band_setup(ctx, bandSetupId, bandStart, bandLen); });
+
+    uint32_t bandEraseId = 0;
+    auto* bandErase = band->add_subcommand("erase", "Crypto-erase a band via EraseMaster (Destructive)");
+    bandErase->add_option("--id", bandEraseId, "Band ID")->required();
+    bandErase->callback([&]{ finalExit = cmd::band_erase(ctx, bandEraseId); });
+
     auto* mbr = app.add_subcommand("mbr", "MBR operations");
     mbr->add_subcommand("status", "Show MBR shadow enabled/done/supported")
        ->callback([&]{ finalExit = cmd::mbr_status(ctx); });
@@ -834,6 +924,9 @@ int main(int argc, char** argv) {
         "Run a JSON script inside one session (schema: docs/cats_cli_transaction_schema.md)");
     txRun->add_option("--script", txScript, "Path to JSON script")->required();
     txRun->callback([&]{ finalExit = cmd::eval_transaction(ctx, txScript); });
+
+    eval->add_subcommand("fault-list", "List FaultPoint step names usable by future fault-inject")
+        ->callback([&]{ finalExit = cmd::eval_fault_list(ctx); });
 
     try {
         app.parse(argc, argv);
