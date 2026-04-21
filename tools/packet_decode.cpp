@@ -10,6 +10,7 @@
 #include <libsed/codec/token_decoder.h>
 #include <libsed/core/uid.h>
 #include <libsed/core/endian.h>
+#include <libsed/core/log.h>
 
 #include <cctype>
 #include <cstdint>
@@ -68,8 +69,12 @@ static LineParse stripAddress(const std::string& line) {
     // ':' 없고 공백 없으면 일반 hex 라인으로 간주
     if (!hasColon && !hasSpace) return { false, 0, s };
 
-    // ':' 없는 경우: 첫 토큰만 4자리 이하의 짧은 16진이면 주소로 취급
-    if (!hasColon && (hexEnd - hexStart) > 8) return { false, 0, s };
+    // ':' 없는 경우: 주소는 4 또는 8자리 hex만 허용 (실제 hexdump 관례).
+    // "abc 00 11 22" 같은 텍스트가 가짜 주소로 오인되는 것을 방지.
+    if (!hasColon) {
+        size_t len = hexEnd - hexStart;
+        if (len != 4 && len != 8) return { false, 0, s };
+    }
 
     out.hasAddr = true;
     try {
@@ -492,6 +497,9 @@ int main(int argc, char* argv[]) {
                   << "주소가 0으로 되돌아오면 다음 패킷으로 간주됩니다.\n";
         return 1;
     }
+
+    // 디코드 에러를 Result로 받기 때문에 libsed의 stderr 로그는 무음 처리.
+    libsed::Logger::instance().setLevel(libsed::LogLevel::None);
 
     std::string inPath = argv[1];
     std::string outPath;
