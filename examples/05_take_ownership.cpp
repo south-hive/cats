@@ -37,13 +37,15 @@ static std::string TEST_SID_PW;
 // This is what happens "under the hood" when you call SedDrive::takeOwnership().
 
 static bool scenario1_evalOwnership(std::shared_ptr<ITransport> transport,
-                                     uint16_t comId) {
+                                     uint16_t comId,
+                                     const PropertiesResult& props) {
     scenario(1, "Take Ownership Step-by-Step (EvalApi)");
 
     EvalApi api;
 
     // ── Step 1: Read MSID (anonymous) ──
     Session anonSession(transport, comId);
+    anonSession.setMaxComPacketSize(props.tperMaxComPacketSize);
     StartSessionResult ssr;
     auto r = api.startSession(anonSession, uid::SP_ADMIN, false, ssr);
     step(1, "Anonymous session to Admin SP", r);
@@ -61,6 +63,7 @@ static bool scenario1_evalOwnership(std::shared_ptr<ITransport> transport,
 
     // ── Step 2: Authenticate as SID using MSID ──
     Session authSession(transport, comId);
+    authSession.setMaxComPacketSize(props.tperMaxComPacketSize);
     StartSessionResult ssr2;
     r = api.startSessionWithAuth(authSession, uid::SP_ADMIN, true,
                                   uid::AUTH_SID, msid, ssr2);
@@ -81,6 +84,7 @@ static bool scenario1_evalOwnership(std::shared_ptr<ITransport> transport,
 
     // ── Step 4: Verify — auth with new password ──
     Session verifySession(transport, comId);
+    verifySession.setMaxComPacketSize(props.tperMaxComPacketSize);
     StartSessionResult ssr3;
     Bytes sidPin = pwBytes(TEST_SID_PW);
     r = api.startSessionWithAuth(verifySession, uid::SP_ADMIN, true,
@@ -92,6 +96,7 @@ static bool scenario1_evalOwnership(std::shared_ptr<ITransport> transport,
 
     // ── Step 5: Verify old MSID no longer works ──
     Session failSession(transport, comId);
+    failSession.setMaxComPacketSize(props.tperMaxComPacketSize);
     StartSessionResult ssr4;
     r = api.startSessionWithAuth(failSession, uid::SP_ADMIN, true,
                                   uid::AUTH_SID, msid, ssr4);
@@ -108,13 +113,15 @@ static bool scenario1_evalOwnership(std::shared_ptr<ITransport> transport,
 // revertSP() on Admin SP resets SID password back to MSID.
 
 static bool scenario2_revert(std::shared_ptr<ITransport> transport,
-                              uint16_t comId) {
+                              uint16_t comId,
+                              const PropertiesResult& props) {
     scenario(2, "Revert to Factory State");
 
     EvalApi api;
 
     // Auth as SID with the new password
     Session session(transport, comId);
+    session.setMaxComPacketSize(props.tperMaxComPacketSize);
     StartSessionResult ssr;
     Bytes sidPin = pwBytes(TEST_SID_PW);
     auto r = api.startSessionWithAuth(session, uid::SP_ADMIN, true,
@@ -130,6 +137,7 @@ static bool scenario2_revert(std::shared_ptr<ITransport> transport,
     // Verify MSID works again
     if (r.ok()) {
         Session verifySession(transport, comId);
+        verifySession.setMaxComPacketSize(props.tperMaxComPacketSize);
         StartSessionResult ssr2;
         auto r2 = api.startSession(verifySession, uid::SP_ADMIN, false, ssr2);
         Bytes msid;
@@ -140,6 +148,7 @@ static bool scenario2_revert(std::shared_ptr<ITransport> transport,
 
         if (!msid.empty()) {
             Session msidAuth(transport, comId);
+            msidAuth.setMaxComPacketSize(props.tperMaxComPacketSize);
             StartSessionResult ssr3;
             r2 = api.startSessionWithAuth(msidAuth, uid::SP_ADMIN, true,
                                            uid::AUTH_SID, msid, ssr3);
@@ -194,9 +203,17 @@ int main(int argc, char* argv[]) {
     auto r = api.discovery0(transport, info);
     if (r.failed()) { printf("Discovery failed\n"); return 1; }
 
+    // Properties must be exchanged before any session to match the sedutil wire
+    // pattern — some drives return NOT_AUTHORIZED / TPER_MALFUNCTION on auth
+    // attempts made before Properties. Internally this also runs StackReset
+    // to force the ComID to Issued(idle) state.
+    PropertiesResult props;
+    r = api.exchangeProperties(transport, info.baseComId, props);
+    if (r.failed()) { printf("Properties exchange failed\n"); return 1; }
+
     bool ok = true;
-    ok &= scenario1_evalOwnership(transport, info.baseComId);
-    ok &= scenario2_revert(transport, info.baseComId);
+    ok &= scenario1_evalOwnership(transport, info.baseComId, props);
+    ok &= scenario2_revert(transport, info.baseComId, props);
     ok &= scenario3_facade(opts.device.c_str(), opts);
 
     printf("\n%s\n", ok ? "All scenarios passed." : "Some scenarios failed.");
