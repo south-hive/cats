@@ -224,9 +224,16 @@ int main(int argc, char* argv[]) {
     NEW_SID_PW = getPassword(opts);
 
     banner("23: sedutil-compat initialSetup (PBKDF2-HMAC-SHA1)");
-    printf("  hash: PBKDF2-HMAC-SHA1(password, drive_serial, 75000 iter, 32B)\n");
-    printf("  sedutil-cli (DTA fork) 와 byte-identical wire 출력.\n");
-    printf("  cats native(SHA-256) drive 와는 호환 안 됨.\n\n");
+    printf("  hash      : PBKDF2-HMAC-SHA1(password, drive_serial, 75000, 32B)\n");
+    printf("  wire form : sedutil-cli (DTA fork) 와 byte-identical\n");
+    printf("\n");
+    printf("  드라이브 상태 요건:\n");
+    printf("    [OK]   factory 상태 (MSID 살아있음)\n");
+    printf("    [OK]   sedutil 또는 본 예제(#23) 로 이미 set 된 상태\n");
+    printf("    [FAIL] cats-native (SHA-256) 로 takeOwnership 된 상태\n");
+    printf("           → SID auth 가 mismatch. 먼저 PSID Revert 필요.\n");
+    printf("\n");
+    printf("  완료 후: 같은 password 로 cats(#23) 와 sedutil-cli 모두 auth 가능.\n\n");
 
     if (!confirmDestructive(opts,
             "run sedutil-compat initialSetup — PSID Revert required to recover"))
