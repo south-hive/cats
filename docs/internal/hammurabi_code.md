@@ -173,6 +173,16 @@ When any AI suggests a "spec fix":
 
 **Why:** Past AI review — 2 of 3 suggested "fixes" were catastrophically wrong. Both survived code review but failed byte comparison.
 
+**Recent example (2026-04-26):** `d94a674` "Fix MethodCall::buildGet — drop
+extra list wrap around CellBlock" was wrong. AI inferred from `sed_compare`'s
+hand-rolled `DtaCommand` reference that sedutil emits CellBlock named pairs
+flat (no inner list). Real `sedutil-cli` running on hardware was wrapping
+the inner list all along (verified by user-captured hex dump showing
+`f0 f0 f2 03 03 f3 f2 04 03 f3 f1 f1` — two STARTLIST). Reverted in
+`71a6818` after ~9 days. `sed_compare` and `ioctl_validator` PASSed
+throughout because both shared the wrong reference. This is exactly the
+class of bug that LAW 17 (golden_validator > sed_compare) addresses.
+
 ---
 
 ## LAW 14: ifRecv must poll until ComPacket.length > 0
@@ -196,3 +206,161 @@ After ifSend, the TPer may not have the response ready. ifRecv must loop:
 Not 5-10 scattered includes. Only add extra includes for debug/low-level protocol work.
 
 **Why:** User said "many diversed include statements are not recommended." The library exists to make TC developers' lives easier.
+
+---
+
+## LAW 16: CellBlock named pairs MUST be wrapped in inner STARTLIST/ENDLIST
+
+`Get [ Cellblock : cell_block ]` per TCG Core Spec — `cell_block` is itself
+a list type, so it MUST be wrapped in its own STARTLIST/ENDLIST inside the
+method's parameter list. The outer list is the args wrapper; the inner list
+is the CellBlock object itself.
+
+```
+Wire form (CPIN_MSID Get):
+  F8                          CALL
+  A8 [obj_uid]                InvokingUID
+  A8 [GET method]             MethodUID
+  F0                          STARTLIST   ← outer args
+    F0                        STARTLIST   ← inner CellBlock
+      F2 03 03 F3             startColumn (key=3) = 3
+      F2 04 03 F3             endColumn   (key=4) = 3
+    F1                        ENDLIST     ← close inner CellBlock
+  F1                          ENDLIST     ← close outer args
+  F9 F0 00 00 00 F1           EOD + status
+```
+
+**Wrong (without inner list):**
+```
+F0    F2 03 03 F3 F2 04 03 F3    F1   ← cats produced this until 71a6818
+```
+
+CellBlock key numbers per TCG Core Spec Table 32: 1=startRow, 2=endRow,
+3=startColumn, 4=endColumn.
+
+**Why:** 0x0F (TPER_MALFUNCTION) on real hardware. Strict firmwares parse
+the tokens but reject the call when the cellblock arg shape does not match
+the method signature. Verified by user-captured `sedutil-cli` hex dump
+2026-04-26; the vendored `DtaCommand` reference was missing the wrap and
+fooled `sed_compare`/`ioctl_validator` into matching libsed's identical
+mistake. Cf. LAW 13 recent example, LAW 17.
+
+---
+
+## LAW 17: golden_validator with hardware fixtures > sed_compare with hand-rolled refs
+
+`sed_compare`'s `DtaCommand` reference is **NOT** ground truth. Two
+implementations sharing the same TCG misreading produce matching but wrong
+bytes — `sed_compare` passes, real hardware rejects. The same applies to
+the hand-rolled `ioctl_validator` references.
+
+**Authority order (encoding correctness):**
+
+```
+1. golden_validator with .bin fixtures captured from real hardware
+2. sed_compare / ioctl_validator (sanity check only)
+```
+
+When adding new commands:
+- `sed_compare` PASS = **encoding looks consistent with our own assumptions**
+- `golden_validator` PASS = **encoding is what real hardware actually accepts**
+
+Both matter, but only golden_validator is decisive. A level-3 PASS by
+itself is not evidence of correctness.
+
+**Process for new operation:**
+1. Implement encoding from spec.
+2. Add hand-rolled reference to `sed_compare` / `ioctl_validator` (level 3).
+3. Capture sedutil bytes on real hardware → `tests/fixtures/golden/*.bin`.
+4. Add `golden_validator` builder for the operation (level 1).
+5. Only call the encoding "validated" when both pass.
+
+**Why:** CellBlock bug (LAW 16) survived 100% of `sed_compare` runs for ~9
+days because the test ran a wrong vs wrong comparison. `golden_validator`
+infrastructure (`tests/integration/golden_validator.cpp`,
+`tests/fixtures/golden/`) was added to break this circular validation. See
+also rosetta_stone.md §15 (Validation Hierarchy).
+
+---
+
+## LAW 18: SyncSession TSN must be ≠ 0 — defensive check
+
+`Session::startSession()` MUST reject SyncSession responses where TSN=0.
+
+```
+TSN = 0  →  Session Manager (reserved); not a valid session number
+TSN ≥ 1  →  Real session, TPer-assigned
+```
+
+A real, healthy SyncSession success response always returns TSN ≥ 1. TSN=0
+in a "success" SyncSession means either:
+- response was malformed and our parser silently mis-extracted, OR
+- TPer is in a bad state and reported success with a sentinel value.
+
+In either case, treating TSN=0 as a real session would send all subsequent
+in-session packets to the SM, producing 0x0F (TPER_MALFUNCTION) on the
+first Get/Set.
+
+**Implementation:** `src/session/session.cpp` — after `decodeSyncSession`,
+check `tsn_ != 0`; if zero, log error and return
+`ErrorCode::MalformedResponse`, leave session state Idle.
+
+**Why:** Defensive against silent corruption. Documented and enforced as
+part of the 0x0F investigation (`b75ea17`).
+
+---
+
+## LAW 19: exchangeProperties() before any session — always
+
+Every code path that opens a session MUST call `exchangeProperties()`
+between `discovery0()` and the first `StartSession`. Properties exchange
+is not a stylistic convention; some firmwares reject auth or in-session
+calls entirely if Properties was never exchanged.
+
+`exchangeProperties()` internally also runs `stackReset()` to push the
+ComID into Issued(idle) state — this is a required precondition.
+
+**Canonical pattern:**
+```cpp
+DiscoveryInfo info;
+api.discovery0(transport, info);
+
+PropertiesResult props;
+api.exchangeProperties(transport, info.baseComId, props);
+
+Session s(transport, info.baseComId);
+s.setMaxComPacketSize(props.tperMaxComPacketSize);   // also required
+api.startSession(s, uid::SP_ADMIN, false, ssr);
+```
+
+**Why:** `examples/05_take_ownership.cpp` originally only called
+`api.discovery0()` and went straight to `api.startSession()`. On real
+hardware this returned `NOT_AUTHORIZED` on the second StartSession (the one
+with SID + MSID). Adding the Properties call fixed it (`7880bee`). The
+SedDrive facade and `eval_composite::fullOpalSetupStepByStep()` already do
+this internally; only the step-by-step example flows had the gap.
+
+---
+
+## LAW 20: Match sedutil's session-lifecycle exactly — no extra resets
+
+When a libsed flow is a deliberate mirror of a sedutil-cli operation
+(e.g., `examples/22_sedutil_initial_setup.cpp` = `sedutil-cli --initialSetup`),
+do **not** add reset/cleanup steps that sedutil itself doesn't perform.
+
+Specifically:
+- `stackReset()` runs **once per device-open** (inside
+  `exchangeProperties()`). Not between sub-ops, even when each sub-op
+  cleanly closes its session.
+- `exchangeProperties()` runs **once per device-open**. Not between sub-ops.
+
+If a session-level error happens between sub-ops, the right answer is to
+diagnose it, not to paper over it with an extra StackReset.
+
+**Why:** Adding inter-op StackReset breaks the "byte-identical to sedutil"
+guarantee that the example was created to demonstrate. It also masks the
+real failure mode — the user/maintainer is led to believe extra resets are
+"required", when the actual bug is elsewhere (encoding, timing, auth, …).
+Concrete: `b75ea17` added `betweenSessions(stackReset)` to example 22 in
+response to a 0x0F that turned out to be the CellBlock encoding bug
+(LAW 16). The reset additions did not help and were reverted in `22f7b10`.

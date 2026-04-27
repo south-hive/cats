@@ -1,5 +1,109 @@
 # Work History
 
+## Session 2026-04-27 — CellBlock inner-list 회귀 + golden_validator 확장 + 근간 문서 정합
+
+### What was done
+
+지난 ~9일간 잠재해 있던 CellBlock 인코딩 회귀를 사용자의 실 하드웨어 hex
+dump 로 잡아내고, 같은 종류의 회귀가 재발하지 않도록 검증 인프라와 근간
+문서(rosetta_stone, hammurabi_code) 를 정렬.
+
+**1) `examples/05_take_ownership` 결함 수정** (`7880bee`)
+- `main()` 에 `exchangeProperties()` 호출 누락 → `discovery0()` 직후 곧장
+  `StartSession` 으로 진입 시 일부 드라이브가 두 번째(SID+MSID) auth 에서
+  `NOT_AUTHORIZED` 반환.
+- Properties 호출 추가 + 각 `Session` 에 `setMaxComPacketSize(props.
+  tperMaxComPacketSize)` 적용 (composite 와 동일한 패턴).
+
+**2) `examples/22_sedutil_initial_setup` 신설** (`dd36b9e`)
+- `sedutil-cli --initialSetup` 의 5 sub-op (A: takeOwnership / B:
+  activateLockingSP / C: configureLockingRange / D: setLockingRange /
+  E: setMBREnable=0) 6 세션 시퀀스를 `EvalApi` 호출로 그대로 이식.
+- `tools/sed_compare/t1_initial_setup.cpp` 와 동일한 TC 순서.
+
+**3) Session post-start delay + TSN=0 검증** (`b75ea17` → 일부 `22f7b10` revert)
+- `Session::setPostStartDelay(ms)` opt-in API 추가 — 일부 펌웨어가
+  SyncSession 응답 직후 ~수십 ms 동안 in-session 호출에 0x0F 를 반환
+  하는 케이스 회피용. 기본값 0.
+- SyncSession 응답에서 TSN=0 이 오면 `MalformedResponse` 반환 (방어 코드).
+- 처음에 sub-op 사이에 `stackReset()` 도 끼워넣었으나 sedutil 자체가 그
+  reset 을 하지 않음을 확인 후 revert. "sedutil 과 동일한 시퀀스" 라는
+  예제 정체성 유지.
+
+**4) CellBlock inner-list 복원** (`71a6818`) — **이 세션의 가장 큰 발견**
+- 사용자가 실 sedutil-cli 를 하드웨어에서 돌려 hex dump 를 캡쳐. cats(35B)
+  vs sedutil(37B) 차이가 정확히 inner `f0`/`f1` 한 쌍.
+- `d94a674` ("drop extra list wrap around CellBlock", 2026-04-18) 의
+  "수정"이 잘못이었음. `sed_compare` 의 hand-rolled `DtaCommand` reference
+  가 cats 와 같은 misreading 을 공유하고 있어서 모든 시퀀스에서 PASS 였음
+  에도 실 하드웨어는 0x0F (TPER_MALFUNCTION) 반환.
+- 수정 범위: `src/method/method_call.cpp::buildGet` 에 inner startList/
+  endList 추가. `tools/sed_compare/{t1_initial_setup, t2_list_locking_ranges,
+  t3_data_store}.cpp` reference 3개 정정. `tests/integration/ioctl_validator.
+  cpp::A.3` 정정.
+
+**5) `golden_validator` 확장** (`29d0e61`)
+- `tests/integration/packet_diff.h` 에 `diffTokenPayload()` 추가 — 헤더
+  (TSN/HSN/seqNumber/길이) 마스킹, offset 56+ 토큰 페이로드만 byte 비교.
+  multi-session 시퀀스 fixture 가 캡쳐 시점의 TSN 에 묶이지 않게 됨.
+- `DiffMode` enum (Full / TokensOnly) 도입.
+- initialSetup B/C/D/E 시퀀스 빌더 15 step 추가. fixture 만 채우면 자동
+  검증.
+- README 에 `sed_compare` (hand-rolled, sanity) vs `ioctl_validator`
+  (unit) vs `golden_validator` (real-hardware ground truth) 분담 명문화.
+
+**6) `tools/packet_decode` 도구 신설** (`3d84cd1`, 보강 `697e1cd`)
+- hex-dump 파일을 `rosetta_stone.md` 형식으로 디코드. 사용자의 실 캡쳐
+  분석에 활용. 가짜 주소 오인식 방지(콜론 없는 주소는 4/8자리 hex 만 허용)
+  + libsed Logger 레벨 None 으로 stderr 노이즈 억제.
+
+**7) 근간 문서 정합 (이번 작업)**
+- `docs/rosetta_stone.md` §4a Properties: `F2 AE "HostProperties"` (string)
+  → `F2 00` (numeric tiny-atom 0) 정정. `param_encoder.cpp:60` 의 코드
+  주석과 doc 가 어긋나던 점 해결.
+- `docs/rosetta_stone.md` §4d Get with CellBlock: nested list 형태로 복원.
+  "Verified against real hardware sedutil-cli hex dump" 명시.
+- `docs/rosetta_stone.md` §15 신설: Validation Hierarchy — sedutil-cli 실
+  하드웨어 capture > sedutil 소스 > hand-rolled reference > spec 텍스트
+  의 권위 등급을 명문화.
+- `docs/internal/hammurabi_code.md`:
+  - LAW 13 에 d94a674 → 71a6818 whiplash 사례 추가.
+  - LAW 16 (CellBlock inner list 필수), LAW 17 (golden_validator >
+    sed_compare), LAW 18 (TSN=0 거부), LAW 19 (Properties 필수),
+    LAW 20 (sedutil session-lifecycle 정확 일치, 추가 reset 금지) 신설.
+
+### 핵심 학습
+
+- `sed_compare` 의 hand-rolled `DtaCommand` reference 는 ground truth 가
+  아니다. cats 와 reference 가 같은 misreading 을 공유하면 영원히 PASS.
+- 인코딩 정확성의 결정적 검증은 `golden_validator` (.bin fixture from real
+  hardware sedutil-cli) 가 PASS 하는 것뿐.
+- 한 번 "수정" 된 인코딩이 잘못이었다는 것을 알아내는 데 9일이 걸렸다.
+  LAW 13 (Never trust AI spec interpretation without byte validation) 의
+  정확한 사례 — 이번엔 "byte validation" 이 가짜 reference 였다는 점이
+  추가 교훈.
+
+### Current state
+
+- ctest 5/6 PASS — `libsed_tests`, `ioctl_validator`, `sed_compare`,
+  `scenario_tests`, `golden_validator` 모두 통과. `cats_cli_smoke` 만
+  스크립트 실행 권한 이슈로 환경 fail (코드 무관, 사전 인지).
+- `golden_validator`: A 시퀀스 4 step + B/C/D/E 15 step = 19 step 등록.
+  fixture 부재로 모두 SKIP→pass.
+- `examples/22_sedutil_initial_setup` 빌드 OK; 하드웨어 검증은 사용자 측.
+
+### 다음 세션에서 이어갈 수 있는 작업
+
+| 항목 | 난이도 |
+|------|-------|
+| `scripts/capture_golden.sh` 에 `--initialSetup` 모드 추가 (현재 `--query` 만) | 하 |
+| 사용자 실 fixture (.bin) 가 들어온 뒤 cats encoding A~E 검증 | 하드웨어 필요 |
+| Set / Authenticate wire format 도 hardware capture 로 cross-check | 하드웨어 필요 |
+| 다른 examples (06~14) 의 `exchangeProperties` 누락 일괄 audit | 중 |
+| §4b/4c StartSession Write=true vs false 정책 정리 (현재 모순 가능) | 중 |
+
+---
+
 ## Session 2026-04-18 (8) — cats-cli ship-ready 후 보완 (band/install/parser-tests/fault-list)
 
 ### What was done
