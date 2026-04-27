@@ -430,14 +430,7 @@ static Packet buildSedutil_B2_SetSidPin() {
 
     cmd.addToken(OPAL_TOKEN::STARTLIST);
 
-    // Where (empty) — sedutil always includes this with proper ENDNAME
-    cmd.addToken(OPAL_TOKEN::STARTNAME);
-    cmd.addToken(OPAL_TOKEN::WHERE);           // key = 0x00 (Where)
-    cmd.addToken(OPAL_TOKEN::STARTLIST);
-    cmd.addToken(OPAL_TOKEN::ENDLIST);
-    cmd.addToken(OPAL_TOKEN::ENDNAME);
-
-    // Values
+    // Object.Set per TCG Core Spec §5.3.3 — no Where for object set.
     cmd.addToken(OPAL_TOKEN::STARTNAME);
     cmd.addToken(OPAL_TOKEN::VALUES);          // key = 0x01 (Values)
     cmd.addToken(OPAL_TOKEN::STARTLIST);
@@ -672,14 +665,9 @@ static Packet buildSedutil_D2_SetRangeConfig() {
 
     cmd.addToken(OPAL_TOKEN::STARTLIST);
 
-    // Where (empty) — sedutil always includes this
-    cmd.addToken(OPAL_TOKEN::STARTNAME);
-    cmd.addToken(OPAL_TOKEN::WHERE);
-    cmd.addToken(OPAL_TOKEN::STARTLIST);
-    cmd.addToken(OPAL_TOKEN::ENDLIST);
-    cmd.addToken(OPAL_TOKEN::ENDNAME);
-
-    // Values
+    // Object.Set per TCG Core Spec §5.3.3 — no Where for object set.
+    // (Removed: empty Where named pair was a hand-rolled assumption that
+    //  matched cats's mistake but disagrees with real sedutil-cli wire.)
     cmd.addToken(OPAL_TOKEN::STARTNAME);
     cmd.addToken(OPAL_TOKEN::VALUES);
     cmd.addToken(OPAL_TOKEN::STARTLIST);
@@ -746,14 +734,9 @@ static Packet buildSedutil_D3_SetRangeLock() {
 
     cmd.addToken(OPAL_TOKEN::STARTLIST);
 
-    // Where (empty) — sedutil always includes this
-    cmd.addToken(OPAL_TOKEN::STARTNAME);
-    cmd.addToken(OPAL_TOKEN::WHERE);
-    cmd.addToken(OPAL_TOKEN::STARTLIST);
-    cmd.addToken(OPAL_TOKEN::ENDLIST);
-    cmd.addToken(OPAL_TOKEN::ENDNAME);
-
-    // Values
+    // Object.Set per TCG Core Spec §5.3.3 — no Where for object set.
+    // (Removed: empty Where named pair was a hand-rolled assumption that
+    //  matched cats's mistake but disagrees with real sedutil-cli wire.)
     cmd.addToken(OPAL_TOKEN::STARTNAME);
     cmd.addToken(OPAL_TOKEN::VALUES);
     cmd.addToken(OPAL_TOKEN::STARTLIST);

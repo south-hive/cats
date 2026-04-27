@@ -23,10 +23,6 @@ static void compareSet_MBRControl_Enable(Section& sec, uint32_t tsn, uint8_t val
     cmd.reset(OPAL_MBRCONTROL, SET);
     cmd.addToken(OPAL_TOKEN::STARTLIST);
       cmd.addToken(OPAL_TOKEN::STARTNAME);
-        cmd.addToken(OPAL_TOKEN::WHERE);
-        cmd.addToken(OPAL_TOKEN::STARTLIST); cmd.addToken(OPAL_TOKEN::ENDLIST);
-      cmd.addToken(OPAL_TOKEN::ENDNAME);
-      cmd.addToken(OPAL_TOKEN::STARTNAME);
         cmd.addToken(OPAL_TOKEN::VALUES);
         cmd.addToken(OPAL_TOKEN::STARTLIST);
           cmd.addToken(OPAL_TOKEN::STARTNAME); cmd.addToken(OPAL_TOKEN::MBRENABLE); cmd.addToken((uint64_t)value); cmd.addToken(OPAL_TOKEN::ENDNAME);
@@ -55,10 +51,6 @@ static void compareSet_MBRControl_Done(Section& sec, uint32_t tsn, uint8_t value
     DtaCommand cmd;
     cmd.reset(OPAL_MBRCONTROL, SET);
     cmd.addToken(OPAL_TOKEN::STARTLIST);
-      cmd.addToken(OPAL_TOKEN::STARTNAME);
-        cmd.addToken(OPAL_TOKEN::WHERE);
-        cmd.addToken(OPAL_TOKEN::STARTLIST); cmd.addToken(OPAL_TOKEN::ENDLIST);
-      cmd.addToken(OPAL_TOKEN::ENDNAME);
       cmd.addToken(OPAL_TOKEN::STARTNAME);
         cmd.addToken(OPAL_TOKEN::VALUES);
         cmd.addToken(OPAL_TOKEN::STARTLIST);

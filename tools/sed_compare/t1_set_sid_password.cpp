@@ -40,11 +40,6 @@ void runSetSIDPassword() {
         cmd.reset(OPAL_C_PIN_SID, SET);
         cmd.addToken(OPAL_TOKEN::STARTLIST);
         cmd.addToken(OPAL_TOKEN::STARTNAME);
-          cmd.addToken(OPAL_TOKEN::WHERE);
-          cmd.addToken(OPAL_TOKEN::STARTLIST);
-          cmd.addToken(OPAL_TOKEN::ENDLIST);
-        cmd.addToken(OPAL_TOKEN::ENDNAME);
-        cmd.addToken(OPAL_TOKEN::STARTNAME);
           cmd.addToken(OPAL_TOKEN::VALUES);
           cmd.addToken(OPAL_TOKEN::STARTLIST);
             cmd.addToken(OPAL_TOKEN::STARTNAME);

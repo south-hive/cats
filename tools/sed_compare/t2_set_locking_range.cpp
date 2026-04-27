@@ -33,10 +33,6 @@ static void compareSetRangeLockState(Section& sec, uint32_t tsn,
     cmd.reset(rangeUid, setMethod);
     cmd.addToken(OPAL_TOKEN::STARTLIST);
       cmd.addToken(OPAL_TOKEN::STARTNAME);
-        cmd.addToken(OPAL_TOKEN::WHERE);
-        cmd.addToken(OPAL_TOKEN::STARTLIST); cmd.addToken(OPAL_TOKEN::ENDLIST);
-      cmd.addToken(OPAL_TOKEN::ENDNAME);
-      cmd.addToken(OPAL_TOKEN::STARTNAME);
         cmd.addToken(OPAL_TOKEN::VALUES);
         cmd.addToken(OPAL_TOKEN::STARTLIST);
           cmd.addToken(OPAL_TOKEN::STARTNAME); cmd.addToken(OPAL_TOKEN::READLOCKED);  cmd.addToken((uint64_t)rl); cmd.addToken(OPAL_TOKEN::ENDNAME);

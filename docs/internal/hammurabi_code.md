@@ -40,17 +40,48 @@ else            → 0x88 + 8 bytes
 
 ---
 
-## LAW 3: Set method MUST include empty Where clause
+## LAW 3: Object.Set has NO Where clause; only Byte-Table writes do
 
-Every Set operation must encode:
+**Object.Set** (CPIN_SID, LockingRange row, MBRControl row, ACE, Authority,
+…): the InvokingUID identifies the row directly. Per TCG Core Spec §5.3.3,
+the encoding is `[ Values : list_of_named_values ]` — **no Where**:
+
 ```
-STARTNAME 0 STARTLIST ENDLIST ENDNAME    ← Where (empty, but REQUIRED)
-STARTNAME 1 STARTLIST values ENDLIST ENDNAME  ← Values
+STARTLIST
+  STARTNAME 1 STARTLIST  values  ENDLIST ENDNAME    ← only Values
+ENDLIST
 ```
 
-**Never** emit Values without Where, even though Where is empty.
+**Byte-Table writes** (raw MBR area, DataStore offset write): the table
+holds a flat byte array; Where carries the offset:
 
-**Why:** Missing Where clause caused 5-byte mismatch with sedutil in ALL Set operations (setCPin, setRange, setMbrEnable, etc.)
+```
+STARTLIST
+  STARTNAME 0 [offset]                   ENDNAME    ← Where = byte offset
+  STARTNAME 1 [bytes]                    ENDNAME    ← Values = bytes
+ENDLIST
+```
+
+`MethodCall::buildSet()` is for Object.Set only and does NOT emit Where.
+Byte-table writers (`EvalApi::writeMbrData`, DataStore writes) build their
+tokens manually with the offset Where.
+
+**Why:** This rule was originally LAW 3 in the OPPOSITE direction
+("MUST include empty Where") — that was wrong. The wrong rule survived
+because:
+  - `e41c77d` (2026-04-17 15:32) correctly removed the empty Where
+    citing TCG Core Spec §5.3.3.
+  - `deac2e6` (2026-04-17 20:21, 5 hours later) wrongly re-added it
+    based on `sed_compare`'s hand-rolled DtaCommand reference (which
+    had the same misreading as cats — false-positive PASS).
+  - User-captured `sedutil-cli` hex dump on hardware 2026-04-27 finally
+    showed the truth: no Where for `CPIN_SID.Set` (74 B vs 69 B
+    subpacket length, exactly the 5-byte empty-Where overhead).
+
+This is the **second** instance of the same hand-rolled-reference trap;
+the first was CellBlock (LAW 16). See LAW 17 — `golden_validator` with
+real-hardware fixtures is the only sound validation; spec-text reading
++ hand-rolled reference is not.
 
 ---
 

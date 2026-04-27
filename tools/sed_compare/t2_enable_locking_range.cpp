@@ -31,10 +31,6 @@ static void compareSetRange_EnableLocking(Section& sec, uint32_t tsn,
     cmd.reset(rangeUid, setMethod);
     cmd.addToken(OPAL_TOKEN::STARTLIST);
       cmd.addToken(OPAL_TOKEN::STARTNAME);
-        cmd.addToken(OPAL_TOKEN::WHERE);
-        cmd.addToken(OPAL_TOKEN::STARTLIST); cmd.addToken(OPAL_TOKEN::ENDLIST);
-      cmd.addToken(OPAL_TOKEN::ENDNAME);
-      cmd.addToken(OPAL_TOKEN::STARTNAME);
         cmd.addToken(OPAL_TOKEN::VALUES);
         cmd.addToken(OPAL_TOKEN::STARTLIST);
           cmd.addToken(OPAL_TOKEN::STARTNAME); cmd.addToken(OPAL_TOKEN::READLOCKENABLED);  cmd.addToken((uint64_t)1); cmd.addToken(OPAL_TOKEN::ENDNAME);
@@ -69,10 +65,6 @@ static void compareSetRange_DisableLocking(Section& sec, uint32_t tsn,
     DtaCommand cmd;
     cmd.reset(rangeUid, setMethod);
     cmd.addToken(OPAL_TOKEN::STARTLIST);
-      cmd.addToken(OPAL_TOKEN::STARTNAME);
-        cmd.addToken(OPAL_TOKEN::WHERE);
-        cmd.addToken(OPAL_TOKEN::STARTLIST); cmd.addToken(OPAL_TOKEN::ENDLIST);
-      cmd.addToken(OPAL_TOKEN::ENDNAME);
       cmd.addToken(OPAL_TOKEN::STARTNAME);
         cmd.addToken(OPAL_TOKEN::VALUES);
         cmd.addToken(OPAL_TOKEN::STARTLIST);

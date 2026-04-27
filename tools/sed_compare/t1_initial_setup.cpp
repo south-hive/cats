@@ -48,10 +48,6 @@ static void compareSet_CPIN_SID(Section& sec, uint32_t tsn, const char* pw) {
     cmd.reset(OPAL_C_PIN_SID, SET);
     cmd.addToken(OPAL_TOKEN::STARTLIST);
       cmd.addToken(OPAL_TOKEN::STARTNAME);
-        cmd.addToken(OPAL_TOKEN::WHERE);
-        cmd.addToken(OPAL_TOKEN::STARTLIST); cmd.addToken(OPAL_TOKEN::ENDLIST);
-      cmd.addToken(OPAL_TOKEN::ENDNAME);
-      cmd.addToken(OPAL_TOKEN::STARTNAME);
         cmd.addToken(OPAL_TOKEN::VALUES);
         cmd.addToken(OPAL_TOKEN::STARTLIST);
           cmd.addToken(OPAL_TOKEN::STARTNAME);
@@ -135,10 +131,6 @@ static void compareSet_GlobalRange_DisableLocking(Section& sec, uint32_t tsn) {
     cmd.reset(OPAL_LOCKINGRANGE_GLOBAL, SET);
     cmd.addToken(OPAL_TOKEN::STARTLIST);
       cmd.addToken(OPAL_TOKEN::STARTNAME);
-        cmd.addToken(OPAL_TOKEN::WHERE);
-        cmd.addToken(OPAL_TOKEN::STARTLIST); cmd.addToken(OPAL_TOKEN::ENDLIST);
-      cmd.addToken(OPAL_TOKEN::ENDNAME);
-      cmd.addToken(OPAL_TOKEN::STARTNAME);
         cmd.addToken(OPAL_TOKEN::VALUES);
         cmd.addToken(OPAL_TOKEN::STARTLIST);
           cmd.addToken(OPAL_TOKEN::STARTNAME); cmd.addToken(OPAL_TOKEN::READLOCKENABLED);  cmd.addToken((uint64_t)0); cmd.addToken(OPAL_TOKEN::ENDNAME);
@@ -167,10 +159,6 @@ static void compareSet_GlobalRange_Unlock(Section& sec, uint32_t tsn) {
     cmd.reset(OPAL_LOCKINGRANGE_GLOBAL, SET);
     cmd.addToken(OPAL_TOKEN::STARTLIST);
       cmd.addToken(OPAL_TOKEN::STARTNAME);
-        cmd.addToken(OPAL_TOKEN::WHERE);
-        cmd.addToken(OPAL_TOKEN::STARTLIST); cmd.addToken(OPAL_TOKEN::ENDLIST);
-      cmd.addToken(OPAL_TOKEN::ENDNAME);
-      cmd.addToken(OPAL_TOKEN::STARTNAME);
         cmd.addToken(OPAL_TOKEN::VALUES);
         cmd.addToken(OPAL_TOKEN::STARTLIST);
           cmd.addToken(OPAL_TOKEN::STARTNAME); cmd.addToken(OPAL_TOKEN::READLOCKED);  cmd.addToken((uint64_t)0); cmd.addToken(OPAL_TOKEN::ENDNAME);
@@ -197,10 +185,6 @@ static void compareSet_MBRControl_Enable0(Section& sec, uint32_t tsn) {
     DtaCommand cmd;
     cmd.reset(OPAL_MBRCONTROL, SET);
     cmd.addToken(OPAL_TOKEN::STARTLIST);
-      cmd.addToken(OPAL_TOKEN::STARTNAME);
-        cmd.addToken(OPAL_TOKEN::WHERE);
-        cmd.addToken(OPAL_TOKEN::STARTLIST); cmd.addToken(OPAL_TOKEN::ENDLIST);
-      cmd.addToken(OPAL_TOKEN::ENDNAME);
       cmd.addToken(OPAL_TOKEN::STARTNAME);
         cmd.addToken(OPAL_TOKEN::VALUES);
         cmd.addToken(OPAL_TOKEN::STARTLIST);

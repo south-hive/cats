@@ -81,16 +81,21 @@ Bytes MethodCall::buildSet(const Uid& objectUid, const TokenList& values,
                             uint64_t methodUid) {
     TokenEncoder paramEnc;
 
-    // Where (empty) — sedutil always includes this with proper ENDNAME.
-    // Our original code was missing ENDNAME, causing the token stream to be
-    // malformed and producing St=0x0C on strict drives.
-    paramEnc.startName();
-    paramEnc.encodeUint(0); // "Where" keyword
-    paramEnc.startList();
-    paramEnc.endList();
-    paramEnc.endName();     // Must close the named pair (was missing before!)
-
-    // Values
+    // Object.Set per TCG Core Spec §5.3.3: `ObjectUID.Set [ Values : list ]`.
+    // No Where — the object position is identified by the InvokingUID itself.
+    //
+    // History note: this was correctly removed in e41c77d (2026-04-17), then
+    // wrongly re-added in deac2e6 (5 h later) based on the hand-rolled
+    // DtaCommand reference in sed_compare. Real sedutil-cli on hardware does
+    // NOT send Where for object sets — confirmed by user-captured hex dump
+    // 2026-04-27 (cats=74B vs sedutil=69B subpacket, exactly 5B = empty Where
+    // overhead).
+    //
+    // Byte-table writes (DataStore, raw MBR) do need Where with row offset,
+    // but those paths bypass buildSet and encode tokens manually
+    // (see EvalApi::writeMbrData / writeDataStore).
+    //
+    // See LAW 3 and LAW 17 in docs/internal/hammurabi_code.md.
     paramEnc.startName();
     paramEnc.encodeUint(1); // "Values" keyword
     paramEnc.startList();

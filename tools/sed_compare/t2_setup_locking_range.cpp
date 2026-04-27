@@ -49,10 +49,6 @@ void runSetupLockingRange() {
         cmd.reset(rangeUid, setMethod);
         cmd.addToken(OPAL_TOKEN::STARTLIST);
           cmd.addToken(OPAL_TOKEN::STARTNAME);
-            cmd.addToken(OPAL_TOKEN::WHERE);
-            cmd.addToken(OPAL_TOKEN::STARTLIST); cmd.addToken(OPAL_TOKEN::ENDLIST);
-          cmd.addToken(OPAL_TOKEN::ENDNAME);
-          cmd.addToken(OPAL_TOKEN::STARTNAME);
             cmd.addToken(OPAL_TOKEN::VALUES);
             cmd.addToken(OPAL_TOKEN::STARTLIST);
               cmd.addToken(OPAL_TOKEN::STARTNAME); cmd.addToken(OPAL_TOKEN::RANGESTART);       cmd.addToken((uint64_t)rangeStart);  cmd.addToken(OPAL_TOKEN::ENDNAME);

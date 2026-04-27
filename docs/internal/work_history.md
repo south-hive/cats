@@ -1,5 +1,75 @@
 # Work History
 
+## Session 2026-04-27 (2) — Object.Set 의 empty Where 회귀 (LAW 3 반전)
+
+### What was done
+
+CellBlock 회귀(`d94a674`→`71a6818`) 와 똑같은 패턴이 `MethodCall::buildSet`
+에서도 발견됨. 사용자가 `C_PIN<SID>.Set` 의 cats vs 실 sedutil-cli hex
+dump 비교에서 5바이트 차이를 발견.
+
+**증상**: cats subpacket length = 74, sedutil = 69. 차이는 정확히
+`f2 00 f0 f1 f3` (empty Where 5바이트). cats 가 Object.Set 에 대해
+empty Where 를 송신하고 있었음.
+
+**진단**:
+- TCG Core Spec §5.3.3: `ObjectUID.Set [ Values : list ]` — Where 없음.
+  객체 위치는 InvokingUID 가 가리킴.
+- Byte-Table.Set (DataStore, raw MBR) 만 Where 를 사용 (offset 운반).
+- `e41c77d` (2026-04-17 15:32) 가 Where 를 정확히 제거했으나 5시간 후
+  `deac2e6` 에서 hand-rolled `DtaCommand` reference 에 맞춰 잘못 재추가.
+- `sed_compare` 의 reference 가 같은 misreading 을 공유해서 매번 PASS.
+- 사용자 실 하드웨어 capture 가 정답 (LAW 17 적용 사례 #2).
+
+### 변경 사항
+
+- **`src/method/method_call.cpp::buildSet`**: empty Where 제거. Values
+  pair 만 emit. 주석에 회귀 history 와 byte-table 우회 경로 명시.
+- **`tools/sed_compare/`**: 8개 파일에서 hand-rolled WHERE 블록 제거
+  (`t1_initial_setup`, `t1_set_sid_password`, `t2_enable_locking_range`,
+  `t2_enable_user`, `t2_set_locking_range`, `t2_set_password`,
+  `t2_setup_locking_range`, `t3_set_mbr`).
+- **`tests/integration/ioctl_validator.cpp`**: B.2 (SetSidPin), 그리고
+  range setup 두 곳의 hand-rolled WHERE 블록 제거.
+- **`docs/internal/hammurabi_code.md` LAW 3**: 정반대로 재작성.
+  과거 LAW 3 ("MUST include empty Where") 가 잘못이었음을 명시. 새
+  rule: Object.Set 은 Where 없음 / Byte-Table.Set 은 Where 있음.
+  whiplash history (e41c77d → deac2e6 → 오늘) 기록.
+- **`docs/rosetta_stone.md` §4e**: empty Where 제거. §4e' (Byte-Table
+  Set with Where) 신설.
+
+### 핵심 학습
+
+- LAW 16 (CellBlock) 과 정확히 같은 패턴. **이번이 두 번째**. hand-rolled
+  reference 가 cats 와 같은 misreading 을 공유하는 한 sed_compare 는
+  영원히 PASS.
+- **Hammurabi 의 법조문 자체도 잘못될 수 있다.** LAW 3 은 이번까지 약
+  10일간 정반대 방향으로 코드 변경을 강제하고 있었음. 사용자 실
+  하드웨어 capture (LAW 17 의 level 1) 만이 그것을 깰 수 있었음.
+- 향후 모든 hand-rolled reference 추가는 **반드시 동일한 op 의 골든
+  fixture 를 함께 추가**해야 한다는 절차가 필요. (LAW 17 의 "Process
+  for new operation" 항목)
+
+### Current state
+
+- ctest 5/6 PASS — `cats_cli_smoke` 만 권한 fail (코드 무관).
+- `sed_compare` 68/68 byte-identical (hand-rolled reference 이지만 cats
+  fix 와 동기 정정).
+- `ioctl_validator` 17/17 PASS.
+- `examples/05_take_ownership` / `22_sedutil_initial_setup` 빌드 OK,
+  하드웨어 검증은 사용자 측.
+
+### 다음 세션에서 이어갈 수 있는 작업
+
+| 항목 | 난이도 |
+|------|-------|
+| 실 fixture 가 들어온 뒤 cats Set encoding 검증 (Set CPIN_SID, Set Range, Set MBRControl) | 하드웨어 필요 |
+| Authenticate / Activate / RevertSP 도 hardware capture 로 cross-check | 하드웨어 필요 |
+| Hammurabi 의 모든 wire-level law 를 hardware capture 로 1차 sweep audit | 하드웨어 필요 |
+| `golden_validator` builder 에 Set CPIN_SID / Set Range / Set MBRControl 추가 (현재는 Get/Activate 위주) | 중 |
+
+---
+
 ## Session 2026-04-27 — CellBlock inner-list 회귀 + golden_validator 확장 + 근간 문서 정합
 
 ### What was done

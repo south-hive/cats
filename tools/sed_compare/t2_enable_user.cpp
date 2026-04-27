@@ -39,10 +39,6 @@ void runEnableUser() {
         cmd.reset(userUid, setMethod);
         cmd.addToken(OPAL_TOKEN::STARTLIST);
           cmd.addToken(OPAL_TOKEN::STARTNAME);
-            cmd.addToken(OPAL_TOKEN::WHERE);
-            cmd.addToken(OPAL_TOKEN::STARTLIST); cmd.addToken(OPAL_TOKEN::ENDLIST);
-          cmd.addToken(OPAL_TOKEN::ENDNAME);
-          cmd.addToken(OPAL_TOKEN::STARTNAME);
             cmd.addToken(OPAL_TOKEN::VALUES);
             cmd.addToken(OPAL_TOKEN::STARTLIST);
               cmd.addToken(OPAL_TOKEN::STARTNAME);

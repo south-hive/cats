@@ -173,22 +173,51 @@ hand-rolled reference but disagreeing with what real sedutil-cli actually
 sends to drives. Real-hardware capture (cats=35B vs sedutil=37B, diff = inner
 `f0`/`f1` pair) corrected this. See LAW 16, LAW 17 in `hammurabi_code.md`.
 
-### 4e. Set with Values (in-session, TSN=N/HSN=105)
+### 4e. Object.Set with Values (in-session, TSN=N/HSN=105)
+
+For `ObjectUID.Set [ Values : list ]` — the object position is identified by
+the InvokingUID itself, so **no Where**.
 
 ```
 F8                              CALL
-A8 [object_uid]                 e.g., CPIN_SID
+A8 [object_uid]                 e.g., CPIN_SID, LOCKING_GLOBALRANGE, MBRCTRL_SET
 A8 [SET method]                 0x0000000600000017
 F0                              STARTLIST
-  F2 00 F0 F1 F3               Where (EMPTY but required — STARTNAME 0 STARTLIST ENDLIST ENDNAME)
-  F2 01                         Values (index=1)
+  F2 01                         Values (key = uint 1)
     F0                          STARTLIST
-      F2 03 A8 [pin_bytes] F3  PIN column(3) = bytes
+      F2 03 A8 [pin_bytes] F3   PIN column(3) = bytes
     F1                          ENDLIST
   F3                            ENDNAME
 F1                              ENDLIST
 F9 F0 00 00 00 F1               EOD + status
 ```
+
+**No empty Where.** This doc previously showed `F2 00 F0 F1 F3` (empty
+Where) before the Values pair — that was wrong, and matched libsed's wrong
+encoding for ~9 days (2026-04-17 to 2026-04-27). User-captured sedutil
+hex dump on real hardware showed cats=74B vs sedutil=69B subpacket — the
+5-byte difference was exactly the empty-Where overhead. See LAW 3 in
+`hammurabi_code.md`.
+
+For **Byte-Table writes** (DataStore, raw MBR shadow), Where IS used and
+carries the byte offset — see §4e' below.
+
+### 4e'. Byte-Table.Set with Where (DataStore / raw MBR write)
+
+```
+F8                              CALL
+A8 [byte_table_uid]             e.g., TABLE_MBR, DATASTORE_TABLE_0
+A8 [SET method]                 0x0000000600000017
+F0                              STARTLIST
+  F2 00 [offset]              F3   Where (key=0) = uint byte offset
+  F2 01 [byte_data]           F3   Values (key=1) = bytes
+F1                              ENDLIST
+F9 F0 00 00 00 F1               EOD + status
+```
+
+In libsed: `EvalApi::writeMbrData(offset, data)` and DataStore writes
+build these tokens manually (NOT through `MethodCall::buildSet`, which
+is for object set only).
 
 ### 4f. Activate / RevertSP / Erase / GenKey (empty params)
 
