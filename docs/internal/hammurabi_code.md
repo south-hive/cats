@@ -450,13 +450,27 @@ Same in reverse (sedutil-Set drive + libsed-Auth).
 3. Document the divergence at the entry point (CLI flag help text,
    API docstring, README).
 
-### Optional sedutil-compat path (not yet implemented)
+### Optional sedutil-compat path (implemented 2026-04-28)
 
-`HashPassword` ships `sha256`, `hmacSha256`, `pbkdf2Sha256`, but **NOT**
-`pbkdf2Sha1`. Implementing it as `HashPassword::sedutilCompatHash(password,
-serial)` would let users explicitly opt into cross-tool compatibility
-without changing libsed's default. Do not bolt this on as a default —
-it is irreversibly destructive to existing libsed-set drives.
+`HashPassword` now ships `sha1`, `hmacSha1`, `pbkdf2Sha1`, and
+`sedutilHash(password, drive_serial, iter=75000, keyLen=32)`.
+`EvalApi::getNvmeSerial(transport, &serial)` extracts the 20-byte
+NVMe Identify Controller SN field for use as PBKDF2 salt.
+
+Wire-form output: `D0 20 [32 bytes]` — byte-identical to sedutil-cli
+(DTA fork) `DtaHashPwd` for the same password+serial combination.
+
+Reference example: `examples/23_sedutil_compat_setup.cpp` runs the same
+6-session initialSetup as `22_sedutil_initial_setup` but with
+sedutil-compatible hashing. The two examples are interchangeable for
+cats-only lifecycle (each is self-consistent), but only #23 produces
+wire bytes that survive a tool swap to sedutil-cli on the same drive.
+
+Default behavior is **unchanged** — `string`-overload `setCPin`,
+`startSessionWithAuth`, `takeOwnership`, etc. still call
+`HashPassword::passwordToBytes` (= SHA-256). Switching the default is
+irreversibly destructive to every libsed-set drive in the field, so it
+remains opt-in (use `Bytes` overloads with `sedutilHash` output).
 
 **Why:** Silent data-loss landmine. Discovered 2026-04-27 during user-led
 review when the user asked "do cats and sedutil handle the password

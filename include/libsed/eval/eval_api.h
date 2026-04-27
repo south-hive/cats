@@ -1316,6 +1316,15 @@ public:
     static Result nvmeIdentify(std::shared_ptr<ITransport> transport,
                                uint8_t cns, uint32_t nsid, Bytes& data);
 
+    /// @brief NVMe Identify Controller 의 SN 필드(20 바이트) 추출 — sedutil
+    /// 호환 password hash (`HashPassword::sedutilHash`) 의 salt 로 직접
+    /// 전달하기 위한 편의 helper. trailing 0x20 padding 도 그대로 포함됨.
+    /// @param transport 전송 인터페이스
+    /// @param serial   20-byte SN field (출력)
+    /// @return 성공 또는 오류 코드
+    static Result getNvmeSerial(std::shared_ptr<ITransport> transport,
+                                  Bytes& serial);
+
     /// @brief NVMe Get Log Page 수행
     /// @param transport 전송 인터페이스
     /// @param logId 로그 페이지 ID

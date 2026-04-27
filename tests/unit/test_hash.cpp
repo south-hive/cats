@@ -25,6 +25,18 @@ static bool bytesMatchHex(const Bytes& actual, const char* hex32) {
     return true;
 }
 
+// Variable-length hex compare — for SHA-1 (20B), HMAC-SHA1 (20B),
+// PBKDF2-SHA1 of arbitrary dkLen.
+static bool bytesMatchHexN(const Bytes& actual, const char* hex, size_t expectLen) {
+    if (actual.size() != expectLen) return false;
+    for (size_t i = 0; i < expectLen; ++i) {
+        unsigned v;
+        if (sscanf(hex + i*2, "%02x", &v) != 1) return false;
+        if (actual[i] != (uint8_t)v) return false;
+    }
+    return true;
+}
+
 // ── SHA-256 vectors (NIST FIPS 180-2) ──────────────────────────────
 
 TEST(Hash, Sha256Empty) {
@@ -125,6 +137,115 @@ TEST(Hash, PasswordToBytes_StableForSamePassword) {
     EXPECT_EQ(a, b);
 }
 
+// ── SHA-1 vectors (FIPS 180-4 / RFC 3174) ──────────────────────────
+
+TEST(Hash, Sha1Empty) {
+    auto h = HashPassword::sha1(nullptr, 0);
+    EXPECT_TRUE(bytesMatchHexN(h,
+        "da39a3ee5e6b4b0d3255bfef95601890afd80709", 20));
+}
+
+TEST(Hash, Sha1Abc) {
+    std::string msg = "abc";
+    auto h = HashPassword::sha1(reinterpret_cast<const uint8_t*>(msg.data()), msg.size());
+    EXPECT_TRUE(bytesMatchHexN(h,
+        "a9993e364706816aba3e25717850c26c9cd0d89d", 20));
+}
+
+TEST(Hash, Sha1LongString) {
+    // FIPS 180-4 §A.2 — 56-byte test vector
+    std::string msg = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
+    auto h = HashPassword::sha1(reinterpret_cast<const uint8_t*>(msg.data()), msg.size());
+    EXPECT_TRUE(bytesMatchHexN(h,
+        "84983e441c3bd26ebaae4aa1f95129e5e54670f1", 20));
+}
+
+// ── HMAC-SHA-1 vectors (RFC 2202) ──────────────────────────────────
+
+TEST(Hash, HmacSha1_Rfc2202_Case1) {
+    // key = 20 bytes 0x0b, data = "Hi There"
+    Bytes key(20, 0x0b);
+    std::string data = "Hi There";
+    Bytes msg(data.begin(), data.end());
+    auto mac = HashPassword::hmacSha1(key, msg);
+    EXPECT_TRUE(bytesMatchHexN(mac,
+        "b617318655057264e28bc0b6fb378c8ef146be00", 20));
+}
+
+TEST(Hash, HmacSha1_Rfc2202_Case2) {
+    // key = "Jefe", data = "what do ya want for nothing?"
+    std::string keyStr = "Jefe";
+    Bytes key(keyStr.begin(), keyStr.end());
+    std::string data = "what do ya want for nothing?";
+    Bytes msg(data.begin(), data.end());
+    auto mac = HashPassword::hmacSha1(key, msg);
+    EXPECT_TRUE(bytesMatchHexN(mac,
+        "effcdf6ae5eb2fa2d27416d5f184df9c259a7c79", 20));
+}
+
+// ── PBKDF2-HMAC-SHA1 vectors (RFC 6070) ────────────────────────────
+
+TEST(Hash, Pbkdf2Sha1_Rfc6070_Case1) {
+    Bytes salt = {'s','a','l','t'};
+    auto dk = HashPassword::pbkdf2Sha1("password", salt, /*iter*/1, /*dkLen*/20);
+    EXPECT_TRUE(bytesMatchHexN(dk,
+        "0c60c80f961f0e71f3a9b524af6012062fe037a6", 20));
+}
+
+TEST(Hash, Pbkdf2Sha1_Rfc6070_Case2) {
+    Bytes salt = {'s','a','l','t'};
+    auto dk = HashPassword::pbkdf2Sha1("password", salt, /*iter*/2, /*dkLen*/20);
+    EXPECT_TRUE(bytesMatchHexN(dk,
+        "ea6c014dc72d6f8ccd1ed92ace1d41f0d8de8957", 20));
+}
+
+TEST(Hash, Pbkdf2Sha1_Rfc6070_Case3) {
+    Bytes salt = {'s','a','l','t'};
+    auto dk = HashPassword::pbkdf2Sha1("password", salt, /*iter*/4096, /*dkLen*/20);
+    EXPECT_TRUE(bytesMatchHexN(dk,
+        "4b007901b765489abead49d926f721d065a429c1", 20));
+}
+
+TEST(Hash, Pbkdf2Sha1_Rfc6070_Case5_LongerOutput) {
+    // dkLen=25 forces 2 PBKDF2 blocks (20 + 5 bytes from 2nd block).
+    // Verifies the multi-block accumulation logic.
+    Bytes salt;
+    std::string saltStr = "saltSALTsaltSALTsaltSALTsaltSALTsalt";
+    salt.assign(saltStr.begin(), saltStr.end());
+    auto dk = HashPassword::pbkdf2Sha1("passwordPASSWORDpassword",
+                                         salt, /*iter*/4096, /*dkLen*/25);
+    EXPECT_TRUE(bytesMatchHexN(dk,
+        "3d2eec4fe41c849b80c8d83662c0e44a8b291a964cf2f07038", 25));
+}
+
+// ── sedutilHash() — sedutil-cli (DTA fork) compatibility ──────────
+
+TEST(Hash, SedutilHash_DelegatesToPbkdf2Sha1) {
+    // sedutilHash 는 pbkdf2Sha1 의 wrapper. RFC 6070 Case 3 인자로 호출
+    // 했을 때 같은 결과가 나오는지 확인 (default iter/keyLen 무시하고
+    // 명시 인자 사용).
+    Bytes salt = {'s','a','l','t'};
+    auto dk = HashPassword::sedutilHash("password", salt,
+                                          /*iter*/4096, /*keyLen*/20);
+    EXPECT_TRUE(bytesMatchHexN(dk,
+        "4b007901b765489abead49d926f721d065a429c1", 20));
+}
+
+TEST(Hash, SedutilHash_Default_75000_32B) {
+    // sedutil DTA fork 의 실제 사용 형태 (iter=75000, keyLen=32) 은
+    // 단위 테스트 내에서 OpenSSL 등 외부 reference 없이 검증 곤란하므로
+    // 여기선 (a) 길이가 정확히 32B, (b) 같은 입력에 대해 결정론적,
+    // (c) 작은 변경에 민감 (확산성) 만 확인. 실제 wire-level byte-
+    // identical 검증은 hardware capture (golden_validator) 로 수행.
+    Bytes serial(20, 0x41); // 20 bytes 'A'
+    auto a = HashPassword::sedutilHash("password", serial);
+    auto b = HashPassword::sedutilHash("password", serial);
+    auto c = HashPassword::sedutilHash("Password", serial);  // P 대문자
+    EXPECT_EQ(a.size(), 32u);
+    EXPECT_EQ(a, b);
+    EXPECT_NE(a, c);
+}
+
 #ifndef GTEST_INCLUDE_GTEST_GTEST_H_
 void run_hash_tests() {
     printf("Hash tests:\n");
@@ -137,6 +258,17 @@ void run_hash_tests() {
     RUN_TEST(Hash, PasswordToBytes_Sha256OfInput);
     RUN_TEST(Hash, SedutilDivergence_Sha256VsPbkdf2Sha256);
     RUN_TEST(Hash, PasswordToBytes_StableForSamePassword);
+    RUN_TEST(Hash, Sha1Empty);
+    RUN_TEST(Hash, Sha1Abc);
+    RUN_TEST(Hash, Sha1LongString);
+    RUN_TEST(Hash, HmacSha1_Rfc2202_Case1);
+    RUN_TEST(Hash, HmacSha1_Rfc2202_Case2);
+    RUN_TEST(Hash, Pbkdf2Sha1_Rfc6070_Case1);
+    RUN_TEST(Hash, Pbkdf2Sha1_Rfc6070_Case2);
+    RUN_TEST(Hash, Pbkdf2Sha1_Rfc6070_Case3);
+    RUN_TEST(Hash, Pbkdf2Sha1_Rfc6070_Case5_LongerOutput);
+    RUN_TEST(Hash, SedutilHash_DelegatesToPbkdf2Sha1);
+    RUN_TEST(Hash, SedutilHash_Default_75000_32B);
     printf("  All Hash tests passed!\n\n");
 }
 #endif

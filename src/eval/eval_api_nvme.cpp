@@ -32,6 +32,24 @@ Result EvalApi::nvmeIdentify(std::shared_ptr<ITransport> transport,
     return dev->identify(cns, nsid, data);
 }
 
+Result EvalApi::getNvmeSerial(std::shared_ptr<ITransport> transport,
+                                Bytes& serial) {
+    // NVMe Identify Controller (CNS=0x01) layout:
+    //   bytes [0..3]   VID (Vendor ID)
+    //   bytes [4..23]  SN (Serial Number, 20 ASCII bytes, space-padded)
+    //   bytes [24..63] MN (Model Number, 40 bytes)
+    //   ...
+    //
+    // sedutil-cli uses these 20 bytes verbatim as the salt for
+    // PBKDF2-HMAC-SHA1, including any trailing 0x20 (space) padding.
+    Bytes id;
+    auto r = nvmeIdentify(transport, /*cns*/0x01, /*nsid*/0, id);
+    if (r.failed()) return r;
+    if (id.size() < 24) return ErrorCode::MalformedResponse;
+    serial.assign(id.begin() + 4, id.begin() + 24);
+    return ErrorCode::Success;
+}
+
 Result EvalApi::nvmeGetLogPage(std::shared_ptr<ITransport> transport,
                                 uint8_t logId, uint32_t nsid,
                                 Bytes& data, uint32_t dataLen) {

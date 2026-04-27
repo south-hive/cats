@@ -240,6 +240,7 @@ if(LIBSED_BUILD_EXAMPLES)
     add_executable(20_custom_transport    examples/20_custom_transport.cpp)
     add_executable(21_transactions        examples/21_transactions.cpp)
     add_executable(22_sedutil_initial_setup examples/22_sedutil_initial_setup.cpp)
+    add_executable(23_sedutil_compat_setup  examples/23_sedutil_compat_setup.cpp)
 
     target_link_libraries(14_error_handling      PRIVATE libsed)
     target_link_libraries(15_wire_inspection     PRIVATE libsed)
@@ -250,6 +251,7 @@ if(LIBSED_BUILD_EXAMPLES)
     target_link_libraries(20_custom_transport    PRIVATE libsed)
     target_link_libraries(21_transactions        PRIVATE libsed)
     target_link_libraries(22_sedutil_initial_setup PRIVATE libsed)
+    target_link_libraries(23_sedutil_compat_setup  PRIVATE libsed)
 endif()
 
 # ══════════════════════════════════════════════════════

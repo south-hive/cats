@@ -100,6 +100,94 @@ struct Sha256Ctx {
     }
 };
 
+// ── SHA-1 (RFC 3174 / FIPS 180-4) ──────────────────────────────────
+// 64-byte block, 20-byte output, 80 rounds with 4 round constants.
+// Style mirrors the SHA-256 ctx above for consistency.
+
+inline uint32_t rotl(uint32_t x, int n) { return (x << n) | (x >> (32 - n)); }
+
+struct Sha1Ctx {
+    uint32_t h[5] = {
+        0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0
+    };
+    uint8_t buf[64] = {};
+    uint64_t totalLen = 0;
+    size_t bufLen = 0;
+
+    void processBlock(const uint8_t* block) {
+        uint32_t w[80];
+        for (int i = 0; i < 16; i++) {
+            w[i] = (static_cast<uint32_t>(block[i*4]) << 24) |
+                   (static_cast<uint32_t>(block[i*4+1]) << 16) |
+                   (static_cast<uint32_t>(block[i*4+2]) << 8) |
+                   static_cast<uint32_t>(block[i*4+3]);
+        }
+        for (int i = 16; i < 80; i++) {
+            w[i] = rotl(w[i-3] ^ w[i-8] ^ w[i-14] ^ w[i-16], 1);
+        }
+
+        uint32_t a=h[0], b=h[1], c=h[2], d=h[3], e=h[4];
+
+        for (int i = 0; i < 80; i++) {
+            uint32_t f, k;
+            if (i < 20) {
+                f = (b & c) | ((~b) & d);
+                k = 0x5A827999;
+            } else if (i < 40) {
+                f = b ^ c ^ d;
+                k = 0x6ED9EBA1;
+            } else if (i < 60) {
+                f = (b & c) | (b & d) | (c & d);
+                k = 0x8F1BBCDC;
+            } else {
+                f = b ^ c ^ d;
+                k = 0xCA62C1D6;
+            }
+            uint32_t t = rotl(a, 5) + f + e + k + w[i];
+            e = d; d = c; c = rotl(b, 30); b = a; a = t;
+        }
+
+        h[0]+=a; h[1]+=b; h[2]+=c; h[3]+=d; h[4]+=e;
+    }
+
+    void update(const uint8_t* data, size_t len) {
+        totalLen += len;
+        while (len > 0) {
+            size_t space = 64 - bufLen;
+            size_t copy = std::min(len, space);
+            std::memcpy(buf + bufLen, data, copy);
+            bufLen += copy;
+            data += copy;
+            len -= copy;
+            if (bufLen == 64) {
+                processBlock(buf);
+                bufLen = 0;
+            }
+        }
+    }
+
+    std::array<uint8_t, 20> finalize() {
+        uint64_t bits = totalLen * 8;
+        uint8_t pad = 0x80;
+        update(&pad, 1);
+        pad = 0;
+        while (bufLen != 56) update(&pad, 1);
+
+        uint8_t lenBuf[8];
+        for (int i = 7; i >= 0; i--) { lenBuf[i] = static_cast<uint8_t>(bits & 0xFF); bits >>= 8; }
+        update(lenBuf, 8);
+
+        std::array<uint8_t, 20> result;
+        for (int i = 0; i < 5; i++) {
+            result[i*4]   = static_cast<uint8_t>((h[i] >> 24) & 0xFF);
+            result[i*4+1] = static_cast<uint8_t>((h[i] >> 16) & 0xFF);
+            result[i*4+2] = static_cast<uint8_t>((h[i] >> 8) & 0xFF);
+            result[i*4+3] = static_cast<uint8_t>(h[i] & 0xFF);
+        }
+        return result;
+    }
+};
+
 } // anonymous namespace
 
 Bytes HashPassword::sha256(const uint8_t* data, size_t len) {
@@ -205,6 +293,91 @@ Bytes HashPassword::passwordToBytes(const std::string& password) {
     // docs/rosetta_stone.md for the full risk model.
     return sha256(reinterpret_cast<const uint8_t*>(password.data()),
                   password.size());
+}
+
+// ── sedutil-compatible primitives ──────────────────────────────────
+
+Bytes HashPassword::sha1(const uint8_t* data, size_t len) {
+    Sha1Ctx ctx;
+    ctx.update(data, len);
+    auto hash = ctx.finalize();
+    return Bytes(hash.begin(), hash.end());
+}
+
+Bytes HashPassword::hmacSha1(const Bytes& key, const Bytes& data) {
+    constexpr size_t BLOCK_SIZE = 64;
+
+    Bytes k = key;
+    if (k.size() > BLOCK_SIZE) {
+        k = sha1(k);
+    }
+    k.resize(BLOCK_SIZE, 0);
+
+    Bytes ipad(BLOCK_SIZE), opad(BLOCK_SIZE);
+    for (size_t i = 0; i < BLOCK_SIZE; i++) {
+        ipad[i] = k[i] ^ 0x36;
+        opad[i] = k[i] ^ 0x5C;
+    }
+
+    // inner = SHA-1(ipad || data)
+    Sha1Ctx inner;
+    inner.update(ipad.data(), ipad.size());
+    inner.update(data.data(), data.size());
+    auto innerHash = inner.finalize();
+
+    // outer = SHA-1(opad || inner)
+    Sha1Ctx outer;
+    outer.update(opad.data(), opad.size());
+    outer.update(innerHash.data(), innerHash.size());
+    auto result = outer.finalize();
+
+    return Bytes(result.begin(), result.end());
+}
+
+Bytes HashPassword::pbkdf2Sha1(const std::string& password,
+                                 const Bytes& salt,
+                                 uint32_t iterations,
+                                 uint32_t keyLen) {
+    Bytes derivedKey;
+    derivedKey.reserve(keyLen);
+
+    Bytes passwordBytes(password.begin(), password.end());
+
+    uint32_t blockNum = 1;
+    while (derivedKey.size() < keyLen) {
+        // U1 = HMAC-SHA1(password, salt || INT32_BE(blockNum))
+        Bytes saltBlock = salt;
+        saltBlock.push_back(static_cast<uint8_t>((blockNum >> 24) & 0xFF));
+        saltBlock.push_back(static_cast<uint8_t>((blockNum >> 16) & 0xFF));
+        saltBlock.push_back(static_cast<uint8_t>((blockNum >> 8) & 0xFF));
+        saltBlock.push_back(static_cast<uint8_t>(blockNum & 0xFF));
+
+        Bytes u = hmacSha1(passwordBytes, saltBlock);
+        Bytes t = u;
+
+        for (uint32_t i = 1; i < iterations; i++) {
+            u = hmacSha1(passwordBytes, u);
+            for (size_t j = 0; j < t.size(); j++) {
+                t[j] ^= u[j];
+            }
+        }
+
+        size_t needed = std::min(static_cast<size_t>(keyLen) - derivedKey.size(), t.size());
+        derivedKey.insert(derivedKey.end(), t.begin(), t.begin() + needed);
+        blockNum++;
+    }
+
+    return derivedKey;
+}
+
+Bytes HashPassword::sedutilHash(const std::string& password,
+                                  const Bytes& driveSerial,
+                                  uint32_t iterations,
+                                  uint32_t keyLen) {
+    // sedutil-cli (DTA fork) DtaHashPwd:
+    //   gPBKDF2-HMAC-SHA1(password, drive_serial, 75000, derivedkey_len=32)
+    // Wire form: D0 20 [32 bytes].
+    return pbkdf2Sha1(password, driveSerial, iterations, keyLen);
 }
 
 } // namespace libsed

@@ -391,11 +391,42 @@ SedutilDivergence_Sha256VsPbkdf2Sha256`.
   `takeOwnership`, etc.) flow through this function.
 - `Bytes`-overload entry points pass the bytes through verbatim — use
   these for sedutil-compatible PINs or for raw MSID flows.
-- MSID is read from the drive (factory-set) and used **verbatim** as the
-  StartSession credential — no hashing applied. This part is correct
-  because sedutil also passes MSID verbatim.
+- MSID is read from the drive (factory-set). For `cats`-only lifecycle,
+  the raw MSID bytes can be passed verbatim. For `sedutil`-style
+  authentication on the same drive, MSID must also be hashed via
+  `sedutilHash(msid_string, drive_serial)` because sedutil's
+  `DtaSession::start` runs the credential through PBKDF2 unconditionally.
 - See LAW 21 in `hammurabi_code.md` for the full risk model and
   recovery considerations.
+
+### sedutil-compatible API (opt-in, since 2026-04-28)
+
+For users who must mix tools or want byte-identical wire output to
+sedutil-cli, libsed now ships building blocks (does not change the
+default):
+
+```
+HashPassword::sha1 / hmacSha1 / pbkdf2Sha1     — primitives
+HashPassword::sedutilHash(pw, drive_serial,
+                          iter=75000,
+                          keyLen=32)            — DTA-fork-compatible
+EvalApi::getNvmeSerial(transport, &serial)      — extract 20B salt
+```
+
+Usage pattern:
+```cpp
+Bytes serial;  api.getNvmeSerial(transport, serial);            // 20 B
+Bytes pin = HashPassword::sedutilHash("MyPW", serial);          // 32 B
+api.setCPin(session, CPIN_SID, pin, raw);                       // Bytes overload
+api.startSessionWithAuth(s, SP_ADMIN, true,
+                         AUTH_SID, pin, ssr);                    // Bytes overload
+```
+
+`examples/23_sedutil_compat_setup.cpp` is the full reference flow.
+
+This path is **opt-in only**. Calling the `string` overloads still
+produces SHA-256, unchanged from prior behavior. Default switch is
+**not safe** — would lock every libsed-set drive.
 
 ---
 
