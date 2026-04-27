@@ -113,6 +113,13 @@ public:
     /// @param ms  타임아웃 값 (밀리초)
     void setTimeout(uint32_t ms) { timeoutMs_ = ms; }
 
+    /// @brief StartSession 응답 후 첫 in-session 호출 전 대기 시간(ms).
+    ///
+    /// 일부 TPer는 SyncSession 응답을 보낸 직후 잠시 동안 in-session 호출을
+    /// 처리할 준비가 되어 있지 않아 0x0F(TPER_MALFUNCTION)으로 응답한다.
+    /// 50~100ms 정도의 대기로 회피 가능. 기본값은 0.
+    void setPostStartDelay(uint32_t ms) { postStartDelayMs_ = ms; }
+
     /// @brief 이 세션의 SSC 타입 설정 — Get/Set/Authenticate UID 선택에 사용됨.
     ///
     /// Opal/Pyrite(기본) 세션은 GET=0x16/SET=0x17/AUTHENTICATE=0x1C를 쓰고,
@@ -139,6 +146,7 @@ private:
     uint32_t hsn_ = 0;  // Host session number
     uint32_t maxComPacketSize_ = 2048;
     uint32_t timeoutMs_ = 30000;
+    uint32_t postStartDelayMs_ = 0;  // post-StartSession quiesce delay
     SscType sscType_ = SscType::Opal20;  // Default; call setSscType() for Enterprise
     static inline uint32_t sessionCounter_ = 105;  // sedutil hardcodes HSN=105
 };

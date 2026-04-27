@@ -43,6 +43,10 @@
 
 static std::string NEW_SID_PW;
 
+// 일부 TPer는 SyncSession 직후 ~수십 ms 동안 in-session 호출을 0x0F
+// (TPER_MALFUNCTION) 로 거부함. 50ms 면 대부분의 드라이브에서 충분.
+static constexpr uint32_t POST_START_DELAY_MS = 50;
+
 // ── 작은 유틸 ───────────────────────────────────────────
 
 static Session makeSession(std::shared_ptr<ITransport> transport,
@@ -50,7 +54,21 @@ static Session makeSession(std::shared_ptr<ITransport> transport,
                            const PropertiesResult& props) {
     Session s(transport, comId);
     s.setMaxComPacketSize(props.tperMaxComPacketSize);
+    s.setPostStartDelay(POST_START_DELAY_MS);
     return s;
+}
+
+/// 세션 간 ComID 상태 정리: StackReset 으로 Issued(idle) 상태로 강제 복귀.
+/// 이전 세션이 비정상 종료되었거나 ComID 가 Associated 상태로 남아 있어
+/// 다음 StartSession 이 0x0F 로 실패하는 것을 방지.
+static void betweenSessions(EvalApi& api,
+                            std::shared_ptr<ITransport> transport,
+                            uint16_t comId) {
+    auto r = api.stackReset(transport, comId);
+    if (r.failed()) {
+        printf("       (stackReset between ops failed: %s — continuing)\n",
+               r.message().c_str());
+    }
 }
 
 // ── A. takeOwnership ───────────────────────────────────
@@ -260,12 +278,17 @@ int main(int argc, char* argv[]) {
     r = api.exchangeProperties(transport, info.baseComId, props);
     if (r.failed()) { printf("Properties failed: %s\n", r.message().c_str()); return 1; }
 
-    // A ~ E 순차 실행. 어느 단계든 실패하면 중단.
+    // A ~ E 순차 실행. 각 sub-op 사이에 StackReset 으로 ComID 상태 초기화.
+    // 어느 단계든 실패하면 중단.
     Bytes msid;
     if (!opA_takeOwnership(transport, info.baseComId, props, msid)) return 1;
+    betweenSessions(api, transport, info.baseComId);
     if (!opB_activateLockingSP(transport, info.baseComId, props))   return 1;
+    betweenSessions(api, transport, info.baseComId);
     if (!opC_disableLocking  (transport, info.baseComId, props))    return 1;
+    betweenSessions(api, transport, info.baseComId);
     if (!opD_unlockGlobal    (transport, info.baseComId, props))    return 1;
+    betweenSessions(api, transport, info.baseComId);
     if (!opE_disableMbr      (transport, info.baseComId, props))    return 1;
 
     printf("\n  initialSetup completed. SID=newPw, LockingSP active,\n");

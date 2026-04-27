@@ -119,11 +119,25 @@ Result Session::startSession(const Uid& spUid, bool write,
     tsn_ = sessionParams.tperSessionNumber;
     hsn_ = sessionParams.hostSessionNumber;
 
+    // TSN=0 은 SM(세션 매니저)을 의미하므로 in-session 호출에 사용 불가.
+    // SyncSession 이 TSN=0 을 돌려주면 응답이 깨졌거나 TPer 가 비정상 상태.
+    if (tsn_ == 0) {
+        LIBSED_ERROR("SyncSession returned invalid TSN=0");
+        state_ = State::Idle;
+        return ErrorCode::MalformedResponse;
+    }
+
     // Update packet builder with session numbers
     packetBuilder_.setSessionNumbers(tsn_, hsn_);
 
     state_ = State::Active;
     LIBSED_INFO("Session started: TSN=%u HSN=%u", tsn_, hsn_);
+
+    // 일부 TPer는 SyncSession 응답 직후 in-session 호출에 대해 0x0F 를 반환.
+    // setPostStartDelay() 로 설정한 시간만큼 대기한 후 첫 호출 시도.
+    if (postStartDelayMs_ > 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(postStartDelayMs_));
+    }
 
     // ── Debug layer: post-session-start hook ──
     LIBSED_CHECK_FAULT_NP(debug::FaultPoint::AfterStartSession);
