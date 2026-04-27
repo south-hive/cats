@@ -355,13 +355,47 @@ Authority: column 5 = AUTH_ENABLED
 ```
 Tool        Algorithm         Salt                      Iter    Output   Wire
 ──────────  ────────────────  ────────────────────────  ──────  ───────  ──────────────────
-sedutil     PBKDF2-HMAC-SHA1  20-byte drive serial num  75000   20 B     D0 14 [20 bytes]
+sedutil     PBKDF2-HMAC-SHA1  drive serial / MSID       75000   20 B     D0 14 [20 bytes]
 libsed      SHA-256           (none)                    —       32 B     D0 20 [32 bytes]
 ```
 
-Both encodings are accepted by Opal 2.0 drives.
-NEVER use raw ASCII password bytes — most drives require ≥ 20-byte PINs.
-Always call `HashPassword::passwordToBytes()` in libsed code.
+### ⚠ Cross-tool incompatibility — read carefully
+
+The drive accepts any byte sequence ≥ 20 bytes as a PIN, but it stores
+exactly what you Set. Auth must send exactly the same bytes. Therefore:
+
+- **libsed-Set drive + sedutil-Auth (same password)** → MISMATCH → AUTH_FAIL
+- **sedutil-Set drive + libsed-Auth (same password)** → MISMATCH → AUTH_FAIL
+- After `TryLimit` failures (typically 5) the SID authority locks. Recovery
+  requires **PSID Revert**, which **destroys all data and crypto keys**.
+
+Pinned divergence test: `tests/unit/test_hash.cpp::
+SedutilDivergence_Sha256VsPbkdf2Sha256`.
+
+### Safe usage
+
+- Use **libsed throughout the drive's lifecycle** — Set, Auth, and Revert
+  via libsed only. Self-consistent.
+- Or use **sedutil-cli throughout** — likewise consistent.
+- **Do not mix tools on the same drive.** If you must, pre-compute a
+  sedutil-compatible PIN (PBKDF2-HMAC-SHA1, drive-serial salt, 75000 iter,
+  20 B) and pass it via `setCPin(Bytes)` / `startSessionWithAuth(Bytes)`.
+  libsed exposes `pbkdf2Sha256` as a building block but **does not yet
+  ship PBKDF2-HMAC-SHA1**; cross-tool users must implement that themselves
+  or vendor it.
+
+### Implementation notes
+
+- `HashPassword::passwordToBytes(string)` always returns plain SHA-256.
+  All `string`-overload entry points (`setCPin`, `startSessionWithAuth`,
+  `takeOwnership`, etc.) flow through this function.
+- `Bytes`-overload entry points pass the bytes through verbatim — use
+  these for sedutil-compatible PINs or for raw MSID flows.
+- MSID is read from the drive (factory-set) and used **verbatim** as the
+  StartSession credential — no hashing applied. This part is correct
+  because sedutil also passes MSID verbatim.
+- See LAW 21 in `hammurabi_code.md` for the full risk model and
+  recovery considerations.
 
 ---
 

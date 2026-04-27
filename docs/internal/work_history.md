@@ -1,5 +1,82 @@
 # Work History
 
+## Session 2026-04-27 (3) — 비밀번호 해시 분기 명문화 (LAW 21 신설)
+
+### What was done
+
+사용자가 "Set SID 시 cats 와 sedutil 이 password payload 를 같은 방식으로
+처리하는지" 확인 요청. 잘못 처리되면 **PSID Revert 외에는 복구 불가능한
+데이터 손실** 위험이라 정밀 추적.
+
+**발견**:
+- cats `HashPassword::passwordToBytes` = **plain SHA-256** (32 B, salt 없음).
+- sedutil `DtaHashPwd` = **PBKDF2-HMAC-SHA1** (drive serial/MSID 솔트,
+  75000 iter, 20 B).
+- **두 알고리즘 결과는 절대 일치하지 않음** — `tests/unit/test_hash.cpp::
+  SedutilDivergence_Sha256VsPbkdf2Sha256` 가 명시적으로 pin.
+- 즉 cats 로 set 한 드라이브 + sedutil 로 auth (혹은 그 역) →
+  AUTH_FAIL 반복 → SID 잠김 → PSID Revert (데이터 파괴).
+
+이는 **알려진 설계상 분기**이고 unit test 로 고정되어 있지만, **사용자
+대상 문서에 위험이 충분히 노출되어 있지 않았음**. 더불어 코드 주석
+하나는 정반대 사실을 적고 있어 향후 작업자가 cross-compat 으로 오해할
+위험이 있었음.
+
+### 변경 사항 (안전 패치)
+
+- **`src/security/hash_password.cpp`**: `passwordToBytes` 함수 주석에
+  "This matches sedutil behavior: sha256(password)" 라는 거짓 진술 제거.
+  대신 cross-tool 비호환 경고 + 잠금 시나리오 + 복구 옵션 + opt-in
+  경로 (Bytes overload + 외부 PBKDF2-SHA1 사전계산) 명시.
+- **`docs/rosetta_stone.md` §10**: "Both encodings are accepted" 라는
+  오해 가능 표현 제거. Cross-tool 비호환 명문화 + 안전 사용 시나리오
+  + Implementation note (string vs Bytes overload, MSID verbatim 처리)
+  세분화.
+- **`docs/internal/hammurabi_code.md` LAW 21 신설**: failure mode 단계별
+  설명, required behavior (string vs Bytes overload, 거짓 주석 금지),
+  새 기능 추가 시 절차, 향후 sedutil-compat 옵션 (PBKDF2-SHA1 미구현)
+  의 destructive 성격 경고.
+
+### 결정 사항 / 보류
+
+- **default 알고리즘 변경 안 함** (SHA-256 유지). 기존 libsed 로 set 한
+  모든 드라이브를 깨는 destructive change 라 사용자 명시 동의 없이 수행
+  불가.
+- `pbkdf2Sha1` 구현 안 함 (현재 코드엔 없음). 사용자가 cross-tool 호환을
+  원하면 외부에서 사전계산 + Bytes overload 사용. 향후 opt-in 헬퍼 추가
+  여부는 별도 결정.
+- cats-cli / examples 의 `--password` 사용 지점에도 경고를 띄울지 여부는
+  follow-up.
+
+### 핵심 학습
+
+- "Drive accepts these bytes" ≠ "These bytes match the stored credential".
+  TCG 드라이브는 어떤 ≥20B 바이트열이든 PIN 으로 받아들이지만, **set 시
+  보낸 바이트와 auth 시 보내는 바이트가 일치해야** 인증이 성공.
+- 안전한 분기 정책: **단일 도구만 lifecycle 내내 사용** (cats only or
+  sedutil only). 도중에 도구 전환하면 잠금 위험.
+- 코드 주석이 사실과 정반대라도 unit test 가 정정해주지 않음 — test 는
+  divergence 를 pin 하면서도 user-facing 경고는 분리되어 있어, 주석
+  기반으로 이후 작업하던 AI/사람이 잘못 이해할 수 있었음. 이런 주석은
+  단순 거짓 진술 이상의 위험 (LAW 21 의 "거짓 주석 금지" 항목으로 명문화).
+
+### Current state
+
+- ctest 5/6 PASS (cats_cli_smoke 권한 이슈만 fail, 무관).
+- libsed 의 password 해시 동작은 **변경 없음** — 안전. 변경된 건 문서/주석
+  뿐이라 회귀 위험 없음.
+
+### 다음 세션에서 이어갈 수 있는 작업
+
+| 항목 | 난이도 |
+|------|-------|
+| `HashPassword::sedutilCompatHash(password, serial)` opt-in 헬퍼 (PBKDF2-SHA1 구현) | 중 |
+| cats-cli `--password` 사용 시 stderr 경고 (cross-tool risk) | 하 |
+| examples 05/22 의 banner 에 "do not mix tools" 경고 추가 | 하 |
+| 사용자 실 하드웨어에서 cats-set drive vs sedutil-auth fail 직접 검증 (안전 시뮬레이션) | 하드웨어 필요 |
+
+---
+
 ## Session 2026-04-27 (2) — Object.Set 의 empty Where 회귀 (LAW 3 반전)
 
 ### What was done

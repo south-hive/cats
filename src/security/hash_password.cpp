@@ -183,10 +183,26 @@ Bytes HashPassword::hashForDrive(const std::string& password,
 }
 
 Bytes HashPassword::passwordToBytes(const std::string& password) {
-    // SHA-256 hash to ensure 32-byte PIN compatible with all Opal drives.
-    // Most drives enforce minimum PIN length (≥ 20 bytes); raw ASCII is too
-    // short for drives that expect MSID-length (32-byte) credentials.
-    // This matches sedutil behavior: sha256(password).
+    // SHA-256 hash to produce a 32-byte PIN that satisfies Opal's minimum
+    // PIN-length requirement (≥ 20 bytes); raw ASCII is too short for
+    // drives that expect MSID-length credentials.
+    //
+    // ⚠ NOT cross-compatible with sedutil-cli.
+    //   sedutil hashes passwords with PBKDF2-HMAC-SHA1 (drive serial /
+    //   MSID as salt, 75000 iterations). A drive whose C_PIN was Set via
+    //   libsed will reject sedutil's same-password authentication, and
+    //   vice versa. After enough auth failures the drive locks SID,
+    //   recoverable only via PSID Revert (destroys data).
+    //
+    //   This divergence is by design and pinned by tests/unit/test_hash.cpp::
+    //   `SedutilDivergence_Sha256VsPbkdf2Sha256`.
+    //
+    //   Use libsed throughout the drive's lifecycle for consistency, OR
+    //   compute a sedutil-compatible PIN externally and pass it via the
+    //   `Bytes` overloads of setCPin / startSessionWithAuth.
+    //
+    // See LAW 21 in docs/internal/hammurabi_code.md and §10 in
+    // docs/rosetta_stone.md for the full risk model.
     return sha256(reinterpret_cast<const uint8_t*>(password.data()),
                   password.size());
 }

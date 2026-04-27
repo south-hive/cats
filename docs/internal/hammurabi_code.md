@@ -395,3 +395,71 @@ real failure mode — the user/maintainer is led to believe extra resets are
 Concrete: `b75ea17` added `betweenSessions(stackReset)` to example 22 in
 response to a 0x0F that turned out to be the CellBlock encoding bug
 (LAW 16). The reset additions did not help and were reverted in `22f7b10`.
+
+---
+
+## LAW 21: Password hashing diverges from sedutil — DO NOT mix tools
+
+**libsed and sedutil hash passwords with completely different algorithms.**
+Drives that have their C_PIN Set by one tool will reject the other tool's
+authentication for the same password.
+
+```
+Tool      Algorithm         Salt              Iter     Output  Wire
+─────     ────────────────  ───────────────   ──────   ──────  ──────────────
+libsed    SHA-256           (none)            1        32 B    D0 20 [32 B]
+sedutil   PBKDF2-HMAC-SHA1  drive serial/MSID 75000    20 B    D0 14 [20 B]
+```
+
+This is **by design**. Pinned by `tests/unit/test_hash.cpp::
+SedutilDivergence_Sha256VsPbkdf2Sha256`. The default cannot be changed
+unilaterally — switching default would lock every libsed-set drive.
+
+### Failure mode
+
+1. User sets SID password "P" with libsed → drive holds `SHA-256("P")`.
+2. User runs `sedutil-cli` with the same password "P".
+3. sedutil sends `PBKDF2-HMAC-SHA1(serial, "P", 75000)`.
+4. Drive compares → **mismatch** → AUTH_FAIL.
+5. After `TryLimit` (typically 5) consecutive failures, the SID authority
+   **locks**.
+6. Only recovery: **PSID Revert**, which **destroys all data and keys**.
+
+Same in reverse (sedutil-Set drive + libsed-Auth).
+
+### Required behavior (in both libsed code and tooling)
+
+- The `string`-overload of `setCPin` / `startSessionWithAuth` ALWAYS hashes
+  via `HashPassword::passwordToBytes` (= SHA-256). Do not change this
+  silently.
+- The `Bytes`-overloads pass bytes verbatim. Use these when:
+  - the credential is MSID (raw factory bytes, no hashing)
+  - the user wants a sedutil-compatible PIN (precompute externally)
+- `HashPassword::passwordToBytes` documentation MUST carry the
+  cross-tool warning. Do not "simplify" the comment to claim sedutil
+  parity (this was actively wrong in the codebase before 2026-04-27 —
+  the comment said "This matches sedutil behavior: sha256(password)"
+  which is factually incorrect).
+
+### When adding a new feature that handles a SID/Admin/User password
+
+1. Use the `string`-overload only when libsed is the sole tool managing
+   the drive's lifecycle.
+2. Expose a `Bytes`-overload alongside it for sedutil-compat or
+   pre-hashed scenarios.
+3. Document the divergence at the entry point (CLI flag help text,
+   API docstring, README).
+
+### Optional sedutil-compat path (not yet implemented)
+
+`HashPassword` ships `sha256`, `hmacSha256`, `pbkdf2Sha256`, but **NOT**
+`pbkdf2Sha1`. Implementing it as `HashPassword::sedutilCompatHash(password,
+serial)` would let users explicitly opt into cross-tool compatibility
+without changing libsed's default. Do not bolt this on as a default —
+it is irreversibly destructive to existing libsed-set drives.
+
+**Why:** Silent data-loss landmine. Discovered 2026-04-27 during user-led
+review when the user asked "do cats and sedutil handle the password
+payload identically?" The answer is no, has always been no, but the
+risk was buried inside a unit test rather than surfaced in user-facing
+docs. This law exists to keep the warning at eye level.
