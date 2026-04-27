@@ -42,8 +42,17 @@ Result EvalApi::getNvmeSerial(std::shared_ptr<ITransport> transport,
     //
     // sedutil-cli uses these 20 bytes verbatim as the salt for
     // PBKDF2-HMAC-SHA1, including any trailing 0x20 (space) padding.
+    //
+    // NvmeTransport::identifyController() 는 DI 모드와 legacy fd 모드
+    // 모두에서 동작 — INvmeDevice 없이도 직접 ioctl 로 fallback.
+    if (!transport || transport->type() != TransportType::NVMe) {
+        return ErrorCode::TransportNotAvailable;
+    }
+    auto* nvmeTr = dynamic_cast<NvmeTransport*>(transport.get());
+    if (!nvmeTr) return ErrorCode::TransportNotAvailable;
+
     Bytes id;
-    auto r = nvmeIdentify(transport, /*cns*/0x01, /*nsid*/0, id);
+    auto r = nvmeTr->identifyController(id);
     if (r.failed()) return r;
     if (id.size() < 24) return ErrorCode::MalformedResponse;
     serial.assign(id.begin() + 4, id.begin() + 24);

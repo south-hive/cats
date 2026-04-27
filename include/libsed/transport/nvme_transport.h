@@ -41,6 +41,12 @@ public:
     /// Get shared_ptr to INvmeDevice
     std::shared_ptr<INvmeDevice> nvmeDeviceShared() const { return nvmeDevice_; }
 
+    /// NVMe Identify Controller (CNS=0x01, NSID=0). Works in BOTH modes:
+    ///   - DI mode: delegates to INvmeDevice::identify
+    ///   - Legacy fd mode: issues NVME_IOCTL_ADMIN_CMD directly
+    /// Returns 4096-byte Identify Controller data on success.
+    Result identifyController(Bytes& out);
+
 private:
     Result openDirect();
 

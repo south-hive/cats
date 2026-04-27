@@ -182,4 +182,51 @@ Result NvmeTransport::ifRecv(uint8_t protocolId, uint16_t comId,
 #endif
 }
 
+// ── Identify Controller ─────────────────────────────
+// 두 모드 모두에서 동작:
+//   DI 모드: INvmeDevice::identify 위임
+//   Legacy fd 모드: NVME_IOCTL_ADMIN_CMD 로 opcode 0x06 직접 발행
+//
+// sedutilHash() 의 salt 인 20-byte SN field 추출용으로 EvalApi::
+// getNvmeSerial() 가 호출. legacy 경로에서도 INvmeDevice DI 없이
+// 동작하도록 fallback 제공.
+
+Result NvmeTransport::identifyController(Bytes& out) {
+    if (nvmeDevice_) {
+        return nvmeDevice_->identify(/*cns*/0x01, /*nsid*/0, out);
+    }
+
+#if defined(__linux__) && !defined(__ANDROID__)
+    if (fd_ < 0) return ErrorCode::TransportNotAvailable;
+
+    static constexpr size_t IDENTIFY_LEN = 4096;
+    static constexpr size_t DMA_ALIGN = 1024;
+    void* raw = std::aligned_alloc(DMA_ALIGN, IDENTIFY_LEN);
+    if (!raw) return ErrorCode::TransportRecvFailed;
+    std::memset(raw, 0, IDENTIFY_LEN);
+
+    struct nvme_admin_cmd cmd = {};
+    cmd.opcode = 0x06;          // Identify
+    cmd.nsid = 0;                // CNS=1 doesn't use NSID
+    cmd.addr = reinterpret_cast<uint64_t>(raw);
+    cmd.data_len = IDENTIFY_LEN;
+    cmd.cdw10 = 0x00000001;      // CNS = 0x01 (Identify Controller)
+
+    int ret = ioctl(fd_, NVME_IOCTL_ADMIN_CMD, &cmd);
+    if (ret < 0) {
+        std::free(raw);
+        LIBSED_ERROR("NVMe Identify Controller failed: %s", strerror(errno));
+        return ErrorCode::TransportRecvFailed;
+    }
+
+    out.assign(static_cast<uint8_t*>(raw),
+                static_cast<uint8_t*>(raw) + IDENTIFY_LEN);
+    std::free(raw);
+    return ErrorCode::Success;
+#else
+    (void)out;
+    return ErrorCode::TransportNotAvailable;
+#endif
+}
+
 } // namespace libsed
