@@ -302,21 +302,20 @@ static Packet buildSedutil_A3_GetMsid() {
     DtaCommand cmd;
     cmd.reset(OPAL_C_PIN_MSID, GET);
 
-    // sedutil's DtaDevOpal::getTable() puts the CellBlock named pairs directly
-    // in the method's parameter list (single STARTLIST/ENDLIST), NOT nested.
-    cmd.addToken(OPAL_TOKEN::STARTLIST);
-
-    cmd.addToken(OPAL_TOKEN::STARTNAME);
-    cmd.addToken(OPAL_TOKEN::STARTCOLUMN);     // key = 0x03 (startColumn)
-    cmd.addToken(OPAL_TINY_ATOM::UINT_03);     // value: PIN column
-    cmd.addToken(OPAL_TOKEN::ENDNAME);
-
-    cmd.addToken(OPAL_TOKEN::STARTNAME);
-    cmd.addToken(OPAL_TOKEN::ENDCOLUMN);       // key = 0x04 (endColumn)
-    cmd.addToken(OPAL_TINY_ATOM::UINT_03);     // value: PIN column
-    cmd.addToken(OPAL_TOKEN::ENDNAME);
-
-    cmd.addToken(OPAL_TOKEN::ENDLIST);
+    // 실 sedutil-cli 는 CellBlock 을 inner STARTLIST/ENDLIST 로 wrap.
+    // (이전 주석은 잘못된 가정. 실 hardware hex dump 로 확인됨.)
+    cmd.addToken(OPAL_TOKEN::STARTLIST);          // outer args
+      cmd.addToken(OPAL_TOKEN::STARTLIST);        // inner CellBlock
+        cmd.addToken(OPAL_TOKEN::STARTNAME);
+          cmd.addToken(OPAL_TOKEN::STARTCOLUMN); // key = 0x03 (startColumn)
+          cmd.addToken(OPAL_TINY_ATOM::UINT_03); // value: PIN column
+        cmd.addToken(OPAL_TOKEN::ENDNAME);
+        cmd.addToken(OPAL_TOKEN::STARTNAME);
+          cmd.addToken(OPAL_TOKEN::ENDCOLUMN);   // key = 0x04 (endColumn)
+          cmd.addToken(OPAL_TINY_ATOM::UINT_03); // value: PIN column
+        cmd.addToken(OPAL_TOKEN::ENDNAME);
+      cmd.addToken(OPAL_TOKEN::ENDLIST);          // close inner CellBlock
+    cmd.addToken(OPAL_TOKEN::ENDLIST);            // close outer args
 
     cmd.complete();
     cmd.setcomID(COMID);

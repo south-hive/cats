@@ -38,16 +38,19 @@ static void compareGet_DataStore(Section& sec, uint32_t tsn,
 
     DtaCommand cmd;
     cmd.reset(tableUid, getMethod);
-    cmd.addToken(OPAL_TOKEN::STARTLIST);
-      cmd.addToken(OPAL_TOKEN::STARTNAME);
-        cmd.addToken(OPAL_TOKEN::STARTROW);
-        cmd.addToken((uint64_t)offset);
-      cmd.addToken(OPAL_TOKEN::ENDNAME);
-      cmd.addToken(OPAL_TOKEN::STARTNAME);
-        cmd.addToken(OPAL_TOKEN::ENDROW);
-        cmd.addToken((uint64_t)(offset + length - 1));
-      cmd.addToken(OPAL_TOKEN::ENDNAME);
-    cmd.addToken(OPAL_TOKEN::ENDLIST);
+    // CellBlock 은 outer args 안에 inner list 로 wrap (실 sedutil 동작)
+    cmd.addToken(OPAL_TOKEN::STARTLIST);          // outer args
+      cmd.addToken(OPAL_TOKEN::STARTLIST);        // inner CellBlock
+        cmd.addToken(OPAL_TOKEN::STARTNAME);
+          cmd.addToken(OPAL_TOKEN::STARTROW);
+          cmd.addToken((uint64_t)offset);
+        cmd.addToken(OPAL_TOKEN::ENDNAME);
+        cmd.addToken(OPAL_TOKEN::STARTNAME);
+          cmd.addToken(OPAL_TOKEN::ENDROW);
+          cmd.addToken((uint64_t)(offset + length - 1));
+        cmd.addToken(OPAL_TOKEN::ENDNAME);
+      cmd.addToken(OPAL_TOKEN::ENDLIST);          // close inner CellBlock
+    cmd.addToken(OPAL_TOKEN::ENDLIST);            // close outer args
     cmd.complete();
     cmd.setcomID(COMID);
     Packet ref = extractSedutilPacket(cmd, tsn, HSN);

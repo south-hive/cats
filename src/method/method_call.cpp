@@ -60,12 +60,17 @@ Bytes MethodCall::buildGet(const Uid& objectUid, const CellBlock& cellBlock,
                             uint64_t methodUid) {
     TokenEncoder paramEnc;
 
-    // CellBlock named pairs go DIRECTLY into the method's parameter list.
-    // MethodCall::build() already wraps the params in STARTLIST/ENDLIST; adding
-    // another inner list would produce a nested list, which sedutil does NOT do
-    // and real Opal drives do NOT accept. Confirmed by sed_compare byte diff
-    // against sedutil-cli Get for C_PIN_MSID.
+    // TCG Core Spec: Get [ Cellblock : cell_block ] — cell_block is a list
+    // type, so it MUST be wrapped in its own STARTLIST/ENDLIST. Real sedutil
+    // binary does this (verified by hex dump from a hardware run); a previous
+    // assumption that sedutil emits cellblock named pairs flat was wrong and
+    // produced 0x0F (TPER_MALFUNCTION) on strict drives.
+    //
+    // Outer list comes from MethodCall::build() (params wrapper).
+    // Inner list is this cellblock object.
+    paramEnc.startList();
     ParamEncoder::encodeCellBlock(paramEnc, cellBlock);
+    paramEnc.endList();
 
     MethodCall call(objectUid, Uid(methodUid));
     call.setParams(paramEnc.data());

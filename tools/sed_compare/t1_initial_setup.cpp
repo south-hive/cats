@@ -80,16 +80,22 @@ static void compareGet_CPIN_MSID_Pin(Section& sec, uint32_t tsn) {
 
     DtaCommand cmd;
     cmd.reset(OPAL_C_PIN_MSID, GET);
-    cmd.addToken(OPAL_TOKEN::STARTLIST);
-      cmd.addToken(OPAL_TOKEN::STARTNAME);
-        cmd.addToken(OPAL_TOKEN::STARTCOLUMN);
-        cmd.addToken(OPAL_TINY_ATOM::UINT_03); // PIN
-      cmd.addToken(OPAL_TOKEN::ENDNAME);
-      cmd.addToken(OPAL_TOKEN::STARTNAME);
-        cmd.addToken(OPAL_TOKEN::ENDCOLUMN);
-        cmd.addToken(OPAL_TINY_ATOM::UINT_03); // PIN
-      cmd.addToken(OPAL_TOKEN::ENDNAME);
-    cmd.addToken(OPAL_TOKEN::ENDLIST);
+    // Real sedutil-cli emits a NESTED list for the CellBlock — verified by
+    // hex dump on hardware. Earlier reference here was missing the inner
+    // STARTLIST/ENDLIST and matched libsed's (also wrong) flat encoding,
+    // which is why this test always passed despite drive-level 0x0F.
+    cmd.addToken(OPAL_TOKEN::STARTLIST);          // outer args list
+      cmd.addToken(OPAL_TOKEN::STARTLIST);        // inner CellBlock list
+        cmd.addToken(OPAL_TOKEN::STARTNAME);
+          cmd.addToken(OPAL_TOKEN::STARTCOLUMN);
+          cmd.addToken(OPAL_TINY_ATOM::UINT_03); // PIN
+        cmd.addToken(OPAL_TOKEN::ENDNAME);
+        cmd.addToken(OPAL_TOKEN::STARTNAME);
+          cmd.addToken(OPAL_TOKEN::ENDCOLUMN);
+          cmd.addToken(OPAL_TINY_ATOM::UINT_03); // PIN
+        cmd.addToken(OPAL_TOKEN::ENDNAME);
+      cmd.addToken(OPAL_TOKEN::ENDLIST);          // close inner CellBlock
+    cmd.addToken(OPAL_TOKEN::ENDLIST);            // close outer args
     cmd.complete();
     cmd.setcomID(COMID);
     Packet ref = extractSedutilPacket(cmd, tsn, HSN);
