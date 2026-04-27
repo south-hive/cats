@@ -98,6 +98,52 @@ inline int diffPackets(const Packet& a, const Packet& b) {
 }
 
 // ═══════════════════════════════════════════════════════
+//  Token-payload-only diff
+// ═══════════════════════════════════════════════════════
+//
+// Compare ONLY the token payload (offset 56 onwards, length from
+// SubPacket.length). 헤더(TSN/HSN/SeqNumber/길이 필드)는 무시.
+//
+// 용도: 다세션 시퀀스(initialSetup 등) 의 fixture 와 cats 출력을 비교할 때
+// TSN 이 달라도 인코딩 로직 자체는 동일하면 PASS 가 되도록.
+// 정확한 wire-level 검증이 필요한 경우(ComID/HSN/seqNumber 등) 는 여전히
+// diffPackets() 사용.
+
+inline int diffTokenPayload(const char* name, const Packet& a, const Packet& b) {
+    if (a.size() < 56 || b.size() < 56) {
+        printf("    Both packets must be ≥56 bytes (got %zu, %zu)\n",
+               a.size(), b.size());
+        return 1;
+    }
+    uint32_t aLen = Endian::readBe32(a.data() + 52);
+    uint32_t bLen = Endian::readBe32(b.data() + 52);
+    if (aLen != bLen) {
+        printf("    SubPacket.length differs: %s=%u  ref=%u\n", name, aLen, bLen);
+        return 1;
+    }
+    if (56u + aLen > a.size() || 56u + bLen > b.size()) {
+        printf("    Token payload out-of-bounds (truncated packet)\n");
+        return 1;
+    }
+    int diffs = 0;
+    for (uint32_t i = 0; i < aLen; ++i) {
+        uint8_t av = a[56 + i];
+        uint8_t bv = b[56 + i];
+        if (av != bv) {
+            printf("    payload[0x%04X]: %s=0x%02X  ref=0x%02X\n",
+                   i, name, av, bv);
+            ++diffs;
+            if (diffs >= 50) { printf("    ... (too many diffs)\n"); break; }
+        }
+    }
+    return diffs;
+}
+
+inline int diffTokenPayload(const Packet& a, const Packet& b) {
+    return diffTokenPayload("libsed", a, b);
+}
+
+// ═══════════════════════════════════════════════════════
 //  Token stream decoder
 // ═══════════════════════════════════════════════════════
 
