@@ -53,6 +53,10 @@ public:
     /// 응답에서 추출된 메서드 이름 (CALL 헤더가 있는 경우)
     const std::string& methodName() const { return methodName_; }
 
+    /// 응답 CALL 헤더에서 추출한 method UID (없으면 0).
+    /// SM_CLOSE_SESSION 등 server-initiated close 감지에 사용.
+    uint64_t recvMethodUid() const { return recvMethodUid_; }
+
     /// send 토큰에서 추출한 메서드 UID 설정 (일반 메서드용)
     void setSendMethodUid(uint64_t uid);
 
@@ -60,6 +64,7 @@ private:
     MethodStatus status_ = MethodStatus::Fail;
     std::vector<Token> resultTokens_;
     std::string methodName_;
+    uint64_t    recvMethodUid_ = 0;
 };
 
 } // namespace libsed

@@ -46,6 +46,7 @@ Result MethodResult::parse(const std::vector<Token>& tokens) {
     resultTokens_.clear();
     status_ = MethodStatus::Fail;
     methodName_.clear();
+    recvMethodUid_ = 0;
 
     if (tokens.empty()) {
         return ErrorCode::MalformedResponse;
@@ -72,6 +73,7 @@ Result MethodResult::parse(const std::vector<Token>& tokens) {
         // extract MethodUID for logging, then skip
         if (startIdx < eodIndex && tokens[startIdx].isAtom() && tokens[startIdx].isByteSequence) {
             uint64_t muid = tokenToUid(tokens[startIdx]);
+            recvMethodUid_ = muid;
             const char* name = methodUidName(muid);
             if (name) {
                 methodName_ = name;

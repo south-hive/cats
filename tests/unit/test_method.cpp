@@ -1,5 +1,6 @@
 #include "libsed/method/method_call.h"
 #include "libsed/method/method_result.h"
+#include "libsed/method/method_uids.h"
 #include "libsed/method/param_encoder.h"
 #include "libsed/codec/token_decoder.h"
 #include "libsed/codec/token_stream.h"
@@ -104,6 +105,32 @@ TEST(MethodResult, ParseFailure) {
     EXPECT_EQ(result.status(), MethodStatus::NotAuthorized);
 }
 
+TEST(MethodResult, RecvCloseSessionMethodForm) {
+    // TPer 가 0xFA 대신 SessionManager.CloseSession() method-form 으로 응답하는 케이스.
+    // CALL + SMUID + SM_CLOSE_SESSION + StartList ENDList + EOD + status[0,0,0]
+    TokenEncoder enc;
+    enc.call();
+    Bytes smuid(8, 0); smuid[7] = 0xff;
+    enc.encodeBytes(smuid);                  // InvokingUID = SMUID
+    Bytes muid(8, 0); muid[6] = 0xff; muid[7] = 0x06;
+    enc.encodeBytes(muid);                   // MethodUID = 0x...FF06
+    enc.startList();
+    enc.endList();
+    enc.endOfData();
+    enc.startList();
+    enc.encodeUint(0);
+    enc.encodeUint(0);
+    enc.encodeUint(0);
+    enc.endList();
+
+    MethodResult result;
+    auto r = result.parse(enc.data());
+    EXPECT_TRUE(r.ok());
+    EXPECT_TRUE(result.isSuccess());
+    EXPECT_EQ(result.recvMethodUid(), method::SM_CLOSE_SESSION);
+    EXPECT_EQ(result.methodName(), std::string("CloseSession"));
+}
+
 TEST(ParamEncoder, StartSession) {
     auto data = ParamEncoder::encodeStartSession(105, Uid(uid::SP_ADMIN), false);
     EXPECT_TRUE(!data.empty());
@@ -193,6 +220,7 @@ void run_method_tests() {
     RUN_TEST(MethodCall, SscUidSelectors);
     RUN_TEST(MethodResult, ParseSuccess);
     RUN_TEST(MethodResult, ParseFailure);
+    RUN_TEST(MethodResult, RecvCloseSessionMethodForm);
     RUN_TEST(ParamEncoder, StartSession);
     RUN_TEST(ParamEncoder, CellBlock);
     printf("  All Method tests passed!\n\n");

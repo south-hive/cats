@@ -219,17 +219,23 @@ Result Session::sendMethod(const Bytes& methodTokens, MethodResult& result) {
     r = result.parse(recvTokens);
     if (r.failed()) return r;
 
-    // Check for EndOfSession in response (session terminated by TPer)
+    // Check for session termination by TPer.
+    // Two valid forms (TCG Core Spec §3.2.4 / §5.2.3):
+    //  (1) bare 0xFA EndOfSession token (sedutil convention)
+    //  (2) SessionManager.CloseSession() method-form (CALL + SMUID + 0xFF06 + EOD + status)
+    bool tperClosed = false;
     for (const auto& token : result.resultTokens()) {
-        if (token.type == TokenType::EndOfSession) {
-            // ── Debug layer: workaround to ignore unexpected EndOfSession ──
-            if (LIBSED_WA_ACTIVE(debug::workaround::kIgnoreEndOfSession)) {
-                LIBSED_WARN("Ignoring unexpected EndOfSession (workaround active)");
-                break;
-            }
+        if (token.type == TokenType::EndOfSession) { tperClosed = true; break; }
+    }
+    if (!tperClosed && result.recvMethodUid() == method::SM_CLOSE_SESSION) {
+        tperClosed = true;
+    }
+    if (tperClosed) {
+        if (LIBSED_WA_ACTIVE(debug::workaround::kIgnoreEndOfSession)) {
+            LIBSED_WARN("Ignoring unexpected session-close response (workaround active)");
+        } else {
             LIBSED_WARN("TPer closed session unexpectedly");
             state_ = State::Closed;
-            break;
         }
     }
 
