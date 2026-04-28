@@ -23,10 +23,10 @@ The ioctl_validator (17 tests, 5 sequences) is the supreme court.
 
 ---
 
-## LAW 2: Integer encoding uses power-of-2 widths ONLY
+## LAW 2: **Encoder** uses power-of-2 widths ONLY (decoder accepts all spec widths)
 
-Encode unsigned integers as: tiny (0-63), 1-byte, 2-byte, 4-byte, or 8-byte.
-**Never** use 3, 5, 6, or 7-byte integers even though TCG spec allows it.
+**Encoder rule (송신):** unsigned integer 를 tiny (0-63), 1-byte, 2-byte, 4-byte,
+8-byte 중 하나로만 인코딩. 3/5/6/7-byte 안 씀.
 
 ```
 value < 64      → tiny atom (1 byte total)
@@ -36,7 +36,17 @@ value < 0x100000000 → 0x84 + 4 bytes
 else            → 0x88 + 8 bytes
 ```
 
-**Why:** 1048576 (0x100000) was encoded as 3 bytes (0x83). sedutil uses 4 bytes (0x84). Real TPers may reject non-power-of-2 widths.
+**Decoder rule (수신):** TCG Core Spec §3.2.2.3.1.1 (Short Atom) 은 length nibble
+0–15 모두 합법. 디코더는 0x80–0x8F 전 범위를 정확히 파싱해야 함
+(`src/codec/token_decoder.cpp:87` 의 `header & 0x0F`). sedutil 이 안 쓴다는 이유로
+reject 하지 않음 — 일부 펌웨어가 응답에서 minimal encoding (예: 0x83) 을 보낼
+수 있고 spec-legal.
+
+**Why:** 1048576 (0x100000) 을 3 byte (0x83) 로 인코딩했다가 sedutil 호환이
+깨졌음 (sedutil 은 4 byte 0x84 사용). 일부 TPer 가 송신 시 non-power-of-2 widths
+를 거부할 가능성. 그러나 **decoder 는 spec 전체** — "Be conservative in what
+you send, liberal in what you accept." 인코더 규칙을 디코더로 확장해서 합법적인
+응답을 reject 하면 그 펌웨어가 부서진다.
 
 ---
 
@@ -178,11 +188,22 @@ Properties response may return TPerProperties first or HostProperties first — 
 
 ---
 
-## LAW 11: CloseSession is special — EndOfSession ONLY
+## LAW 11: CloseSession 송신은 0xFA token (decoder 는 method-form 도 인식)
 
-CloseSession sends just the `0xFA` (EndOfSession) token. No CALL. No EndOfData. No status list.
+**송신 (sedutil convention):** CloseSession 은 `0xFA` (EndOfSession) token 단독.
+No CALL. No EndOfData. No status list. cats `Session::closeSession` 이 이 형식만
+보냄.
 
-**Why:** It's the only command with this format. Adding CALL/EOD would break the session teardown.
+**디코더 / 응답 처리:** TCG Core Spec 은 두 가지 close 메커니즘을 정의 —
+(1) 0xFA token (§3.2.4), (2) `SessionManager.CloseSession()` method (UID 0xFF06,
+§5.2.3). 둘 다 spec-legal. cats `Session::sendMethod` 가 0xFA token 외에
+`MethodResult::recvMethodUid() == SM_CLOSE_SESSION` 응답도 server-initiated
+close 로 인식한다 (`src/session/session.cpp:222`).
+
+**Why:** sedutil 호환을 위해 송신은 0xFA 만 사용. 그러나 **응답** 측에서 일부
+펌웨어가 method-form 으로 close 를 통지할 가능성이 spec-legal — 이를 무시하면
+session leak 이 발생한다. LAW 2 와 같은 패턴: encoder/decoder 비대칭. 응답에
+대해 spec 전체를 수용.
 
 ---
 

@@ -64,7 +64,7 @@ Byte Range   Type              Example
 
 ---
 
-## 3. UINT ENCODING TABLE (power-of-2 widths ONLY)
+## 3. UINT ENCODING TABLE (libsed/sedutil **encoder convention** — power-of-2 widths)
 
 ```
 Value Range          Header  Data Bytes  Total   Example (value=2048)
@@ -76,7 +76,18 @@ Value Range          Header  Data Bytes  Total   Example (value=2048)
 > 4294967295         0x88    8           9       (rare, 64-bit values)
 ```
 
-NEVER use 0x83 (3-byte) or 0x85-0x87 (5-7 byte). Round up.
+**Encoder rule (this implementation):** sedutil 호환을 위해 송신 시 power-of-2
+widths만 사용 (1/2/4/8 byte). 0x83, 0x85–0x87 은 **사용하지 않음**.
+
+**Decoder rule (spec-compliant):** TCG Core Spec §3.2.2.3.1.1 (Short Atom)
+및 Table 9 에 따라 short atom 의 length nibble 은 0–15 모두 합법.
+디코더는 0x80–0x8F 전 범위를 정확히 파싱해야 하며 (`src/codec/token_decoder.cpp:87`
+의 `header & 0x0F`), sedutil 이 안 쓴다는 이유로 reject 하지 않음.
+
+**왜 비대칭인가:** "Be conservative in what you send, liberal in what you accept."
+송신 wire compat 는 sedutil 을 따르고, 수신은 spec 을 따른다. 일부 펌웨어가
+응답에서 minimal encoding (예: 0x83 0x01 0x00 0x00 = 65536) 을 보낼 수 있으며,
+이는 spec-legal — 디코더가 이를 거부하면 그 펌웨어가 부서진다.
 
 ---
 
@@ -105,11 +116,17 @@ F9                              EOD
 F0 00 00 00 F1                  status [0,0,0]
 ```
 
-**Key is numeric `0` (tiny atom), NOT the string "HostProperties".** This
-doc previously showed `AE "HostProperties"` — wrong. Confirmed by
-`src/method/param_encoder.cpp:56-60` and sedutil hex dump. The property
-*names* inside the inner list ARE strings (`"MaxComPacketSize"`, etc.) — only
-the outer wrapper key is numeric.
+**Key encoding is method-specific** — Properties (TCG Core Spec §5.2.3.4) 의
+`HostProperties` named param 은 integer index `0` 으로 식별 (request 측).
+같은 데이터의 response 측 (§12) 은 **string name `"TPerProperties"` /
+`"HostProperties"`** 사용. 이건 Properties method 의 정의일 뿐 **글로벌 규칙이 아님** —
+새 메서드를 추가할 때는 spec 의 해당 method definition 을 확인해서 named param 의
+key type (integer index vs string name) 을 결정할 것.
+
+Inner property item key (`"MaxComPacketSize"` 등) 는 양방향 모두 string. 이
+doc 가 `AE "HostProperties"` 를 outer key 로 보여줬던 건 wrong — request 측 outer
+key 는 numeric 0 임을 sedutil hex dump 와 `src/method/param_encoder.cpp:56-60`
+이 확인.
 
 ### 4b. StartSession Unauthenticated (SM, TSN=0/HSN=0)
 
@@ -229,13 +246,26 @@ F0 F1                           STARTLIST ENDLIST (empty)
 F9 F0 00 00 00 F1               EOD + status
 ```
 
-### 4g. CloseSession (SPECIAL — no CALL/EOD)
+### 4g. CloseSession — sedutil convention: bare 0xFA
+
+TCG Core Spec 은 **두 가지 close 메커니즘** 을 정의한다:
+
+- **EndOfSession token (`0xFA`)** — §3.2.4. 단일 control token, CALL/EOD/status 없음.
+- **`SessionManager.CloseSession()` method (UID `0x00...FF06`)** — §5.2.3.
+  정상 method call 형식 (CALL + SMUID + MethodUID + EOD + status).
+
+**libsed/sedutil 구현 선택:** 송신은 0xFA token 만 사용. SM_CLOSE_SESSION method
+는 보내지 않음.
 
 ```
-FA                              EndOfSession (ONLY THIS)
+FA                              EndOfSession
 ```
 
-No CALL. No EOD. No status list. Just 0xFA.
+**디코더는 양쪽 모두 인식해야 함** — 일부 펌웨어가 응답에서 SM_CLOSE_SESSION
+method-form 으로 close 를 통지할 수 있고 (spec-legal), `src/session/session.cpp`
+의 `Session::sendMethod` 가 0xFA token 외에 `MethodResult::recvMethodUid() ==
+SM_CLOSE_SESSION` 도 server-initiated close 로 인식한다. §8 method UID 표에
+SM_CLOSE_SESSION 등록 유지 — 미래 호환을 위해.
 
 ---
 
@@ -303,6 +333,14 @@ UID_HEXFF         0xFFFFFFFFFFFFFFFF      Null/sentinel — "no authority"
 ---
 
 ## 8. METHOD UIDs (hex, 8-byte big-endian)
+
+> **Method UID 는 SP context 와 함께 해석해야 함.** 같은 UID 가 다른 SP 에서 다른
+> method 를 의미할 수 있음 (TCG Core Spec §5 SP-scoped method namespaces).
+> dispatch 시 항상 `(InvokingUID, MethodUID)` 쌍으로 처리. SSC 종류는 §11
+> Discovery feature codes 로 결정 — cats 는 `method::getUidFor(session.sscType())`
+> / `setUidFor` / `authenticateUidFor` 로 라우팅 (`src/eval/eval_api_table.cpp`).
+> 새 method 추가 시 SSC 별 UID 가 다른지 spec 확인 필수. 예: EAUTHENTICATE(0x0C)
+> 와 DELETE_ROW(0x0C) 는 같은 UID 를 SP context 로 disambiguate.
 
 ```
 Name              Value                   Type
@@ -463,10 +501,24 @@ Feature codes: `0x0001`=TPer, `0x0002`=Locking, `0x0003`=Geometry,
 
 ## 12. SM RESPONSE FORMAT
 
-Session Manager responses (Properties, SyncSession) include a CALL header (LAW 9):
+> **Response framing — observed behavior, not spec contract.**
+> TCG Core Spec 은 method response 토큰 스트림을 `[results...] EOD [status_list]`
+> 형식으로 정의하며, **CALL 헤더 echo 여부는 명시적으로 규정하지 않는다** (§3.3.10).
+> 아래 표는 sedutil + 다수 Opal 드라이브의 **관찰된 동작** — 다른 펌웨어가 다르게
+> 행동할 가능성에 대비해야 함.
+
+**관찰된 동작:**
+
+- **SM method 응답** (Properties, SyncSession): CALL + InvokingUID + MethodUID
+  prefix 있음.
+- **일반 method 응답** (Get/Set/Auth 등): CALL prefix 없이 result list 로 시작.
+
+**파서 구현:** `MethodResult::parse` 가 첫 토큰을 검사해서 `0xF8`(CALL) 이면
+prefix 를 skip, 아니면 바로 result list 로 간주 (`src/method/method_result.cpp:67`
+조건부 skip). 둘 다 지원하므로 벤더 차이에 robust.
 
 ```
-F8                              CALL
+F8                              CALL  (SM 응답에서만 관찰됨, 일반 method 에선 보통 없음)
 A8 [SMUID]                      InvokingUID
 A8 [SM_METHOD_UID]              MethodUID
 F0                              STARTLIST
@@ -475,8 +527,6 @@ F1                              ENDLIST
 F9                              EOD
 F0 status 00 00 F1              Status list [status, reserved, reserved]
 ```
-
-Regular method responses (Get, Set, etc.) do NOT have the CALL header.
 
 ### Status List
 
@@ -581,6 +631,15 @@ method-level status.
                                       (the same raw byte works at this range).
 ```
 
+> **Future-proof 주의:** status 0x00 / 0x01 은 tiny atom uint 표현과 raw byte
+> 표현이 wire 상 동일 (tiny atom 범위 0x00–0x3F). 만약 future spec 또는 벤더가
+> status ≥ 0x40 을 정의하면 인코딩이 갈라짐 — 그때는 spec text 를 다시 확인할 것.
+> 현재 sedutil 호환 범위는 0/1 만.
+
+> **응답 처리도 observed behavior:** 아래 §TPer response 항목은 spec contract 가
+> 아니라 다수 드라이브에서 관찰된 패턴 — spec 은 TPer 의 transaction 결과 보고
+> 방식에 여러 옵션을 허용한다.
+
 ### Packet layout
 
 Each boundary is its own ComPacket within an active session. Method calls
@@ -667,3 +726,22 @@ the same commit, both based on level-3 reasoning. `sed_compare` and
 
 If level 3 passes but level 1 fails, libsed AND the level-3 reference are
 both wrong — fix both.
+
+### Spec compliance vs sedutil compliance
+
+이 문서는 **sedutil-compatible subset of TCG** 를 정의한다 — TCG spec 의 모든
+합법 인코딩을 다루지 않는다.
+
+- **송신 (encoder)**: sedutil 호환 subset 만 사용. 본 문서의 모든 §4x 템플릿
+  이 그 subset 이다 — power-of-2 widths (§3), 0xFA bare CloseSession (§4g),
+  Properties outer key numeric 0 (§4a), CALL prefix 만 SM 응답 echo 가정 (§12).
+- **수신 (decoder)**: TCG spec 전체를 받아들여야 한다. sedutil 이 안 보내는
+  형식이라도 다른 host SW 나 TPer 응답에서 등장 가능 — 0x83 short atom 이나
+  SM_CLOSE_SESSION method-form 응답이나 CALL 헤더 없는 SM 응답이나 모두 합법.
+
+**규칙 추가 시:** "(a) spec 이 허용하는가, (b) sedutil 이 그 형식을 쓰는가" 를
+**분리해서 기록할 것**. "sedutil 이 안 쓴다 = spec 이 금지한다" 가 아니다.
+
+이 한 단락이 향후 새 엔지니어가 §3 "NEVER 0x83" 같은 문구를 spec rule 로
+오독해서 디코더의 합법적 동작을 제거하는 것을 막는다 ("Postel's law":
+be conservative in what you send, liberal in what you accept).
