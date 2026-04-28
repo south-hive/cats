@@ -60,6 +60,7 @@ enum class ErrorCode : int {
     AuthFailed            = 600,   ///< 인증 실패 (비밀번호 불일치 등)
     AuthLockedOut         = 601,   ///< 인증 시도 초과로 Authority 잠김
     InvalidCredential     = 602,   ///< 유효하지 않은 인증 정보 (형식 오류 등)
+    AlreadyOwnedDifferentCredential = 603,  ///< 드라이브가 이미 소유 상태이며 SID 비번이 호출자의 것과 다름 (멱등성 take_ownership 실패)
 
     // ── 일반 에러 (900-999) ───────────────────────────
     NotImplemented        = 900,   ///< 아직 구현되지 않은 기능
@@ -121,6 +122,8 @@ public:
             case ErrorCode::AuthFailed:             return "Authentication failed";
             case ErrorCode::AuthLockedOut:          return "Authority locked out";
             case ErrorCode::InvalidCredential:      return "Invalid credential";
+            case ErrorCode::AlreadyOwnedDifferentCredential:
+                                                    return "Drive already owned with different SID password";
             // General (900-999)
             case ErrorCode::NotImplemented:         return "Not implemented";
             case ErrorCode::InvalidArgument:        return "Invalid argument";

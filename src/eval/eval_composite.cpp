@@ -4,6 +4,9 @@
 #include "libsed/eval/eval_composite.h"
 #include "libsed/core/uid.h"
 
+#include <chrono>
+#include <thread>
+
 namespace libsed {
 namespace eval {
 namespace composite {
@@ -22,6 +25,29 @@ void logStep(CompositeResult& cr, const std::string& name,
 /// 패스워드 → Bytes
 Bytes toBytes(const std::string& pw) {
     return HashPassword::passwordToBytes(pw);
+}
+
+constexpr int    MAX_SPBUSY_RETRIES     = 3;
+constexpr int    SPBUSY_RETRY_DELAY_MS  = 50;
+
+/// SpBusy(St=3) 응답을 받았을 때 StackReset 후 재시도하는 데코레이터.
+/// fn() 은 세션을 여는 호출(가령 `api.startSessionWithAuth(...)`)이며 Result 반환.
+/// MethodSpBusy 가 아닐 경우 즉시 패스스루.
+template <typename Fn>
+Result withSpBusyRetry(EvalApi& api,
+                        std::shared_ptr<ITransport> transport,
+                        uint16_t comId,
+                        Fn&& fn) {
+    Result r = fn();
+    for (int attempt = 1;
+         attempt <= MAX_SPBUSY_RETRIES &&
+             r.code() == ErrorCode::MethodSpBusy;
+         ++attempt) {
+        api.stackReset(transport, comId);
+        std::this_thread::sleep_for(std::chrono::milliseconds(SPBUSY_RETRY_DELAY_MS));
+        r = fn();
+    }
+    return r;
 }
 
 } // anonymous
@@ -73,12 +99,37 @@ CompositeResult takeOwnership(EvalApi& api,
     for (auto& s : sub.steps) cr.steps.push_back(s);
     if (sub.failed()) { cr.overall = sub.overall; return cr; }
 
-    // Step 2: SID auth with MSID
+    // Step 2: SID auth with MSID (SpBusy 자동 복구).
     Session session(transport, comId);
     StartSessionResult ssr;
-    auto r = api.startSessionWithAuth(session, uid::SP_ADMIN, true,
-                                       uid::AUTH_SID, msid, ssr);
+    auto r = withSpBusyRetry(api, transport, comId, [&]() {
+        return api.startSessionWithAuth(session, uid::SP_ADMIN, true,
+                                         uid::AUTH_SID, msid, ssr);
+    });
     logStep(cr, "StartSession(AdminSP, SID=MSID, Write)", r, ssr.raw);
+
+    // Step 2b: NotAuthorized → 이미 소유 상태일 가능성. 호출자의 새 비번으로 재시도.
+    if (r.code() == ErrorCode::MethodNotAuthorized) {
+        Bytes newPin = toBytes(newSidPw);
+        Session probe(transport, comId);
+        StartSessionResult probeSsr;
+        auto rp = withSpBusyRetry(api, transport, comId, [&]() {
+            return api.startSessionWithAuth(probe, uid::SP_ADMIN, true,
+                                             uid::AUTH_SID, newPin, probeSsr);
+        });
+        if (rp.ok()) {
+            // 새 비번으로 인증 성공 → 이미 동일 비번으로 소유됨. 멱등 no-op.
+            api.closeSession(probe);
+            logStep(cr, "Already owned (idempotent: new password matches)",
+                    ErrorCode::Success, probeSsr.raw);
+            cr.overall = ErrorCode::Success;
+            return cr;
+        }
+        // 새 비번도 거절 → 다른 비번으로 이미 소유됨.
+        logStep(cr, "Already owned with different credential",
+                ErrorCode::AlreadyOwnedDifferentCredential, probeSsr.raw);
+        return cr;
+    }
     if (r.failed()) return cr;
 
     // Step 3: Set C_PIN_SID
@@ -106,12 +157,14 @@ CompositeResult revertToFactory(EvalApi& api,
     CompositeResult cr;
     cr.overall = ErrorCode::Success;
 
-    // Try SID auth first
+    // Try SID auth first (SpBusy 자동 복구)
     Bytes sidCred = toBytes(sidPw);
     Session session(transport, comId);
     StartSessionResult ssr;
-    auto r = api.startSessionWithAuth(session, uid::SP_ADMIN, true,
-                                       uid::AUTH_SID, sidCred, ssr);
+    auto r = withSpBusyRetry(api, transport, comId, [&]() {
+        return api.startSessionWithAuth(session, uid::SP_ADMIN, true,
+                                         uid::AUTH_SID, sidCred, ssr);
+    });
     logStep(cr, "StartSession(AdminSP, SID, Write)", r, ssr.raw);
 
     if (r.ok()) {

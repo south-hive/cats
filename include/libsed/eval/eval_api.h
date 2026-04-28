@@ -481,11 +481,26 @@ public:
     /// @return 성공 또는 오류 코드
     Result activate(Session& session, uint64_t spUid, RawResult& result);
 
-    /// @brief SP Revert (SP를 공장 초기 상태로 복원)
-    /// @param session 활성 세션 객체
-    /// @param spUid Revert할 SP UID
-    /// @param result 원시 결과가 저장될 구조체
+    /// @brief `<SP>.RevertSP()` 메서드 호출 — 메서드 UID `0x0000000600000011`
+    ///
+    /// TCG Core Spec Table 245 의 RevertSP 메서드를 호출한다. 이름이 비슷한
+    /// @ref EvalApi::revert 와 **다른 메서드**이며 권한 요구치도 다르다.
+    ///
+    /// **권한 요구**:
+    /// - `SP_LOCKING.RevertSP()` — Admin1 of Locking SP (전형적 사용 패턴)
+    /// - `SP_ADMIN.RevertSP()`   — PSID 또는 SP의 owner 권한 (SID 로 호출 시 NotAuthorized)
+    ///
+    /// **AdminSP factory reset 이 목적이라면 @ref EvalApi::revert 를 사용하라**
+    /// (sedutil-cli `--revertTPer` 와 동일한 wire — SID 로도 호출 가능).
+    ///
+    /// 호출 성공 시 TPer 가 세션을 자동으로 닫으므로 `closeSession()` 추가 호출 불필요.
+    ///
+    /// @param session 활성 세션 객체 (SP 의 owner 권한으로 인증된)
+    /// @param spUid   Revert 할 SP UID (`uid::SP_LOCKING` 등)
+    /// @param result  원시 결과가 저장될 구조체
     /// @return 성공 또는 오류 코드
+    /// @warning `revert()` 와 이름이 비슷하지만 다른 메서드. 잘못 고르면 NotAuthorized.
+    /// @see EvalApi::revert
     Result revertSP(Session& session, uint64_t spUid, RawResult& result);
 
     // ── 암호화 / 키 연산 ────────────────────────────
@@ -1168,11 +1183,25 @@ public:
     //  Revert (객체 수준, RevertSP와 구별)
     // ══════════════════════════════════════════════════
 
-    /// @brief 객체에 대한 Revert 메서드 수행 (SP 수준 Revert가 아님)
-    /// @param session 활성 세션 객체
-    /// @param objectUid Revert할 대상 객체 UID
-    /// @param result 원시 결과가 저장될 구조체
+    /// @brief `<object>.Revert()` 메서드 호출 — 메서드 UID `0x0000000600000202`
+    ///
+    /// TCG Core Spec Table 235 의 Revert 메서드를 호출한다. 이름이 비슷한
+    /// @ref EvalApi::revertSP 와 **다른 메서드**이며 권한 ACE 도 다르다.
+    ///
+    /// **권한 요구**:
+    /// - `SP_ADMIN.Revert()` — **SID 로 호출 가능** (sedutil `--revertTPer` 와 동일)
+    /// - `SP_ADMIN.Revert()` — PSID 로도 호출 가능 (비번 분실 시 emergency revert)
+    ///
+    /// 즉 AdminSP 의 factory reset 은 보통 이 메서드 (`Revert`) 이며,
+    /// SID 인증 세션에서 호출한다. 호출 성공 시 TPer 가 세션을 자동으로 닫으므로
+    /// `closeSession()` 추가 호출 불필요.
+    ///
+    /// @param session   활성 세션 객체 (SID 또는 PSID 인증된 AdminSP 세션)
+    /// @param objectUid Revert 할 객체 UID (`uid::SP_ADMIN`)
+    /// @param result    원시 결과가 저장될 구조체
     /// @return 성공 또는 오류 코드
+    /// @warning `revertSP()` 와 이름이 비슷하지만 다른 메서드. 잘못 고르면 NotAuthorized.
+    /// @see EvalApi::revertSP
     Result revert(Session& session, uint64_t objectUid, RawResult& result);
 
     // ══════════════════════════════════════════════════
