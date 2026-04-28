@@ -180,7 +180,8 @@ Result EvalApi::getSpLifecycle(Session& session, uint64_t spUid,
 }
 
 Result EvalApi::psidRevert(Session& session, RawResult& result) {
-    return revertSP(session, uid::SP_ADMIN, result);
+    // PSID 인증 세션에서 AdminSP.Revert() 호출 (sedutil-compat).
+    return revert(session, uid::SP_ADMIN, result);
 }
 
 // ════════════════════════════════════════════════════════
@@ -265,6 +266,11 @@ Result EvalApi::activate(Session& session, uint64_t spUid) {
 Result EvalApi::revertSP(Session& session, uint64_t spUid) {
     RawResult raw;
     return revertSP(session, spUid, raw);
+}
+
+Result EvalApi::revert(Session& session, uint64_t objectUid) {
+    RawResult raw;
+    return revert(session, objectUid, raw);
 }
 
 Result EvalApi::psidRevert(Session& session) {

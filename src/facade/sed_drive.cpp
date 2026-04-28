@@ -264,14 +264,14 @@ Result SedDrive::unlockRange(uint32_t rangeId, const std::string& password,
 Result SedDrive::revert(const std::string& sidPassword) {
     return withSession(Uid(uid::SP_ADMIN), sidPassword, Uid(uid::AUTH_SID),
         [&](Session& s) -> Result {
-            return impl_->api.revertSP(s, uid::SP_ADMIN);
+            return impl_->api.revert(s, uid::SP_ADMIN);
         });
 }
 
 Result SedDrive::psidRevert(const std::string& psid) {
     return withSession(Uid(uid::SP_ADMIN), psid, Uid(uid::AUTH_PSID),
         [&](Session& s) -> Result {
-            return impl_->api.revertSP(s, uid::SP_ADMIN);
+            return impl_->api.revert(s, uid::SP_ADMIN);
         });
 }
 

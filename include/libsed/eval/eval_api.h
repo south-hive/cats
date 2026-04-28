@@ -1404,6 +1404,7 @@ public:
 
     Result activate(Session& session, uint64_t spUid);
     Result revertSP(Session& session, uint64_t spUid);
+    Result revert(Session& session, uint64_t objectUid);
     Result psidRevert(Session& session);
 
     Result setMbrEnable(Session& session, bool enable);

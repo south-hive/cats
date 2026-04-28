@@ -115,10 +115,11 @@ CompositeResult revertToFactory(EvalApi& api,
     logStep(cr, "StartSession(AdminSP, SID, Write)", r, ssr.raw);
 
     if (r.ok()) {
-        // RevertSP(AdminSP) — TPer closes session
+        // AdminSP.Revert() — sedutil-compat: SID 권한이 호출 가능한 메서드
+        // (RevertSP 0x0011 은 AdminSP 에서 SID 로 호출 시 NotAuthorized 반환)
         RawResult raw;
-        r = api.revertSP(session, uid::SP_ADMIN, raw);
-        logStep(cr, "RevertSP(AdminSP)", r, raw);
+        r = api.revert(session, uid::SP_ADMIN, raw);
+        logStep(cr, "Revert(AdminSP)", r, raw);
         // Session auto-closed by TPer, do NOT call closeSession
         return cr;
     }
