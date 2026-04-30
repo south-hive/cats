@@ -110,7 +110,9 @@ static bool scenario1_evalOwnership(std::shared_ptr<ITransport> transport,
 // ── Scenario 2: Revert to factory (restore MSID as SID) ──
 //
 // Important: always clean up after ownership tests!
-// revertSP() on Admin SP resets SID password back to MSID.
+// AdminSP.Revert() (UID 0x0202) resets SID password back to MSID.
+// SID 권한으로 호출 가능 (sedutil --revertTPer 와 동일 wire).
+// AdminSP.RevertSP() (0x0011) 은 PSID 권한이 필요하므로 SID 세션에서 NotAuthorized.
 
 static bool scenario2_revert(std::shared_ptr<ITransport> transport,
                               uint16_t comId,
@@ -130,8 +132,16 @@ static bool scenario2_revert(std::shared_ptr<ITransport> transport,
     if (r.failed()) return false;
 
     // Revert Admin SP — this resets SID password back to MSID
-    r = api.revertSP(session, uid::SP_ADMIN);
-    step(2, "RevertSP(Admin SP)", r);
+    RawResult raw;
+    r = api.revert(session, uid::SP_ADMIN, raw);
+    bool methodOk = r.ok() && raw.methodResult.isSuccess();
+    step(2, "Revert(Admin SP)", methodOk);
+    if (!methodOk) {
+        printf("    Method status: 0x%02X (%s)\n",
+               static_cast<unsigned>(raw.methodResult.status()),
+               raw.methodResult.statusMessage().c_str());
+        return false;
+    }
     // Session is invalidated after revert, no need to close
 
     // Verify MSID works again

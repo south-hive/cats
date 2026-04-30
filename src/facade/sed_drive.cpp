@@ -213,18 +213,14 @@ Result SedDrive::readMsid(Bytes& outMsid) {
 }
 
 Result SedDrive::takeOwnership(const std::string& newSidPassword) {
-    Bytes msidVal;
-    auto r = readMsid(msidVal);
-    if (r.failed()) return r;
-
-    // Login with raw MSID bytes — MSID is a raw credential, NOT a human password.
-    // The Bytes overload of login() passes credentials directly without hashing.
-    auto s = login(Uid(uid::SP_ADMIN), msidVal, Uid(uid::AUTH_SID), true);
-    if (s.failed()) return s.openResult();
-    // setCPin(string) hashes newSidPassword via SHA-256 before storing
-    r = impl_->api.setCPin(s.raw(), uid::CPIN_SID, newSidPassword);
-    s.close();
-    return r;
+    // composite::takeOwnership 으로 라우팅 — getMsid + StartSession(SID=MSID)
+    // + SetCPin 의 표준 흐름과 함께 멱등성 처리도 같이 받는다:
+    //   - 이미 같은 비밀번호로 소유 중이면 Success (no-op)
+    //   - 다른 비밀번호로 소유 중이면 AlreadyOwnedDifferentCredential
+    //   - StartSession 이 SpBusy 면 자동 StackReset+재시도
+    auto cr = eval::composite::takeOwnership(
+        impl_->api, impl_->transport, impl_->comId, newSidPassword);
+    return cr.overall;
 }
 
 Result SedDrive::activateLocking(const std::string& sidPassword) {
